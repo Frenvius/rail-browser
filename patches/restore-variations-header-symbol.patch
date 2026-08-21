@@ -1,0 +1,16 @@
+diff --git a/components/variations/net/variations_http_headers.cc b/components/variations/net/variations_http_headers.cc
+index 210829dd78..9341be5997 100644
+--- a/components/variations/net/variations_http_headers.cc
++++ b/components/variations/net/variations_http_headers.cc
+@@ -32,6 +32,11 @@
+ 
+ namespace variations {
+ 
++// Kept as an ABI symbol for URLRequest overloads that remain in this Chromium
++// revision. Ungoogled policy is enforced by ShouldAppendVariationsHeader(),
++// which always returns false, so the header is never emitted.
++const char kClientDataHeader[] = "X-Client-Data";
++
+ namespace {
+ 
+ // The result of checking whether a request to a URL should have variations

@@ -1,0 +1,6 @@
+* text=auto
+*.patch -text
+*.list -text
+*.ps1 text eol=crlf
+*.py text eol=lf
+*.sh text eol=lf

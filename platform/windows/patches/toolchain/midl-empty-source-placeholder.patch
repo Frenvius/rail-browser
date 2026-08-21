@@ -1,0 +1,17 @@
+# Binary pruning removes the checked-in .tlb type libraries, so the first build
+# takes midl.py's "source missing" path: it writes an empty placeholder, skips
+# the GUID rewrite, and lets midl.exe produce the real file. On every later
+# build the placeholder exists, source_exists becomes true, and the GUID rewrite
+# asserts on a zero-byte type library. Treat an empty source as missing.
+
+--- a/build/toolchain/win/midl.py
++++ b/build/toolchain/win/midl.py
+@@ -359,7 +359,7 @@
+ 
+   for source_file in common_files:
+     file_path = os.path.join(source, source_file)
+-    if not os.path.isfile(file_path):
++    if not os.path.isfile(file_path) or os.path.getsize(file_path) == 0:
+       source_exists = False
+       if sys.platform != 'win32':
+         print('File %s needs to be generated from Windows first' % file_path)

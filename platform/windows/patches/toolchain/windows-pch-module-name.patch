@@ -1,0 +1,21 @@
+diff --git a/build/toolchain/win/toolchain.gni b/build/toolchain/win/toolchain.gni
+index 5a8e5195d5..5cae16c1cf 100644
+--- a/build/toolchain/win/toolchain.gni
++++ b/build/toolchain/win/toolchain.gni
+@@ -4,6 +4,7 @@
+ 
+ import("//build/config/clang/clang.gni")
+ import("//build/config/compiler/compiler.gni")
++import("//build/config/pch.gni")
+ import("//build/config/rust.gni")
+ import("//build/config/sanitizers/sanitizers.gni")
+ import("//build/config/win/visual_studio_version.gni")
+@@ -220,7 +221,7 @@ template("msvc_toolchain") {
+ 
+     # -fmodule-name is not supported by MSVC.
+     module_name_flag = ""
+-    if (toolchain_is_clang) {
++    if (toolchain_is_clang && !enable_precompiled_headers) {
+       module_name_flag = " \"-fmodule-name={{cc_module_name}}_Private\""
+     }
+ 

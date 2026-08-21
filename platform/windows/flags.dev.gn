@@ -1,0 +1,21 @@
+# Fast local build for the WebUI browser shell. Keep distribution settings in
+# flags.windows.gn; this file deliberately optimizes iteration time instead.
+chrome_pgo_phase=0
+enable_swiftshader=false
+ffmpeg_branding="Chrome"
+is_clang=true
+is_component_build=false
+is_debug=true
+is_official_build=false
+proprietary_codecs=true
+target_cpu="x64"
+use_sysroot=false
+
+# Full Chromium symbols are prohibitively large for a UI architecture probe.
+# DCHECKs remain enabled because this is still a debug build.
+blink_symbol_level=0
+v8_symbol_level=0
+symbol_level=0
+
+enable_rust=true
+enable_mse_mpeg2ts_stream_parser=true
