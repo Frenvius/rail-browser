@@ -1,157 +1,195 @@
+diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
+index a75d80b00c..d47a524557 100644
+--- a/chrome/browser/resources/webui_browser/BUILD.gn
++++ b/chrome/browser/resources/webui_browser/BUILD.gn
+@@ -23,6 +23,7 @@ build_webui("build") {
+     "extension.ts",
+     "extensions_bar.ts",
+     "icons.html.ts",
++    "rail/docked_devtools.ts",
+     "side_panel.html.ts",
+     "side_panel.ts",
+     "tab_strip/events.ts",
+@@ -48,6 +49,11 @@ build_webui("build") {
+     "content_region.css",
+     "extension.css",
+     "extensions_bar.css",
++    "rail/rail_app.css",
++    "rail/rail_content_region.css",
++    "rail/rail_tab.css",
++    "rail/rail_tab_strip.css",
++    "rail/rail_tokens.css",
+     "side_panel.css",
+     "tab_strip/tab.css",
+     "tab_strip/tab_group.css",
 diff --git a/chrome/browser/resources/webui_browser/app.css b/chrome/browser/resources/webui_browser/app.css
-index 08978c8e14..46107b2688 100644
+index 08978c8e14..4c3672a256 100644
 --- a/chrome/browser/resources/webui_browser/app.css
 +++ b/chrome/browser/resources/webui_browser/app.css
-@@ -10,18 +10,42 @@
-  * #css_wrapper_metadata_end */
+@@ -4,195 +4,7 @@
  
- :host {
-+  /* Product tokens stay local to the privileged top-chrome shell. */
-+  --lab-accent: #8f7cf6;
-+  --lab-accent-soft: rgb(143 124 246 / 18%);
-+  --lab-border: rgb(255 255 255 / 13%);
-+  --lab-chrome: rgb(24 25 31 / 72%);
-+  --lab-chrome-strong: rgb(31 32 40 / 88%);
-+  --lab-content-border: rgb(255 255 255 / 16%);
-+  --lab-text: #f3f1fa;
-+
-+  color-scheme: dark;
-   display: flex;
-   flex-direction: column;
-   height: 100%;
-   margin: 0;
-   padding: 0;
+ /* #css_wrapper_metadata_start
+  * #type=style-lit
+- * #import=//resources/cr_elements/cr_icons_lit.css.js
++ * #import=./rail/rail_app.css.js
+  * #scheme=relative
+- * #include=cr-icons-lit
++ * #include=rail-app
+  * #css_wrapper_metadata_end */
+-
+-:host {
+-  display: flex;
+-  flex-direction: column;
+-  height: 100%;
+-  margin: 0;
+-  padding: 0;
 -  background-color: var(--color-frame-active);
 -  color: var(--color-toolbar-text);
-+  background-color: transparent;
-+  color: var(--lab-text);
-   position: relative; /* Needed for absolute positioning of controls */
-   overflow: hidden;
-   user-select: none;
- }
- 
-+#rootContainer {
-+  background: transparent;
-+  display: grid;
-+  grid-template-rows: auto 1fr;
-+  height: 100%;
-+}
-+
-+#topContainer {
-+  background: var(--lab-chrome);
-+  border-bottom: 1px solid var(--lab-border);
-+  grid-row: 1;
-+  min-width: 0;
-+}
-+
- /* Hide browser frame in tab fullscreen mode */
- :host([fullscreen-mode='tab']) #topContainer {
-   display: none;
-@@ -46,12 +70,28 @@
-   --iron-icon-stroke-color: var(--color-tab-foreground-active-frame-active);
-   --iron-icon-fill-color: transparent;
-   stroke-width: 3px;
-+  color: var(--lab-text);
-   height: 41px;
+-  position: relative; /* Needed for absolute positioning of controls */
+-  overflow: hidden;
+-  user-select: none;
+-}
+-
+-/* Hide browser frame in tab fullscreen mode */
+-:host([fullscreen-mode='tab']) #topContainer {
+-  display: none;
+-}
+-
+-/* Make content fill the window in tab fullscreen mode */
+-:host([fullscreen-mode='tab']) #contentRegion {
+-  position: fixed;
+-  top: 0;
+-  left: 0;
+-  width: 100%;
+-  height: 100%;
+-}
+-
+-.caption-button {
+-  box-shadow: none;
+-  border-radius: 0;
+-  --cr-button-background-color: transparent;
+-  --cr-button-border-color: transparent;
+-  --iron-icon-width: 16px;
+-  --iron-icon-height: 16px;
+-  --iron-icon-stroke-color: var(--color-tab-foreground-active-frame-active);
+-  --iron-icon-fill-color: transparent;
+-  stroke-width: 3px;
+-  height: 41px;
 -  min-width: 30px;
-+  min-width: 42px;
-   padding: 0;
-   shape-rendering: crispEdges;
- }
- 
-+.caption-button:focus-visible,
-+cr-icon-button:focus-visible,
-+#locationIconButton:focus-visible {
-+  outline: 2px solid var(--lab-accent);
-+  outline-offset: -3px;
-+}
-+
-+.caption-button:hover {
-+  background: rgb(255 255 255 / 9%);
-+}
-+
-+.caption-button:last-child:hover {
-+  background: #c42b1c;
-+}
-+
- #bookmarkBar {
-   display: flex;
-   flex-direction: row;
-@@ -70,15 +110,23 @@ cr-icon-button {
-   --cr-icon-button-fill-color: var(--color-toolbar-button-icon);
- }
- 
-+cr-icon-button:hover {
-+  background: rgb(255 255 255 / 8%);
-+}
-+
- webui-browser-searchbox {
-+  --cr-searchbox-background: rgb(8 9 13 / 58%);
-   --cr-searchbox-font-size: 14px;
-+  --cr-searchbox-foreground: var(--lab-text);
-   --cr-searchbox-height: 32px;
-   --cr-searchbox-input-height: 32px;
+-  padding: 0;
+-  shape-rendering: crispEdges;
+-}
+-
+-#bookmarkBar {
+-  display: flex;
+-  flex-direction: row;
+-  align-items: center;
+-  height: 35px;
+-  user-select: none;
+-  margin-left: 8px;
+-  margin-right: 8px;
+-}
+-
+-cr-icon-button {
+-  --cr-icon-button-icon-size: 20px;
+-  --cr-icon-button-margin-end: 0;
+-  --cr-icon-button-margin-start: 0;
+-  --cr-icon-button-size: 35px;
+-  --cr-icon-button-fill-color: var(--color-toolbar-button-icon);
+-}
+-
+-webui-browser-searchbox {
+-  --cr-searchbox-font-size: 14px;
+-  --cr-searchbox-height: 32px;
+-  --cr-searchbox-input-height: 32px;
 -  --cr-searchbox-shadow: 0 0 0px 1px #20212451;
-   --cr-searchbox-icon-left-position: 12px;
-   --cr-searchbox-icon-size-in-searchbox: 20px;
-   --cr-searchbox-icon-top-position: 0;
-   --cr-searchbox-match-padding: 4px 0;
-+  --cr-searchbox-placeholder: rgb(243 241 250 / 55%);
-+  --cr-searchbox-shadow: inset 0 0 0 1px var(--lab-border),
-+      0 8px 20px rgb(0 0 0 / 14%);
- 
-   margin: 0 10px;
-   flex: 1;
-@@ -91,7 +139,7 @@ webui-browser-searchbox[dropdown-is-visible] {
- .activeFrame {
-   /* Everything below the tab strip is the active frame, so give it the active
-    * background color. */
+-  --cr-searchbox-icon-left-position: 12px;
+-  --cr-searchbox-icon-size-in-searchbox: 20px;
+-  --cr-searchbox-icon-top-position: 0;
+-  --cr-searchbox-match-padding: 4px 0;
+-
+-  margin: 0 10px;
+-  flex: 1;
+-}
+-
+-webui-browser-searchbox[dropdown-is-visible] {
+-  --cr-searchbox-shadow: 0 3px 7px 0px #20212451;
+-}
+-
+-.activeFrame {
+-  /* Everything below the tab strip is the active frame, so give it the active
+-   * background color. */
 -  background-color: var(--color-tab-background-active-frame-active);
-+  background-color: transparent;
- }
- 
- .titlebarDiv {
-@@ -100,15 +148,20 @@ webui-browser-searchbox[dropdown-is-visible] {
-   display: flex;
-   /* The tab strip is by default mostly inactive content, so give it the
-    * inactive background color. */
+-}
+-
+-.titlebarDiv {
+-  app-region: drag;
+-  -webkit-app-region: drag;
+-  display: flex;
+-  /* The tab strip is by default mostly inactive content, so give it the
+-   * inactive background color. */
 -  background-color: var(--color-tab-background-inactive-frame-active);
-+  background-color: transparent;
-+  min-height: 41px;
- }
- 
- .tabstripDiv {
+-}
+-
+-.tabstripDiv {
 -  app-region: no-drag;
 -  -webkit-app-region: no-drag;
 -  float: left;
 -  overflow: hidden;
 -  text-align: left;
-+  app-region: drag;
-+  -webkit-app-region: drag;
-+  display: flex;
-+  flex: 0 0 208px;
-+  flex-direction: column;
-+  min-height: 0;
-+  overflow-x: hidden;
-+  overflow-y: auto;
-+  width: 208px;
- }
- 
- .captionButtonsDiv {
-@@ -155,44 +208,48 @@ webui-browser-searchbox[dropdown-is-visible] {
- #searchBar {
-   display: flex;
-   flex: none;
+-}
+-
+-.captionButtonsDiv {
+-  float: right;
+-  flex: 1;
+-  text-align: right;
+-  white-space: nowrap;
+-}
+-
+-.captionButtonsDiv cr-button {
+-  app-region: no-drag;
+-  -webkit-app-region: no-drag;
+-}
+-
+-#addressBox {
+-  position: relative;
+-  flex: 1;
+-  display: flex;
+-  align-items: center;
+-}
+-
+-#locationIconButton {
+-  position: absolute;
+-  z-index: 101;
+-  top: 3px;
+-  left: 22px;
+-  height: 27px;
+-  min-width: 32px;
+-  padding: 0;
+-  border: none;
+-  --iron-icon-width: 16px;
+-  --iron-icon-height: 16px;
+-  background-color: var(--color-searchbox-background);
+-}
+-
+-#locationIcon {
+-  fill: var(--color-searchbox-foreground);
+-  stroke: var(--color-searchbox-foreground);
+-  stroke-width: 0;
+-  stroke-linecap: round;
+-  shape-rendering: geometricPrecision;
+-}
+-
+-#searchBar {
+-  display: flex;
+-  flex: none;
 -  padding: 7px;
-+  background: var(--lab-chrome-strong);
-+  gap: 2px;
-+  padding: 7px 10px 9px;
- }
- 
- #searchBar #address {
-   display: block;
- }
- 
+-}
+-
+-#searchBar #address {
+-  display: block;
+-}
+-
 -#rootContainer {
 -  display: grid;
 -  height: 100%;
@@ -167,54 +205,30 @@ index 08978c8e14..46107b2688 100644
 -  min-width: 0;
 -}
 -
- #main {
-   grid-row: 2;
-   display: flex;
-   flex-direction: row;
-   flex: 1;
+-#main {
+-  grid-row: 2;
+-  display: flex;
+-  flex-direction: row;
+-  flex: 1;
 -  background-color: var(--color-toolbar);
-+  background-color: var(--lab-chrome);
-+  gap: 8px;
-+  padding: 0 8px 8px;
- }
- 
- content-region {
+-}
+-
+-content-region {
 -  border-top: 1px var(--color-toolbar-separator) solid;
-+  background: #fff;
-+  border: 1px solid var(--lab-content-border);
-+  border-radius: 14px;
-+  box-shadow: 0 16px 42px rgb(0 0 0 / 34%);
-+  overflow: hidden;
- }
- 
- content-region[showing-side-panel] {
+-}
+-
+-content-region[showing-side-panel] {
 -  border-top: 1px var(--color-toolbar-separator) solid;
 -  border-right: 1px var(--color-toolbar-separator) solid;
 -  border-left: none;
 -  border-bottom: none;
 -  border-radius: 0 16px 0 0;
-+  border: 1px solid var(--lab-content-border);
-+  border-radius: 14px;
-+}
-+
-+webui-browser-searchbox:focus-within {
-+  --cr-searchbox-shadow: inset 0 0 0 1px var(--lab-accent),
-+      0 0 0 3px var(--lab-accent-soft);
-+}
-+
-+@media (prefers-reduced-motion: reduce) {
-+  *,
-+  *::before,
-+  *::after {
-+    scroll-behavior: auto !important;
-+    transition-duration: .01ms !important;
-+  }
- }
+-}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 8ebad94626..dfe648e2e1 100644
+index 8ebad94626..30eb8aaab7 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
-@@ -12,14 +12,6 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -12,32 +12,6 @@ export function getHtml(this: WebuiBrowserAppElement) {
  <div class="activeFrame" id="rootContainer">
    <div id="topContainer">
      <div class="titlebarDiv" @mousedown="${this.onTabDragMousedown_}">
@@ -226,10 +240,49 @@ index 8ebad94626..dfe648e2e1 100644
 -            @tab-updated="${this.onTabUpdated_}">
 -        </webui-browser-tab-strip>
 -      </div>
-       <if expr="not is_macosx">
-         <div class="captionButtonsDiv">
-           <cr-button type="button" class="caption-button"
-@@ -70,6 +62,14 @@ export function getHtml(this: WebuiBrowserAppElement) {
+-      <if expr="not is_macosx">
+-        <div class="captionButtonsDiv">
+-          <cr-button type="button" class="caption-button"
+-            @click="${this.onMinimizeClick_}">
+-            <cr-icon icon="webui-browser:minimize"></cr-icon>
+-          </cr-button>
+-          <cr-button type="button" class="caption-button"
+-            @click="${this.onMaximizeClick_}">
+-            <cr-icon icon="webui-browser:maximize"></cr-icon>
+-          </cr-button>
+-          <cr-button type="button" class="caption-button"
+-            @click="${this.onCloseClick_}">
+-            <cr-icon icon="webui-browser:close"></cr-icon>
+-          </cr-button>
+-        </div>
+-      </if>
+-    </div>
+-    <div id="searchBar">
+       <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
+         ?disabled="${this.backButtonDisabled_}"
+         @click="${this.onBackClick_}"
+@@ -65,11 +39,35 @@ export function getHtml(this: WebuiBrowserAppElement) {
+       <cr-icon-button id="appMenuButton" iron-icon="cr:more-vert"
+         title="$i18n{appMenuTooltip}"
+         @click="${this.onAppMenuClick_}"></cr-icon-button>
++      <if expr="not is_macosx">
++        <div class="captionButtonsDiv">
++          <cr-button type="button" class="caption-button"
++            @click="${this.onMinimizeClick_}">
++            <cr-icon icon="webui-browser:minimize"></cr-icon>
++          </cr-button>
++          <cr-button type="button" class="caption-button"
++            @click="${this.onMaximizeClick_}">
++            <cr-icon icon="webui-browser:maximize"></cr-icon>
++          </cr-button>
++          <cr-button type="button" class="caption-button"
++            @click="${this.onCloseClick_}">
++            <cr-icon icon="webui-browser:close"></cr-icon>
++          </cr-button>
++        </div>
++      </if>
+     </div>
+     <webui-browser-bookmark-bar id="bookmarkBar">
      </webui-browser-bookmark-bar>
    </div>
    <div id="main">
@@ -285,231 +338,228 @@ index caed98ffda..50d655d9fb 100644
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
 diff --git a/chrome/browser/resources/webui_browser/content_region.css b/chrome/browser/resources/webui_browser/content_region.css
-index 485da70ac0..4e0f087f11 100644
+index 485da70ac0..eb301584e3 100644
 --- a/chrome/browser/resources/webui_browser/content_region.css
 +++ b/chrome/browser/resources/webui_browser/content_region.css
-@@ -38,3 +38,19 @@ cr-tab-webview.active {
-   visibility: visible;
-   position: static;
- }
-+
-+cr-webview {
-+  position: absolute;
-+  inset: 0;
-+  width: 100%;
-+  height: 100%;
-+}
-+
-+cr-tab-webview.active.docked {
-+  position: absolute;
-+  z-index: 1;
-+}
-+
-+cr-tab-webview.active.docked.hiddenByDevtools {
-+  visibility: hidden;
-+}
+@@ -4,7 +4,9 @@
+ 
+ /* #css_wrapper_metadata_start
+  * #type=style-lit
++ * #import=./rail/rail_content_region.css.js
+  * #scheme=relative
++ * #include=rail-content-region
+  * #css_wrapper_metadata_end */
+ 
+ :host {
 diff --git a/chrome/browser/resources/webui_browser/content_region.ts b/chrome/browser/resources/webui_browser/content_region.ts
-index 8ad3ede567..41ad2bf459 100644
+index 8ad3ede567..27d14963bc 100644
 --- a/chrome/browser/resources/webui_browser/content_region.ts
 +++ b/chrome/browser/resources/webui_browser/content_region.ts
-@@ -5,9 +5,10 @@
+@@ -5,8 +5,10 @@
  import {assert} from '//resources/js/assert.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 +import type {Rect} from 'chrome://resources/mojo/ui/gfx/geometry/mojom/geometry.mojom-webui.js';
  
  import {getCss} from './content_region.css.js';
--import {TabWebviewElement} from './webview.js';
-+import {TabWebviewElement, WebviewElement} from './webview.js';
++import {DockedDevTools} from './rail/docked_devtools.js';
+ import {TabWebviewElement} from './webview.js';
  
  export class ContentRegionElement extends CrLitElement {
-   static get is() {
-@@ -34,6 +35,65 @@ export class ContentRegionElement extends CrLitElement {
+@@ -34,6 +36,16 @@ export class ContentRegionElement extends CrLitElement {
    private webviews: Map<string, TabWebviewElement> = new Map();
    activeWebview?: TabWebviewElement;
  
-+  private devtoolsWebview?: WebviewElement;
-+  private devtoolsGuestId: string = '';
-+  private dockedWebview?: TabWebviewElement;
++  private devtools = new DockedDevTools(this);
 +
-+  async showDevTools(guestId: string, inspectedBounds: Rect,
-+                     hideInspected: boolean) {
-+    if (this.devtoolsGuestId !== guestId) {
-+      this.closeDevTools();
-+      const webview = new WebviewElement();
-+      this.devtoolsWebview = webview;
-+      this.devtoolsGuestId = guestId;
-+      this.shadowRoot.appendChild(webview);
-+      await webview.updateComplete;
-+      webview.attachGuest(guestId);
-+    }
-+    this.layOutInspectedContents(inspectedBounds, hideInspected);
++  showDevTools(guestId: string, inspectedBounds: Rect, hideInspected: boolean) {
++    return this.devtools.show(guestId, inspectedBounds, hideInspected);
 +  }
 +
 +  closeDevTools() {
-+    if (this.devtoolsWebview) {
-+      this.devtoolsWebview.remove();
-+      this.devtoolsWebview = undefined;
-+      this.devtoolsGuestId = '';
-+    }
-+    if (this.dockedWebview) {
-+      this.dockedWebview.classList.remove('docked', 'hiddenByDevtools');
-+      this.dockedWebview.removeAttribute('style');
-+      this.dockedWebview = undefined;
-+    }
-+  }
-+
-+  private layOutInspectedContents(bounds: Rect, hideInspected: boolean) {
-+    const webview = this.activeWebview;
-+    if (!webview) {
-+      return;
-+    }
-+    if (this.dockedWebview && this.dockedWebview !== webview) {
-+      this.dockedWebview.classList.remove('docked', 'hiddenByDevtools');
-+      this.dockedWebview.removeAttribute('style');
-+    }
-+    this.dockedWebview = webview;
-+    webview.classList.add('docked');
-+    webview.classList.toggle('hiddenByDevtools', hideInspected);
-+
-+    const width = this.offsetWidth;
-+    const height = this.offsetHeight;
-+    if (bounds.width <= 0 && bounds.height <= 0 && !hideInspected) {
-+      webview.style.left = '0';
-+      webview.style.top = '0';
-+      webview.style.width = '100%';
-+      webview.style.height = '100%';
-+      return;
-+    }
-+    webview.style.left = `${Math.min(bounds.x, width)}px`;
-+    webview.style.top = `${Math.min(bounds.y, height)}px`;
-+    webview.style.width = `${Math.min(bounds.width, width)}px`;
-+    webview.style.height = `${Math.min(bounds.height, height)}px`;
++    this.devtools.close();
 +  }
 +
    activateTab(tabId: string) {
      const webview = this.webviews.get(tabId);
      assert(webview);
-@@ -72,6 +132,9 @@ export class ContentRegionElement extends CrLitElement {
+@@ -72,6 +84,7 @@ export class ContentRegionElement extends CrLitElement {
      if (this.activeWebview === webview) {
        this.activeWebview = undefined;
      }
-+    if (this.dockedWebview === webview) {
-+      this.dockedWebview = undefined;
-+    }
++    this.devtools.forget(webview);
      this.webviews.delete(tabId);
      webview.remove();
      this.requestUpdate();
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.css b/chrome/browser/resources/webui_browser/tab_strip/tab.css
-index 4f1c700024..414ae7a747 100644
+index 4f1c700024..0ded2eee38 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.css
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab.css
-@@ -10,26 +10,28 @@
- :host {
-     --favicon-size: 16px;
+@@ -4,94 +4,7 @@
  
+ /* #css_wrapper_metadata_start
+  * #type=style-lit
++ * #import=../rail/rail_tab.css.js
+  * #scheme=relative
++ * #include=rail-tab
+  * #css_wrapper_metadata_end */
+-
+-:host {
+-    --favicon-size: 16px;
+-
 -    flex-grow: 1;
 -    flex-basis: 0;
 -    max-width: 233px;
-+    flex: 0 0 auto;
-+    max-width: none;
-     min-width: 0;
- }
- 
- .tab {
-     color: var(--color-tab-foreground-inactive-frame-active);
+-    min-width: 0;
+-}
+-
+-.tab {
+-    color: var(--color-tab-foreground-inactive-frame-active);
 -    background-color: var(--color-tab-background-inactive-frame-active);
 -    border-radius: 12px 12px 0 0;
-+    background-color: rgb(255 255 255 / 4%);
-+    border: 1px solid transparent;
-+    border-radius: 8px;
-     height: 34px;
-     padding: 0 10px;
-     display: flex;
-     align-items: center;
-     position: relative;
+-    height: 34px;
+-    padding: 0 10px;
+-    display: flex;
+-    align-items: center;
+-    position: relative;
 -    transition: transform 300ms ease;
-+    transition: background-color 120ms ease, border-color 120ms ease,
-+        transform 160ms ease;
- }
- 
- :host(:not([drag-in-progress]):not([active])) .tab:hover {
+-}
+-
+-:host(:not([drag-in-progress]):not([active])) .tab:hover {
 -    background-color: var(--color-tab-background-highlighted);
-+    background-color: rgb(255 255 255 / 9%);
-+    border-color: rgb(255 255 255 / 8%);
-     transition: background-color 100ms ease-in-out;
- }
- 
-@@ -38,8 +40,10 @@
- }
- 
- :host([active]) .tab {
+-    transition: background-color 100ms ease-in-out;
+-}
+-
+-:host(:not([drag-in-progress]):not([active])) .tab:not(:hover) {
+-    transition: background-color 300ms ease-in-out;
+-}
+-
+-:host([active]) .tab {
 -    color: var(--color-tab-foreground-active-frame-active);
 -    background-color: var(--color-tab-background-active-frame-active);
-+    color: #f6f3ff;
-+    background-color: rgb(143 124 246 / 18%);
-+    border-color: rgb(168 151 255 / 38%);
-+    box-shadow: 0 7px 18px rgb(0 0 0 / 18%);
- }
- 
- #favicon {
-@@ -70,11 +74,12 @@ cr-icon {
- }
- 
- #bottomCorners {
+-}
+-
+-#favicon {
+-    height: var(--favicon-size);
+-    width: var(--favicon-size);
+-    background-size: contain;
+-    background-image: var(--favicon-url);
+-}
+-
+-.close {
+-    border:none;
+-    --cr-icon-button-icon-size: 14px;
+-    --cr-icon-button-size: 16px;
+-    --cr-icon-button-margin-end: 0px;
+-}
+-
+-cr-icon {
+-    --iron-icon-width: 16px;
+-    --iron-icon-height: 16px;
+-}
+-
+-#title {
+-    flex: 1 1 0%;
+-    text-align: left;
+-    margin-left: 10px;
+-    white-space: nowrap;
+-    overflow: hidden;
+-}
+-
+-#bottomCorners {
 -    position: absolute;
 -    width: calc(100% + 24px);
 -    height: 12px;
 -    left: -12px;
 -    bottom: 0;
-+    display: none;
-+}
-+
-+.close:focus-visible {
-+    outline: 2px solid #a897ff;
-+    outline-offset: 1px;
- }
- 
- .corner {
+-}
+-
+-.corner {
+-    width: 12px;
+-    height: 12px;
+-    position: absolute;
+-    bottom: 0;
+-}
+-
+-#leftCorner {
+-    left: 0;
+-    background-image: radial-gradient(circle at 0 0, transparent 0,
+-        transparent 12px, var(--color-tab-background-active-frame-active) 13px);
+-}
+-
+-#rightCorner {
+-    right: 0;
+-    background-image: radial-gradient(circle at 100% 0, transparent 0,
+-        transparent 12px, var(--color-tab-background-active-frame-active) 13px);
+-}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css
-index 207b92cfae..025f4ba72c 100644
+index 207b92cfae..e58d103e4b 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css
-@@ -13,10 +13,13 @@
-   * be excluded from the dragging area */
-   -webkit-app-region: drag;
+@@ -4,33 +4,7 @@
  
-+  align-items: stretch;
-   display: flex;
+ /* #css_wrapper_metadata_start
+  * #type=style-lit
++ * #import=../rail/rail_tab_strip.css.js
+  * #scheme=relative
++ * #include=rail-tab-strip
+  * #css_wrapper_metadata_end */
+-
+-#tabstrip {
+-  /* Make the window frame draggable.
+-  * Children elements need to use "app-region: no-drag" to
+-  * be excluded from the dragging area */
+-  -webkit-app-region: drag;
+-
+-  display: flex;
 -  align-items: end;
 -  margin-left: 12px;
 -  margin-top: 7px;
-+  flex: 1;
-+  flex-direction: column;
-+  gap: 3px;
-+  min-height: 0;
-+  padding: 4px;
- }
- 
- #tabstrip.nodrag {
-@@ -29,8 +32,16 @@ webui-browser-tab {
- }
- 
- #newTabButton {
+-}
+-
+-#tabstrip.nodrag {
+-  -webkit-app-region: no-drag;
+-}
+-
+-#newTabButton,
+-webui-browser-tab {
+-  -webkit-app-region: no-drag;
+-}
+-
+-#newTabButton {
 -  margin: 3px 10px;
-+  align-self: flex-start;
-+  border-radius: 9px;
-+  margin: 6px 2px 2px;
-+  margin-top: auto;
-   --cr-icon-button-icon-size: 18px;
-   --cr-icon-button-size: 28px;
-   --cr-icon-button-margin-end: 8px;
- }
-+
-+#newTabButton:focus-visible {
-+  outline: 2px solid #8f7cf6;
-+  outline-offset: 1px;
-+}
+-  --cr-icon-button-icon-size: 18px;
+-  --cr-icon-button-size: 28px;
+-  --cr-icon-button-margin-end: 8px;
+-}
+diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
+index 65d7e76ce5..6d527c12bf 100644
+--- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
++++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
+@@ -10,6 +10,7 @@ export function getHtml(this: TabStripElement) {
+   // clang-format off
+   return html`<!--_html_template_start_-->
+ <div id="tabstrip">
++  <div id="tabList">
+     ${this.items_.map(item => item.type === 'tab' ? html`
+           <webui-browser-tab id="${this.tabIdToDomId(item.id)}"
+               .tabData="${item.tabData}"
+@@ -21,10 +22,12 @@ export function getHtml(this: TabStripElement) {
+               .groupData="${item.groupData}">
+           </webui-browser-tab-group>
+         `)}
+-  <cr-icon-button id="newTabButton" iron-icon="cr:add"
+-      title="$i18n{tooltipNewTab}"
++  </div>
++  <button id="newTabButton" title="$i18n{tooltipNewTab}"
+       @click="${this.onNewTabButtonClick_}">
+-  </cr-icon-button>
++    <cr-icon icon="cr:add"></cr-icon>
++    <span>$i18n{tooltipNewTab}</span>
++  </button>
+ </div>
+ <!--_html_template_end_-->`;
+   // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/webui_browser.html b/chrome/browser/resources/webui_browser/webui_browser.html
 index 2a17afc37b..db2ba1e21d 100644
 --- a/chrome/browser/resources/webui_browser/webui_browser.html
@@ -561,10 +611,24 @@ index 77f5a0e8f4..3764ce07e1 100644
          GetUserDataFactory().CreateInstance<BrowserElementsWebUiBrowser>(
              *browser, *browser);
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..d4482129ac 100644
+index 3d4fe27f4f..91773009e1 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -140,6 +140,10 @@ source_set("impl") {
+@@ -75,6 +75,13 @@ source_set("impl") {
+     sources += [ "webui_browser_window_mac.mm" ]
+   }
+ 
++  if (is_win) {
++    sources += [
++      "rail/rail_window_frame.cc",
++      "rail/rail_window_frame.h",
++    ]
++  }
++
+   deps = [
+     ":browser_mojo_bindings",
+     ":webui_browser",
+@@ -140,6 +147,10 @@ source_set("impl") {
      ]
    }
  
@@ -575,7 +639,7 @@ index 3d4fe27f4f..d4482129ac 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -154,6 +158,7 @@ mojom("browser_mojo_bindings") {
+@@ -154,6 +165,7 @@ mojom("browser_mojo_bindings") {
      "//components/browser_apis/tab_strip:mojom",
      "//mojo/public/mojom/base",
      "//ui/base/mojom:ui_base_types",
@@ -615,7 +679,7 @@ index 15a65f7152..5bc1d440fd 100644
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
-index df2247060d..41bcd666ed 100644
+index df2247060d..9a372ab9ee 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 @@ -4,6 +4,7 @@
@@ -626,99 +690,22 @@ index df2247060d..41bcd666ed 100644
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
-@@ -15,7 +16,91 @@
+@@ -15,7 +16,14 @@
  #include "ui/base/interaction/element_events.h"
  #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/metadata/metadata_impl_macros.h"
 +#include "ui/events/event.h"
  #include "ui/views/interaction/element_tracker_views.h"
 +#include "ui/views/widget/widget.h"
-+#include "ui/views/widget/widget_delegate.h"
 +
 +#if BUILDFLAG(IS_WIN)
-+#include <windows.h>
-+
-+#include <commctrl.h>
-+
++#include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
 +#include "ui/aura/window.h"
-+#include "ui/views/win/hwnd_util.h"
 +#endif
-+
-+namespace {
-+
-+#if BUILDFLAG(IS_WIN)
-+int ResizeCommandForComponent(int component) {
-+  switch (component) {
-+    case HTLEFT:
-+      return WMSZ_LEFT;
-+    case HTRIGHT:
-+      return WMSZ_RIGHT;
-+    case HTTOP:
-+      return WMSZ_TOP;
-+    case HTTOPLEFT:
-+      return WMSZ_TOPLEFT;
-+    case HTTOPRIGHT:
-+      return WMSZ_TOPRIGHT;
-+    case HTBOTTOM:
-+      return WMSZ_BOTTOM;
-+    case HTBOTTOMLEFT:
-+      return WMSZ_BOTTOMLEFT;
-+    case HTBOTTOMRIGHT:
-+      return WMSZ_BOTTOMRIGHT;
-+    default:
-+      return 0;
-+  }
-+}
-+
-+wchar_t* ResizeCursorForComponent(int component) {
-+  switch (component) {
-+    case HTLEFT:
-+    case HTRIGHT:
-+      return IDC_SIZEWE;
-+    case HTTOP:
-+    case HTBOTTOM:
-+      return IDC_SIZENS;
-+    case HTTOPLEFT:
-+    case HTBOTTOMRIGHT:
-+      return IDC_SIZENWSE;
-+    case HTTOPRIGHT:
-+    case HTBOTTOMLEFT:
-+      return IDC_SIZENESW;
-+    default:
-+      return nullptr;
-+  }
-+}
-+
-+constexpr UINT_PTR kResizeCursorSubclassId = 0x57425549;
-+
-+LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
-+                                          UINT message,
-+                                          WPARAM w_param,
-+                                          LPARAM l_param,
-+                                          UINT_PTR subclass_id,
-+                                          DWORD_PTR ref_data) {
-+  if (message == WM_SETCURSOR) {
-+    const LPARAM cursor_position = static_cast<LPARAM>(::GetMessagePos());
-+    const int component = static_cast<int>(
-+        ::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position));
-+    if (wchar_t* cursor = ResizeCursorForComponent(component)) {
-+      ::SetCursor(::LoadCursor(nullptr, cursor));
-+      return TRUE;
-+    }
-+  }
-+
-+  if (message == WM_NCDESTROY) {
-+    ::RemoveWindowSubclass(hwnd, ResizeCursorSubclassProc, subclass_id);
-+  }
-+  return ::DefSubclassProc(hwnd, message, w_param, l_param);
-+}
-+#endif
-+
-+}  // namespace
  
  WebUIBrowserClientView::WebUIBrowserClientView(
      WebUIBrowserWebContentsDelegate* web_contents_delegate,
-@@ -26,6 +111,16 @@ WebUIBrowserClientView::WebUIBrowserClientView(
+@@ -26,6 +34,14 @@ WebUIBrowserClientView::WebUIBrowserClientView(
  }
  
  WebUIBrowserClientView::~WebUIBrowserClientView() {
@@ -727,138 +714,49 @@ index df2247060d..41bcd666ed 100644
 +    event_target_->RemovePreTargetHandler(this);
 +  }
 +  if (GetWidget()) {
-+    ::RemoveWindowSubclass(views::HWNDForWidget(GetWidget()),
-+                           ResizeCursorSubclassProc,
-+                           kResizeCursorSubclassId);
++    rail::RemoveResizeCursorSubclass(GetWidget());
 +  }
 +#endif
    web_contents_delegate_->RemoveObserver(this);
    set_contents_view(nullptr);
  }
-@@ -33,6 +128,14 @@ WebUIBrowserClientView::~WebUIBrowserClientView() {
+@@ -33,6 +49,12 @@ WebUIBrowserClientView::~WebUIBrowserClientView() {
  void WebUIBrowserClientView::AddedToWidget() {
    views::ClientView::AddedToWidget();
  
 +#if BUILDFLAG(IS_WIN)
 +  event_target_ = GetWidget()->GetNativeView();
 +  event_target_->AddPreTargetHandler(this);
-+  CHECK(::SetWindowSubclass(views::HWNDForWidget(GetWidget()),
-+                            ResizeCursorSubclassProc,
-+                            kResizeCursorSubclassId, 0));
++  rail::InstallResizeCursorSubclass(GetWidget());
 +#endif
 +
    // Set up element tracking callback to notify us when the
    // kLocationIconElementId bounds change, so that we can reposition the
    // Permission dialog widget as per the latest position of WebUI Anchor.
-@@ -48,13 +151,106 @@ void WebUIBrowserClientView::AddedToWidget() {
+@@ -48,7 +70,21 @@ void WebUIBrowserClientView::AddedToWidget() {
                                base::Unretained(this)));
  }
  
 +void WebUIBrowserClientView::OnMouseEvent(ui::MouseEvent* event) {
 +#if BUILDFLAG(IS_WIN)
-+  const bool is_hover_event = event->type() == ui::EventType::kMouseMoved ||
-+                              event->type() == ui::EventType::kMouseEntered;
-+  const bool is_left_press = event->type() == ui::EventType::kMousePressed &&
-+                             event->IsOnlyLeftMouseButton();
-+  if (!is_hover_event && !is_left_press) {
-+    return;
-+  }
-+
-+  HWND hwnd = views::HWNDForWidget(GetWidget());
-+  if (!hwnd) {
-+    return;
-+  }
-+
-+  const LPARAM cursor_position = static_cast<LPARAM>(::GetMessagePos());
-+  const int component = static_cast<int>(
-+      ::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position));
-+
-+  if (is_hover_event) {
-+    if (wchar_t* cursor = ResizeCursorForComponent(component)) {
-+      ::SetCursor(::LoadCursor(nullptr, cursor));
-+    }
-+    return;
-+  }
-+
-+  const int resize_command = ResizeCommandForComponent(component);
-+  if (component != HTCAPTION && resize_command == 0) {
-+    return;
-+  }
-+
-+  event->StopPropagation();
-+  ::ReleaseCapture();
-+  if (component == HTCAPTION) {
-+    if (event->GetClickCount() == 2) {
-+      ::PostMessage(hwnd, WM_SYSCOMMAND,
-+                    GetWidget()->IsMaximized() ? SC_RESTORE : SC_MAXIMIZE, 0);
-+      return;
-+    }
-+    ::PostMessage(hwnd, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, cursor_position);
-+    return;
-+  }
-+
-+  ::SetCursor(
-+      ::LoadCursor(nullptr, ResizeCursorForComponent(component)));
-+  ::PostMessage(hwnd, WM_SYSCOMMAND, SC_SIZE | resize_command, cursor_position);
++  rail::HandleFramelessMouseEvent(GetWidget(), event);
 +#endif
 +}
 +
  int WebUIBrowserClientView::NonClientHitTest(const gfx::Point& point) {
-+  // The frameless window has no native frame to grab, so the client area
-+  // itself reports the resize edges.
-+  const int resize_component = GetResizeComponent(point);
++#if BUILDFLAG(IS_WIN)
++  const int resize_component =
++      rail::ResizeComponentForPoint(GetWidget(), size(), point);
 +  if (resize_component != HTNOWHERE) {
 +    return resize_component;
 +  }
++#endif
 +
    if (draggable_region_.contains(point.x(), point.y())) {
      return HTCAPTION;
    }
-   return ClientView::NonClientHitTest(point);
- }
- 
-+int WebUIBrowserClientView::GetResizeComponent(const gfx::Point& point) const {
-+  const views::Widget* widget = GetWidget();
-+  if (!widget || !widget->widget_delegate()->CanResize() ||
-+      widget->IsMaximized() || widget->IsFullscreen()) {
-+    return HTNOWHERE;
-+  }
-+
-+  constexpr int kResizeBorder = 6;
-+  constexpr int kResizeCorner = 16;
-+
-+  bool in_top = point.y() < kResizeBorder;
-+  bool in_bottom = point.y() >= height() - kResizeBorder;
-+  bool in_left = point.x() < kResizeBorder;
-+  bool in_right = point.x() >= width() - kResizeBorder;
-+  if (!in_top && !in_bottom && !in_left && !in_right) {
-+    return HTNOWHERE;
-+  }
-+
-+  in_top |= point.y() < kResizeCorner;
-+  in_left |= point.x() < kResizeCorner;
-+  in_right |= point.x() >= width() - kResizeCorner;
-+
-+  if (in_top) {
-+    if (in_left) {
-+      return HTTOPLEFT;
-+    }
-+    return in_right ? HTTOPRIGHT : HTTOP;
-+  }
-+  if (in_bottom) {
-+    if (in_left) {
-+      return HTBOTTOMLEFT;
-+    }
-+    return in_right ? HTBOTTOMRIGHT : HTBOTTOM;
-+  }
-+  return in_left ? HTLEFT : HTRIGHT;
-+}
-+
- void WebUIBrowserClientView::OnLocationIconMoved(ui::TrackedElement* element) {
-   BrowserWindowInterface* const browser =
-       web_contents_delegate_->window()->browser();
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_client_view.h b/chrome/browser/ui/webui_browser/webui_browser_client_view.h
-index 5e6d29db20..95d76ed1f9 100644
+index 5e6d29db20..76021aed12 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_client_view.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_client_view.h
 @@ -6,12 +6,20 @@
@@ -882,7 +780,7 @@ index 5e6d29db20..95d76ed1f9 100644
  namespace ui {
  class TrackedElement;
  }
-@@ -34,12 +42,22 @@ class WebUIBrowserClientView
+@@ -34,12 +42,19 @@ class WebUIBrowserClientView
    int NonClientHitTest(const gfx::Point& point) override;
    void AddedToWidget() override;
  
@@ -892,9 +790,6 @@ index 5e6d29db20..95d76ed1f9 100644
   private:
    void OnLocationIconMoved(ui::TrackedElement* element);
  
-+  // Returns the resize edge `point` falls in, or HTNOWHERE.
-+  int GetResizeComponent(const gfx::Point& point) const;
-+
    raw_ptr<WebUIBrowserWebContentsDelegate> web_contents_delegate_;
    SkRegion draggable_region_;
  
@@ -975,7 +870,7 @@ index 512f1c770b..1ddf68a4f6 100644
    Browser* browser() { return browser_; }
    WebUIBrowserWindow* browser_window() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..5647d11612 100644
+index 3fabca0c2a..eff8009b61 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -987,25 +882,18 @@ index 3fabca0c2a..5647d11612 100644
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/browser/themes/custom_theme_supplier.h"
  #include "chrome/browser/themes/theme_service.h"
-@@ -53,6 +55,17 @@
+@@ -53,6 +55,10 @@
  #include "ui/views/widget/widget.h"
  #include "ui/views/widget/widget_delegate.h"
  
 +#if BUILDFLAG(IS_WIN)
-+#include <dwmapi.h>
-+
-+// winuser.h aliases this name to LoadAcceleratorsW, which collides with the
-+// WebUIBrowserWindow method below.
-+#undef LoadAccelerators
-+
-+#include "chrome/browser/win/mica_titlebar.h"
-+#include "ui/views/win/hwnd_util.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
 +#endif
 +
  #if BUILDFLAG(IS_CHROMEOS)
  #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
  #endif  // BUILDFLAG(IS_CHROMEOS)
-@@ -127,16 +140,31 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -127,16 +133,21 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
    params.bounds = gfx::Rect(0, 0, 800, 600);
    params.delegate = widget_delegate_.get();
    params.native_widget = CreateNativeWidget();
@@ -1016,17 +904,7 @@ index 3fabca0c2a..5647d11612 100644
    widget_->Init(std::move(params));
    widget_->SetNativeWindowProperty(kWebUIBrowserWindowKey, this);
 +#if BUILDFLAG(IS_WIN)
-+  if (SystemTitlebarCanUseMicaMaterial()) {
-+    const BOOL use_dark_mode =
-+        widget_->GetColorMode() == ui::ColorProviderKey::ColorMode::kDark;
-+    DwmSetWindowAttribute(views::HWNDForWidget(widget_.get()),
-+                          DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark_mode,
-+                          sizeof(use_dark_mode));
-+    const DWM_SYSTEMBACKDROP_TYPE backdrop = DWMSBT_TABBEDWINDOW;
-+    DwmSetWindowAttribute(views::HWNDForWidget(widget_.get()),
-+                          DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
-+                          sizeof(backdrop));
-+  }
++  rail::ApplyMicaBackdrop(widget_.get());
 +#endif
    widget_->MakeCloseSynchronous(base::BindOnce(
        &WebUIBrowserWindow::OnWindowCloseRequested, base::Unretained(this)));
@@ -1038,7 +916,7 @@ index 3fabca0c2a..5647d11612 100644
    web_contents_delegate_->SetUIWebContents(ui_web_contents);
    ui_web_contents->SetDelegate(web_contents_delegate_.get());
    ui_web_contents->SetUserData(
-@@ -182,6 +210,11 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -182,6 +193,11 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
            base::BindRepeating(&WebUIBrowserWindow::OnContentsElementShown,
                                base::Unretained(this)));
  
@@ -1050,7 +928,7 @@ index 3fabca0c2a..5647d11612 100644
    LoadAccelerators();
  }
  
-@@ -691,6 +724,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +707,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -1059,7 +937,7 @@ index 3fabca0c2a..5647d11612 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -1217,6 +1252,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1235,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  
@@ -1103,3 +981,16 @@ index b1bf0bcb52..999e4efac4 100644
    std::unique_ptr<WebUIBrowserModalDialogHost> modal_dialog_host_;
    std::unique_ptr<WebUIToolbarExtensionsContainer> extensions_container_;
    std::unique_ptr<ui::ScopedUnownedUserData<ExtensionsContainer>>
+diff --git a/tools/gritsettings/resource_ids.spec b/tools/gritsettings/resource_ids.spec
+index 9d8b4ade5a..42d5a4e25b 100644
+--- a/tools/gritsettings/resource_ids.spec
++++ b/tools/gritsettings/resource_ids.spec
+@@ -877,7 +877,7 @@
+     "includes": [5230],
+   },
+   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/webui_browser/resources.grd": {
+-    "META": {"sizes": {"includes": [50]}},
++    "META": {"sizes": {"includes": [80]}},
+     "includes": [5250],
+   },
+   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/webui_browser/internal/resources.grd": {

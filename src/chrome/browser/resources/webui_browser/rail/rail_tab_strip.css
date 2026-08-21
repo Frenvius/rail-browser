@@ -1,0 +1,79 @@
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #scheme=relative
+ * #css_wrapper_metadata_end */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#tabstrip {
+  /* Make the window frame draggable.
+  * Children elements need to use "app-region: no-drag" to
+  * be excluded from the dragging area */
+  -webkit-app-region: drag;
+
+  align-items: stretch;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 4px 0 8px;
+}
+
+#tabstrip.nodrag {
+  -webkit-app-region: no-drag;
+}
+
+#tabList {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  /* Fades the last rows out instead of cutting them at the scroll edge. */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 8px 24px;
+}
+
+#tabList::-webkit-scrollbar {
+  width: 0;
+}
+
+#newTabButton,
+webui-browser-tab {
+  -webkit-app-region: no-drag;
+}
+
+#newTabButton {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--rail-text-label, #808098);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 13px;
+  gap: 8px;
+  height: 32px;
+  margin: 4px 8px 0;
+  padding: 0 10px;
+  transition: background-color 100ms ease;
+  --iron-icon-width: 15px;
+  --iron-icon-height: 15px;
+  --iron-icon-fill-color: var(--rail-text-label, #808098);
+}
+
+#newTabButton:hover {
+  background: var(--rail-elevated, #282840);
+}
+
+#newTabButton:focus-visible {
+  outline: 2px solid var(--rail-accent, #7c5cfc);
+  outline-offset: 1px;
+}

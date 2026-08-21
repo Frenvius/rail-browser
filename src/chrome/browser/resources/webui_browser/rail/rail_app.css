@@ -1,0 +1,248 @@
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #import=//resources/cr_elements/cr_icons_lit.css.js
+ * #import=./rail_tokens.css.js
+ * #scheme=relative
+ * #include=cr-icons-lit rail-tokens
+ * #css_wrapper_metadata_end */
+
+:host {
+  color-scheme: dark;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  color: var(--rail-text);
+  position: relative; /* Needed for absolute positioning of controls */
+  overflow: hidden;
+  user-select: none;
+}
+
+#rootContainer {
+  background: transparent;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+#topContainer {
+  background: var(--rail-chrome-strong);
+  grid-row: 1;
+  min-width: 0;
+}
+
+/* Hide browser frame in tab fullscreen mode */
+:host([fullscreen-mode='tab']) #topContainer {
+  display: none;
+}
+
+/* Make content fill the window in tab fullscreen mode */
+:host([fullscreen-mode='tab']) #contentRegion {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.titlebarDiv {
+  app-region: drag;
+  -webkit-app-region: drag;
+  align-items: center;
+  background-color: transparent;
+  display: flex;
+  gap: 2px;
+  height: var(--rail-titlebar-height);
+  padding-left: var(--rail-sidebar-width);
+}
+
+.titlebarDiv cr-icon-button,
+.titlebarDiv cr-button,
+.titlebarDiv #addressBox,
+.titlebarDiv webui-browser-extensions-bar {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+.caption-button {
+  box-shadow: none;
+  border-radius: 0;
+  --cr-button-background-color: transparent;
+  --cr-button-border-color: transparent;
+  --iron-icon-width: 16px;
+  --iron-icon-height: 16px;
+  --iron-icon-stroke-color: var(--rail-text-dim);
+  --iron-icon-fill-color: transparent;
+  stroke-width: 3px;
+  color: var(--rail-text-dim);
+  height: var(--rail-titlebar-height);
+  min-width: 46px;
+  padding: 0;
+  shape-rendering: crispEdges;
+}
+
+.caption-button:focus-visible,
+cr-icon-button:focus-visible,
+#locationIconButton:focus-visible {
+  outline: 2px solid var(--rail-accent);
+  outline-offset: -3px;
+}
+
+.caption-button:hover {
+  background: var(--rail-hover);
+}
+
+.caption-button:last-child:hover {
+  background: #e81123;
+}
+
+#bookmarkBar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  user-select: none;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+
+cr-icon-button {
+  --cr-icon-button-icon-size: 18px;
+  --cr-icon-button-margin-end: 0;
+  --cr-icon-button-margin-start: 0;
+  --cr-icon-button-size: 32px;
+  --cr-icon-button-fill-color: var(--rail-text-dim);
+  border-radius: 6px;
+  transition: background-color 80ms ease;
+}
+
+cr-icon-button:hover {
+  background: var(--rail-hover);
+}
+
+cr-icon-button[disabled] {
+  opacity: .3;
+}
+
+webui-browser-tab-strip {
+  flex: 1;
+  min-height: 0;
+}
+
+webui-browser-searchbox {
+  --color-searchbox-background: var(--rail-elevated);
+  --color-searchbox-foreground: var(--rail-text-muted);
+  --color-searchbox-placeholder: var(--rail-placeholder);
+  --color-searchbox-results-background: var(--rail-chrome-strong);
+  --color-searchbox-selection-background: var(--rail-accent);
+  --color-searchbox-selection-foreground: var(--rail-text);
+  --cr-searchbox-background: var(--rail-elevated);
+  --cr-searchbox-border-radius: 8px;
+  --cr-searchbox-font-size: 13px;
+  --cr-searchbox-foreground: var(--rail-text-muted);
+  --cr-searchbox-height: 30px;
+  --cr-searchbox-input-height: 30px;
+  --cr-searchbox-icon-left-position: 12px;
+  --cr-searchbox-icon-size-in-searchbox: 18px;
+  --cr-searchbox-icon-top-position: 0;
+  --cr-searchbox-match-padding: 4px 0;
+  --cr-searchbox-placeholder: var(--rail-placeholder);
+  --cr-searchbox-shadow: none;
+
+  flex: 1;
+}
+
+webui-browser-searchbox[dropdown-is-visible] {
+  --cr-searchbox-shadow: 0 8px 20px rgb(10 10 24 / 50%);
+}
+
+webui-browser-searchbox:focus-within {
+  --cr-searchbox-shadow: inset 0 0 0 1px var(--rail-accent),
+      0 0 0 3px var(--rail-accent-soft);
+}
+
+.activeFrame {
+  background-color: transparent;
+}
+
+.tabstripDiv {
+  app-region: drag;
+  -webkit-app-region: drag;
+  display: flex;
+  flex: 0 0 var(--rail-sidebar-width);
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  width: var(--rail-sidebar-width);
+}
+
+.captionButtonsDiv {
+  align-self: stretch;
+  display: flex;
+  white-space: nowrap;
+}
+
+.captionButtonsDiv cr-button {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+#addressBox {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  flex: 1;
+  margin: 0 8px;
+  position: relative;
+}
+
+#locationIconButton {
+  position: absolute;
+  z-index: 101;
+  top: 2px;
+  left: 4px;
+  height: 26px;
+  min-width: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  --iron-icon-width: 16px;
+  --iron-icon-height: 16px;
+  background-color: transparent;
+}
+
+#locationIcon {
+  fill: var(--rail-text-dim);
+  stroke: var(--rail-text-dim);
+  stroke-width: 0;
+  stroke-linecap: round;
+  shape-rendering: geometricPrecision;
+}
+
+#main {
+  grid-row: 2;
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  background-color: var(--rail-chrome);
+  min-height: 0;
+  padding: 0 6px 6px 0;
+}
+
+content-region {
+  background: #252540;
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgb(10 10 24 / 50%);
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}

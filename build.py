@@ -56,6 +56,42 @@ def _snapshot_ninja_state(build_dir, backup_dir):
             shutil.copy2(source, backup_dir / name)
 
 
+def _link_overlay(source_tree):
+    """Junction the first-party overlay into the Chromium checkout.
+
+    Overlay sources live in <root>/src and are versioned by this repository.
+    They are junctioned instead of copied so an edit needs no sync step, and
+    junctioning keeps the in-checkout path identical, which the build cache
+    depends on.
+    """
+    overlay_root = _ROOT_DIR / 'src'
+    if not overlay_root.is_dir():
+        return
+    for current, subdirs, files in os.walk(overlay_root):
+        if not files:
+            continue
+        relative = Path(current).relative_to(overlay_root)
+        link = source_tree / relative
+        if link.exists():
+            if not _is_junction(link):
+                raise RuntimeError(
+                    'Overlay target is a real directory, refusing to replace: {}'.format(link))
+            subdirs.clear()
+            continue
+        link.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(Path(current))],
+                       check=True,
+                       stdout=subprocess.DEVNULL)
+        get_logger().info('Linked overlay %s', relative)
+        subdirs.clear()
+
+
+def _is_junction(path):
+    FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+    attributes = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+    return attributes != -1 and bool(attributes & FILE_ATTRIBUTE_REPARSE_POINT)
+
+
 def _get_vcvars_path(name='64'):
     """
     Returns the path to the corresponding vcvars*.bat path
@@ -438,6 +474,7 @@ def main():
         with open(RUST_FLAG_FILE, 'w') as f:
             subprocess.run([source_tree / 'third_party' / 'rust-toolchain-x64' / 'rustc' / 'bin' / 'rustc.exe', '--version'], stdout=f)
 
+    _link_overlay(source_tree)
     _ensure_chromium_clang(source_tree)
     _ensure_chromium_clang_format(source_tree)
 
