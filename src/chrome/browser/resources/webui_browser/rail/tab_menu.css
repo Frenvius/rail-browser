@@ -1,0 +1,39 @@
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #scheme=relative
+ * #css_wrapper_metadata_end */
+
+/* The tab strip is a window drag region; without this the menu never receives
+ * the pointer. */
+:host,
+cr-action-menu,
+.dropdown-item {
+  -webkit-app-region: no-drag;
+}
+
+cr-action-menu {
+  --cr-menu-background-color: var(--rail-chrome-strong, #1e1e32);
+  --cr-menu-background-focus-color: var(--rail-hover, #303048);
+  --cr-menu-border-radius: 8px;
+  --cr-menu-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  --cr-primary-text-color: var(--rail-text-muted, #c0c0d8);
+}
+
+.dropdown-item {
+  color: var(--rail-text-muted, #c0c0d8);
+  font-size: 13px;
+  min-height: 30px;
+  padding: 0 16px;
+}
+
+.dropdown-item:hover {
+  background: var(--rail-hover, #303048);
+  color: var(--rail-text, #f0f0ff);
+}
+
+.dropdown-divider {
+  background: var(--rail-divider, #2a2a42);
+  border: none;
+  height: 1px;
+  margin: 4px 0;
+}

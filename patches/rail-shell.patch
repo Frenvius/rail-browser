@@ -1,16 +1,19 @@
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..d47a524557 100644
+index a75d80b00c..5009dc7d10 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
-@@ -23,6 +23,7 @@ build_webui("build") {
+@@ -23,6 +23,10 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
 +    "rail/docked_devtools.ts",
++    "rail/pinned_tabs.ts",
++    "rail/tab_menu.html.ts",
++    "rail/tab_menu.ts",
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +49,11 @@ build_webui("build") {
+@@ -48,6 +52,12 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -19,6 +22,7 @@ index a75d80b00c..d47a524557 100644
 +    "rail/rail_tab.css",
 +    "rail/rail_tab_strip.css",
 +    "rail/rail_tokens.css",
++    "rail/tab_menu.css",
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
@@ -492,6 +496,113 @@ index 4f1c700024..0ded2eee38 100644
 -    background-image: radial-gradient(circle at 100% 0, transparent 0,
 -        transparent 12px, var(--color-tab-background-active-frame-active) 13px);
 -}
+diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
+index 5d7329b14c..ca86c386d3 100644
+--- a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
++++ b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
+@@ -16,7 +16,7 @@ export function getHtml(this: TabElement) {
+   <span id="title">${this.tabData.title}</span>
+   <cr-icon-button
+       class="close"
+-      iron-icon="cr:clear"
++      iron-icon="${this.closeIcon_()}"
+       @click="${this.onCloseClick}">
+   </cr-icon-button>
+   <div id="bottomCorners" ?hidden="${!this.tabData.isActive}">
+diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
+index 2fbabd09ef..0d415f1813 100644
+--- a/chrome/browser/resources/webui_browser/tab_strip/tab.ts
++++ b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
+@@ -3,13 +3,11 @@
+ // found in the LICENSE file.
+ 
+ import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
++import '../icons.html.js';
+ 
+ import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
+ import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+ import type {Tab as TabData} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
+-import {TabStripUIController} from '/tab_strip_api/tab_strip_ui_controller.mojom-webui.js';
+-import type {TabStripUIControllerRemote} from '/tab_strip_api/tab_strip_ui_controller.mojom-webui.js';
+-
+ import {TabNetworkState} from '../tabs.mojom-webui.js';
+ 
+ import {getCss} from './tab.css.js';
+@@ -39,6 +37,14 @@ export class TabElement extends CrLitElement {
+         type: Boolean,
+         reflect: true,
+       },
++      pinned: {
++        type: Boolean,
++        reflect: true,
++      },
++      dormant: {
++        type: Boolean,
++        reflect: true,
++      },
+     };
+   }
+ 
+@@ -56,31 +62,38 @@ export class TabElement extends CrLitElement {
+ 
+   protected accessor dragInProgress = false;
+   protected accessor active = false;
+-
+-  private readonly tabStripUiController_: TabStripUIControllerRemote;
+-
+-  constructor() {
+-    super();
+-
+-    this.tabStripUiController_ = TabStripUIController.getRemote();
+-  }
++  accessor pinned = false;
++  accessor dormant = false;
+ 
+   override connectedCallback() {
+     super.connectedCallback();
+ 
++    this.addEventListener('click', this.onClick_.bind(this));
+     this.addEventListener('contextmenu', this.onContextMenu_.bind(this));
+   }
+ 
++  private onClick_() {
++    this.fire('tab-select', {id: this.tabData.id});
++  }
++
+   private onContextMenu_(e: MouseEvent) {
+     e.stopPropagation();
+     e.preventDefault();
+ 
+-    this.tabStripUiController_.showTabContextMenu(this.tabData.id, {
+-      x: e.screenX,
+-      y: e.screenY,
++    this.fire('tab-context-menu', {
++      id: this.tabData.id,
++      url: this.tabData.url,
++      pinned: this.pinned,
++      dormant: this.dormant,
++      x: e.clientX,
++      y: e.clientY,
+     });
+   }
+ 
++  protected closeIcon_(): string {
++    return this.pinned && !this.dormant ? 'webui-browser:minimize' : 'cr:clear';
++  }
++
+   override willUpdate(changedProperties: PropertyValues<this>) {
+     super.willUpdate(changedProperties);
+ 
+@@ -109,7 +122,8 @@ export class TabElement extends CrLitElement {
+     return matrix.m41;
+   }
+ 
+-  protected onCloseClick() {
++  protected onCloseClick(e: Event) {
++    e.stopPropagation();
+     this.fire('tab-close-click', {id: this.tabData.id});
+   }
+ }
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css
 index 207b92cfae..e58d103e4b 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css
@@ -533,18 +644,40 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..6d527c12bf 100644
+index 65d7e76ce5..acbf31383d 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -10,6 +10,7 @@ export function getHtml(this: TabStripElement) {
+@@ -10,22 +10,43 @@ export function getHtml(this: TabStripElement) {
    // clang-format off
    return html`<!--_html_template_start_-->
  <div id="tabstrip">
+-    ${this.items_.map(item => item.type === 'tab' ? html`
++  <div id="pinnedList">
++    ${this.pinnedRows_.map(row => html`
++          <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
++              .tabData="${row.item.tabData}"
++              .dragInProgress="${this.dragInProgress_}"
++              .pinned="${true}"
++              .dormant="${row.dormant}"
++              @tab-close-click="${this.onTabCloseClick}"
++              @tab-context-menu="${this.onTabContextMenu_}"
++              @tab-select="${this.onTabSelect_}">
++          </webui-browser-tab>
++        `)}
++  </div>
++  <div id="pinnedDivider" ?hidden="${!this.pinnedRows_.length}"></div>
 +  <div id="tabList">
-     ${this.items_.map(item => item.type === 'tab' ? html`
++    ${this.looseItems_.map(item => item.type === 'tab' ? html`
            <webui-browser-tab id="${this.tabIdToDomId(item.id)}"
                .tabData="${item.tabData}"
-@@ -21,10 +22,12 @@ export function getHtml(this: TabStripElement) {
+               .dragInProgress="${this.dragInProgress_}"
+-              @tab-close-click="${this.onTabCloseClick}">
++              @tab-close-click="${this.onTabCloseClick}"
++              @tab-context-menu="${this.onTabContextMenu_}"
++              @tab-select="${this.onTabSelect_}">
+           </webui-browser-tab>
+         ` : html`
+           <webui-browser-tab-group .collectionId="${item.id}"
                .groupData="${item.groupData}">
            </webui-browser-tab-group>
          `)}
@@ -558,8 +691,228 @@ index 65d7e76ce5..6d527c12bf 100644
 +    <span>$i18n{tooltipNewTab}</span>
 +  </button>
  </div>
++<rail-tab-menu id="tabMenu" @rail-tab-command="${this.onRailTabCommand_}">
++</rail-tab-menu>
  <!--_html_template_end_-->`;
    // clang-format on
+ }
+diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
+index aa4e0fe69e..1c07cd9510 100644
+--- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
++++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
+@@ -4,6 +4,7 @@
+ 
+ import './tab.js';
+ import './tab_group.js';
++import '../rail/tab_menu.js';
+ import '//resources/cr_elements/cr_icon/cr_icon.js';
+ import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
+ import '//resources/cr_elements/icons.html.js';
+@@ -20,6 +21,10 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
+ import {TabStripObservation} from '/tab_strip_api/tab_strip_observation.js';
+ import type {TabStripObserver} from '/tab_strip_api/tab_strip_observer.js';
+ 
++import type {PinnedEntry} from '../rail/pinned_tabs.js';
++import {dormantTabData, PinnedTabs} from '../rail/pinned_tabs.js';
++import type {TabCommandDetail, TabMenuElement, TabMenuTarget} from '../rail/tab_menu.js';
++
+ import type {TabActivated, TabAdded, TabClosed, TabUpdated} from './events.js';
+ import type {TabGroupItem, TabItem, TabStripItem} from './items.js';
+ import type {TabElement} from './tab.js';
+@@ -33,9 +38,15 @@ export type {TabGroupItem, TabItem, TabStripItem};
+ export interface TabStripElement {
+   $: {
+     tabstrip: HTMLElement,
++    tabMenu: TabMenuElement,
+   };
+ }
+ 
++export interface PinnedRow {
++  item: TabItem;
++  dormant: boolean;
++}
++
+ class TabStripItemFactory {
+   static create(child: Container): TabStripItem|null {
+     const data = child.data;
+@@ -82,6 +93,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+       items_: {
+         type: Array,
+       },
++      pinnedRows_: {
++        type: Array,
++        state: true,
++      },
++      looseItems_: {
++        type: Array,
++        state: true,
++      },
+       activeTab_: {
+         type: String,
+         state: true,
+@@ -94,8 +113,11 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+   }
+ 
+   protected accessor items_: TabStripItem[] = [];
++  protected accessor pinnedRows_: PinnedRow[] = [];
++  protected accessor looseItems_: TabStripItem[] = [];
+   protected accessor activeTab_: string = '';
+   protected accessor dragInProgress_ = false;
++  private readonly pinnedTabs_ = new PinnedTabs();
+ 
+   private readonly tabStripService_: TabStripServiceRemote;
+   private tabStripObservation_: TabStripObservation|undefined;
+@@ -117,6 +139,9 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+   private async loadTabStripModel_(observation: TabStripObservation) {
+     const tabSnapshot = await this.tabStripService_.getTabs();
+     const items = this.processModelContainer_(tabSnapshot.tabStrip);
++    await this.pinnedTabs_.restore(
++        items.filter((item): item is TabItem => item.type === 'tab')
++            .map(item => item.tabData));
+     this.setItems_(items);
+ 
+     // Process initial tabs to identify the active tab and fire tab-added
+@@ -171,8 +196,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+ 
+   onNodesClosed(nodesClosedEvent: OnNodesClosedEvent) {
+     nodesClosedEvent.nodeIds.forEach(nodeId => {
++      this.pinnedTabs_.release(nodeId);
+       this.removeItem(nodeId);
+     });
++    this.refreshSections_();
+   }
+ 
+   override update(changedProperties: PropertyValues<this>) {
+@@ -261,10 +288,112 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+   }
+ 
+   protected onTabCloseClick(e: CustomEvent<{id: string}>) {
+-    this.tabStripService_.closeNodes([e.detail.id]);
++    this.closeTarget_(e.detail.id);
++  }
++
++  protected onTabSelect_(e: CustomEvent<{id: string}>) {
++    this.activateTab(e.detail.id);
++  }
++
++  protected onTabContextMenu_(
++      e: CustomEvent<TabMenuTarget&{x: number, y: number}>) {
++    const {id, url, pinned, dormant, x, y} = e.detail;
++    this.$.tabMenu.openFor({id, url, pinned, dormant}, x, y);
++  }
++
++  protected onRailTabCommand_(e: CustomEvent<TabCommandDetail>) {
++    const {command, target} = e.detail;
++    switch (command) {
++      case 'copy-link':
++        navigator.clipboard.writeText(target.url);
++        break;
++      case 'duplicate':
++        this.tabStripService_.createTabAt(null, target.url);
++        break;
++      case 'pin':
++        this.pinTab_(target.id);
++        break;
++      case 'unpin':
++        this.unpinTab_(target.id);
++        break;
++      case 'close':
++        this.closeTarget_(target.id);
++        break;
++    }
++  }
++
++  private pinTab_(tabId: string) {
++    const item = this.findItem_<TabItem>(tabId, 'tab');
++    if (!item) {
++      return;
++    }
++    this.pinnedTabs_.pin(item.tabData);
++    this.refreshSections_();
++  }
++
++  private unpinTab_(id: string) {
++    const entry = this.entryFor_(id);
++    if (!entry) {
++      return;
++    }
++    this.pinnedTabs_.unpin(entry.key);
++    // A row with no tab behind it has nowhere to go once it stops being
++    // pinned, so unpinning one opens it as an ordinary tab.
++    if (!entry.tabId) {
++      this.tabStripService_.createTabAt(null, entry.url);
++    }
++    this.refreshSections_();
++  }
++
++  // Closing a live pinned row destroys the tab and leaves the row behind; a
++  // second close, now with nothing behind it, drops the row itself.
++  private closeTarget_(id: string) {
++    const entry = this.entryFor_(id);
++    if (entry && !entry.tabId) {
++      this.pinnedTabs_.unpin(entry.key);
++      this.refreshSections_();
++      return;
++    }
++    this.tabStripService_.closeNodes([entry ? entry.tabId : id]);
++  }
++
++  private entryFor_(id: string): PinnedEntry|undefined {
++    return this.pinnedTabs_.byKey(id) || this.pinnedTabs_.byTab(id);
++  }
++
++  private async wakeEntry_(entry: PinnedEntry) {
++    const tab = await this.tabStripService_.createTabAt(null, entry.url);
++    this.pinnedTabs_.attach(entry.key, tab);
++    this.refreshSections_();
++  }
++
++  private refreshSections_() {
++    const claimed = new Set<string>();
++    const rows: PinnedRow[] = [];
++    for (const entry of this.pinnedTabs_.entries) {
++      const item =
++          entry.tabId ? this.findItem_<TabItem>(entry.tabId, 'tab') : undefined;
++      if (item) {
++        claimed.add(item.id);
++        rows.push({item, dormant: false});
++        continue;
++      }
++      rows.push({
++        item: {type: 'tab', id: entry.key, tabData: dormantTabData(entry)},
++        dormant: true,
++      });
++    }
++    this.pinnedRows_ = rows;
++    this.looseItems_ = this.items_.filter(item => !claimed.has(item.id));
+   }
+ 
+   protected activateTab(tabId: NodeId) {
++    const dormant = this.pinnedTabs_.byKey(tabId);
++    if (dormant) {
++      this.wakeEntry_(dormant);
++      return;
++    }
++
+     const item = this.findItem_<TabItem>(tabId, 'tab');
+     if (!item) {
+       return;
+@@ -288,6 +417,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+   }
+ 
+   private updateTab(tab: Tab) {
++    this.pinnedTabs_.track(tab);
+     const updated = this.updateItem_(tab.id, 'tab', {
+       type: 'tab',
+       id: tab.id,
+@@ -339,6 +469,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+ 
+   protected setItems_(items: TabStripItem[]) {
+     this.items_ = items;
++    this.refreshSections_();
+   }
+ 
+   private updateItemAt_(index: number, item: TabStripItem) {
 diff --git a/chrome/browser/resources/webui_browser/webui_browser.html b/chrome/browser/resources/webui_browser/webui_browser.html
 index 2a17afc37b..db2ba1e21d 100644
 --- a/chrome/browser/resources/webui_browser/webui_browser.html
@@ -611,10 +964,35 @@ index 77f5a0e8f4..3764ce07e1 100644
          GetUserDataFactory().CreateInstance<BrowserElementsWebUiBrowser>(
              *browser, *browser);
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..91773009e1 100644
+index 3d4fe27f4f..995fb8d2ea 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -75,6 +75,13 @@ source_set("impl") {
+@@ -13,6 +13,7 @@ source_set("headers") {
+ source_set("webui_browser") {
+   sources = [
+     "browser_elements_webui_browser.h",
++    "rail/rail_pinned_tabs.h",
+     "find_bar_owner_webui_browser.h",
+     "webui_browser_exclusive_access_context.h",
+     "webui_browser_side_panel_ui.h",
+@@ -25,6 +26,8 @@ source_set("webui_browser") {
+     ":browser_mojo_bindings",
+     ":headers",
+     "//base",
++    "//components/pref_registry",
++    "//components/prefs",
+     "//chrome/browser/ui/exclusive_access",
+     "//chrome/browser/ui/location_bar",
+     "//chrome/browser/ui/side_panel",
+@@ -52,6 +55,7 @@ source_set("impl") {
+   sources = [
+     "bookmark_bar_page_handler.cc",
+     "bookmark_bar_page_handler.h",
++    "rail/rail_pinned_tabs.cc",
+     "browser_elements_webui_browser.cc",
+     "find_bar_owner_webui_browser.cc",
+     "webui_browser.cc",
+@@ -75,6 +79,13 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -628,7 +1006,7 @@ index 3d4fe27f4f..91773009e1 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -140,6 +147,10 @@ source_set("impl") {
+@@ -140,6 +151,10 @@ source_set("impl") {
      ]
    }
  
@@ -639,7 +1017,7 @@ index 3d4fe27f4f..91773009e1 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -154,6 +165,7 @@ mojom("browser_mojo_bindings") {
+@@ -154,6 +169,7 @@ mojom("browser_mojo_bindings") {
      "//components/browser_apis/tab_strip:mojom",
      "//mojo/public/mojom/base",
      "//ui/base/mojom:ui_base_types",
@@ -648,7 +1026,7 @@ index 3d4fe27f4f..91773009e1 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..5bc1d440fd 100644
+index 15a65f7152..da45995cf1 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -7,6 +7,7 @@ module webui_browser.mojom;
@@ -678,6 +1056,18 @@ index 15a65f7152..5bc1d440fd 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
+@@ -90,6 +103,11 @@ interface PageHandler {
+ 
+   // How far to offset tab strip to avoid overlapping with the caption buttons.
+   GetTabStripInset() => (int32 width);
++
++  // Rail's pinned sidebar rows, serialized by the WebUI. A row outlives the tab
++  // behind it, so it cannot be derived from the tab strip model.
++  GetPinnedTabs() => (string value);
++  SetPinnedTabs(string value);
+ };
+ 
+ // These are all the different icons that can be displayed in the chip next to
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 index df2247060d..9a372ab9ee 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
@@ -800,6 +1190,58 @@ index 5e6d29db20..76021aed12 100644
    // Subscription for tracking location icon element movements.
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
+diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
+index 3ba14e7289..f431fd2125 100644
+--- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
++++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
+@@ -12,6 +12,7 @@
+ #include "base/mac/mac_util.h"
+ #endif
+ #include "chrome/browser/devtools/devtools_window.h"
++#include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser.h"
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+@@ -26,6 +27,7 @@
+ #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
+ #include "chrome/browser/ui/views/tab_search_bubble_host.h"
+ #include "chrome/browser/ui/views/toolbar/app_menu.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_pinned_tabs.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
+ #include "components/browser_apis/tab_strip/types/node_id.h"
+@@ -332,6 +334,18 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+   );
+ }
+ 
++void WebUIBrowserPageHandler::GetPinnedTabs(GetPinnedTabsCallback callback) {
++  Browser* browser = GetBrowser();
++  std::move(callback).Run(
++      rail::GetPinnedTabs(browser ? browser->profile()->GetPrefs() : nullptr));
++}
++
++void WebUIBrowserPageHandler::SetPinnedTabs(const std::string& value) {
++  Browser* browser = GetBrowser();
++  rail::SetPinnedTabs(browser ? browser->profile()->GetPrefs() : nullptr,
++                      value);
++}
++
+ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+     content::RenderFrameHost& render_frame_host,
+     mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
+diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
+index 859da4ef00..2642b2631f 100644
+--- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
++++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
+@@ -56,6 +56,8 @@ class WebUIBrowserPageHandler
+   void Close() override;
+   void ShowBackForwardMenu(bool is_back) override;
+   void GetTabStripInset(GetTabStripInsetCallback callback) override;
++  void GetPinnedTabs(GetPinnedTabsCallback callback) override;
++  void SetPinnedTabs(const std::string& value) override;
+ 
+  private:
+   WebUIBrowserPageHandler(
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_ui.cc b/chrome/browser/ui/webui_browser/webui_browser_ui.cc
 index ec4912721f..71ade4fcbe 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_ui.cc
@@ -994,3 +1436,22 @@ index 9d8b4ade5a..42d5a4e25b 100644
      "includes": [5250],
    },
    "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/webui_browser/internal/resources.grd": {
+diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -91,6 +91,7 @@
+ #include "chrome/browser/ui/safety_hub/safety_hub_prefs.h"
+ #include "chrome/browser/ui/tabs/projects/projects_prefs.h"
+ #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_pinned_tabs.h"
+ #include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_prefs.h"
+ #include "chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h"
+ #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
+@@ -1648,6 +1649,7 @@
+   ChromeLocationBarModelDelegate::RegisterProfilePrefs(registry);
+   content_settings::CookieSettings::RegisterProfilePrefs(registry);
+   ChromeVersionService::RegisterProfilePrefs(registry);
++  rail::RegisterPinnedTabsProfilePrefs(registry);
+   chrome_browser_net::NetErrorTabHelper::RegisterProfilePrefs(registry);
+   chrome_prefs::RegisterProfilePrefs(registry);
+   collaboration::prefs::RegisterProfilePrefs(registry);

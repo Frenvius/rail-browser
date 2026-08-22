@@ -82,6 +82,13 @@
     background: var(--rail-hover-strong, #3d3d5c);
 }
 
+/* The unload glyph is a stroked path, unlike the filled cross it replaces. */
+:host([pinned]:not([dormant])) .close {
+    --iron-icon-fill-color: transparent;
+    --iron-icon-stroke-color: var(--rail-text-dim, #b0b0c8);
+    stroke-width: 2px;
+}
+
 .close:focus-visible {
     outline: 2px solid var(--rail-accent, #7c5cfc);
     outline-offset: 1px;
