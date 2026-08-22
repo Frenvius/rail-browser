@@ -8,12 +8,18 @@ import {getHtml} from './tab_menu.html.js';
 
 export interface TabMenuTarget {
   id: string;
+  // Null while a pinned row has no tab behind it, which is also the only case
+  // where |id| is the pinned key rather than a live tab id.
+  tabId: string|null;
   url: string;
   pinned: boolean;
   dormant: boolean;
+  hasOthers: boolean;
+  hasRight: boolean;
 }
 
-export type TabCommand = 'copy-link'|'duplicate'|'pin'|'unpin'|'close';
+export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
+    'duplicate'|'pin'|'reload'|'unpin';
 
 export interface TabCommandDetail {
   command: TabCommand;
@@ -61,6 +67,10 @@ export class TabMenuElement extends CrLitElement {
     return target && target.pinned && !target.dormant ? 'Close Tab' : 'Remove';
   }
 
+  protected onReloadClick_() {
+    this.fire_('reload');
+  }
+
   protected onCopyLinkClick_() {
     this.fire_('copy-link');
   }
@@ -75,6 +85,14 @@ export class TabMenuElement extends CrLitElement {
 
   protected onCloseClick_() {
     this.fire_('close');
+  }
+
+  protected onCloseOthersClick_() {
+    this.fire_('close-others');
+  }
+
+  protected onCloseRightClick_() {
+    this.fire_('close-right');
   }
 
   private fire_(command: TabCommand) {

@@ -230,7 +230,7 @@ index 08978c8e14..4c3672a256 100644
 -  border-radius: 0 16px 0 0;
 -}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 8ebad94626..2ec30f94dc 100644
+index 8ebad94626..6408373513 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
 @@ -9,35 +9,11 @@ import type {WebuiBrowserAppElement} from './app.js';
@@ -298,7 +298,7 @@ index 8ebad94626..2ec30f94dc 100644
          <cr-button id="locationIconButton" type="button"
            ?hidden="${!this.showLocationIconButton_}"
            @click="${this.onLocationIconClick_}">
-@@ -65,14 +57,45 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -65,14 +57,46 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button id="appMenuButton" iron-icon="cr:more-vert"
          title="$i18n{appMenuTooltip}"
          @click="${this.onAppMenuClick_}"></cr-icon-button>
@@ -326,6 +326,7 @@ index 8ebad94626..2ec30f94dc 100644
 -    <content-region id="contentRegion"
 +    <div class="tabstripDiv">
 +      <webui-browser-tab-strip id="tabstrip"
++          @rail-tab-command="${this.onRailTabCommand_}"
 +          @tab-activated="${this.onTabActivated_}"
 +          @tab-added="${this.onTabAdded_}"
 +          @tab-closed="${this.onTabClosed_}"
@@ -346,7 +347,7 @@ index 8ebad94626..2ec30f94dc 100644
      </side-panel>
    </div>
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..3a400e6c6e 100644
+index caed98ffda..953d1fe343 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -18,6 +18,7 @@ import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
@@ -363,7 +364,7 @@ index caed98ffda..3a400e6c6e 100644
  import type {ContentRegionElement} from './content_region.js';
 +import type {CommandBarHost, CommandBarRow} from './rail/command_registry.js';
 +import {matchCommands, runCommand} from './rail/command_registry.js';
-+import type {TabCommand, TabMenuTarget} from './rail/tab_menu.js';
++import type {TabCommand, TabCommandDetail, TabMenuTarget} from './rail/tab_menu.js';
  import type {SidePanelElement} from './side_panel.js';
  import type {TabActivated, TabAdded, TabClosed, TabUpdated} from './tab_strip/events.js';
  import {TabStripElement} from './tab_strip/tab_strip.js';
@@ -472,7 +473,7 @@ index caed98ffda..3a400e6c6e 100644
      browserProxyFactory.getInstance()
          .callbackRouter.setReloadStopState.addListener(
              this.setReloadStopState.bind(this));
-@@ -331,8 +380,146 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -331,8 +380,150 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.$.tabstrip.elementDrag(e);
    }
  
@@ -497,6 +498,15 @@ index caed98ffda..3a400e6c6e 100644
 +      return;
 +    }
 +    e.preventDefault();
++  }
++
++  // Every other tab command is answered by the tab strip. Reload is the one
++  // that needs the webview, which only the content region holds.
++  protected onRailTabCommand_(e: CustomEvent<TabCommandDetail>) {
++    const {command, target} = e.detail;
++    if (command === 'reload' && target.tabId) {
++      this.$.contentRegion.webviewFor(target.tabId)?.reload();
++    }
 +  }
 +
 +  protected onCommandBarScrimClick_() {
@@ -529,12 +539,7 @@ index caed98ffda..3a400e6c6e 100644
 +    return {
 +      activeTab: () => {
 +        const tab = strip.openTabs.find(candidate => candidate.isActive);
-+        return tab ? {
-+          id: tab.id,
-+          url: tab.url,
-+          pinned: strip.isPinned(tab.id),
-+          dormant: false,
-+        } : null;
++        return tab ? strip.targetFor(tab.id) : null;
 +      },
 +      goBack: () => region.activeWebview?.goBack(),
 +      goForward: () => region.activeWebview?.goForward(),
@@ -619,7 +624,7 @@ index caed98ffda..3a400e6c6e 100644
  
      // If the user initiated the selection (e.g. by pressing Ctrl-L) we want to
      // select everything in order to make it easy to replace the URL. This is
-@@ -361,6 +548,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +552,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -651,7 +656,7 @@ index 485da70ac0..eb301584e3 100644
  
  :host {
 diff --git a/chrome/browser/resources/webui_browser/content_region.ts b/chrome/browser/resources/webui_browser/content_region.ts
-index 8ad3ede567..b0bf09f96b 100644
+index 8ad3ede567..fb0e376cc8 100644
 --- a/chrome/browser/resources/webui_browser/content_region.ts
 +++ b/chrome/browser/resources/webui_browser/content_region.ts
 @@ -5,8 +5,10 @@
@@ -682,10 +687,14 @@ index 8ad3ede567..b0bf09f96b 100644
    activateTab(tabId: string) {
      const webview = this.webviews.get(tabId);
      assert(webview);
-@@ -52,6 +64,10 @@ export class ContentRegionElement extends CrLitElement {
+@@ -52,6 +64,14 @@ export class ContentRegionElement extends CrLitElement {
      return this.webviews.has(tabId);
    }
  
++  webviewFor(tabId: string): TabWebviewElement|undefined {
++    return this.webviews.get(tabId);
++  }
++
 +  get isEmpty(): boolean {
 +    return this.webviews.size === 0;
 +  }
@@ -693,7 +702,7 @@ index 8ad3ede567..b0bf09f96b 100644
    createWebView(tabId: string, isActive: boolean) {
      if (this.hasTab(tabId)) {
        return;
-@@ -72,6 +88,7 @@ export class ContentRegionElement extends CrLitElement {
+@@ -72,6 +92,7 @@ export class ContentRegionElement extends CrLitElement {
      if (this.activeWebview === webview) {
        this.activeWebview = undefined;
      }
@@ -1003,7 +1012,7 @@ index 65d7e76ce5..acbf31383d 100644
    // clang-format on
  }
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..6d4d973438 100644
+index aa4e0fe69e..6751ccf7de 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -1089,7 +1098,7 @@ index aa4e0fe69e..6d4d973438 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -261,10 +288,115 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -261,10 +288,143 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    protected onTabCloseClick(e: CustomEvent<{id: string}>) {
@@ -1103,8 +1112,11 @@ index aa4e0fe69e..6d4d973438 100644
 +
 +  protected onTabContextMenu_(
 +      e: CustomEvent<TabMenuTarget&{x: number, y: number}>) {
-+    const {id, url, pinned, dormant, x, y} = e.detail;
-+    this.$.tabMenu.openFor({id, url, pinned, dormant}, x, y);
++    const {id, x, y} = e.detail;
++    const target = this.targetFor(id);
++    if (target) {
++      this.$.tabMenu.openFor(target, x, y);
++    }
 +  }
 +
 +  protected onRailTabCommand_(e: CustomEvent<TabCommandDetail>) {
@@ -1128,6 +1140,31 @@ index aa4e0fe69e..6d4d973438 100644
 +      case 'close':
 +        this.closeTarget_(target.id);
 +        break;
++      case 'close-others':
++        this.closeMany_(
++            this.looseTabIds_().filter(other => other !== target.id));
++        break;
++      case 'close-right':
++        this.closeToRight_(target.id);
++        break;
++    }
++  }
++
++  private closeToRight_(targetId: string) {
++    const loose = this.looseTabIds_();
++    const index = loose.indexOf(targetId);
++    // A pinned target sits outside the loose order, so there is no "right" of
++    // it to close.
++    if (index >= 0) {
++      this.closeMany_(loose.slice(index + 1));
++    }
++  }
++
++  // Pinned rows are left alone: closing them is what the pin was meant to
++  // prevent, and a dormant row has no tab to close in the first place.
++  private closeMany_(ids: string[]) {
++    if (ids.length) {
++      this.tabStripService_.closeNodes(ids);
 +    }
 +  }
 +
@@ -1206,7 +1243,7 @@ index aa4e0fe69e..6d4d973438 100644
      const item = this.findItem_<TabItem>(tabId, 'tab');
      if (!item) {
        return;
-@@ -288,6 +420,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -288,6 +448,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
@@ -1214,7 +1251,7 @@ index aa4e0fe69e..6d4d973438 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -311,10 +444,31 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,10 +472,51 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -1227,8 +1264,28 @@ index aa4e0fe69e..6d4d973438 100644
 +    this.tabStripService_.createTabAt(null, url);
 +  }
 +
-+  isPinned(tabId: string): boolean {
-+    return this.entryFor_(tabId) !== undefined;
++  targetFor(id: string): TabMenuTarget|null {
++    const entry = this.entryFor_(id);
++    const item = this.findItem_<TabItem>(entry ? entry.tabId ?? id : id, 'tab');
++    if (!entry && !item) {
++      return null;
++    }
++    const loose = this.looseTabIds_();
++    const index = loose.indexOf(id);
++    return {
++      id,
++      tabId: item ? item.id : null,
++      url: item ? item.tabData.url : entry!.url,
++      pinned: entry !== undefined,
++      dormant: entry !== undefined && !entry.tabId,
++      hasOthers: loose.some(other => other !== id),
++      hasRight: index >= 0 && index < loose.length - 1,
++    };
++  }
++
++  private looseTabIds_(): string[] {
++    return this.looseItems_.filter(item => item.type === 'tab')
++        .map(item => item.id);
 +  }
 +
 +  get openTabs(): Tab[] {
@@ -1247,7 +1304,7 @@ index aa4e0fe69e..6d4d973438 100644
    // Utility helpers:
    private findItemIndex_(id: string, type?: 'tab'|'group'): number {
      return this.items_.findIndex(
-@@ -339,6 +493,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -339,6 +541,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    protected setItems_(items: TabStripItem[]) {
      this.items_ = items;

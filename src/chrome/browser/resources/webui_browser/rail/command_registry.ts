@@ -86,6 +86,22 @@ export const COMMANDS: Command[] = [
     run: onActiveTab('unpin'),
   },
   {
+    id: 'close-others',
+    label: 'Close Other Tabs',
+    hint: '',
+    keywords: 'rest remaining',
+    enabled: host => host.activeTab()?.hasOthers === true,
+    run: onActiveTab('close-others'),
+  },
+  {
+    id: 'close-right',
+    label: 'Close Tabs to the Right',
+    hint: '',
+    keywords: 'after below',
+    enabled: host => host.activeTab()?.hasRight === true,
+    run: onActiveTab('close-right'),
+  },
+  {
     id: 'copy-link',
     label: 'Copy Link',
     hint: '',
