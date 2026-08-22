@@ -1,0 +1,29 @@
+--- a/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
++++ b/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
+@@ -172,15 +172,20 @@
+     },
+ 
+     "google": {
+-      "name": "No Search",
+-      "keyword": "nosearch",
+-      "favicon_url": "about:blank",
+-      "search_url": "http://{searchTerms}",
+-      "new_tab_url": "about:blank",
++      "name": "Google",
++      "keyword": "google.com",
++      "favicon_url": "https://www.google.com/favicon.ico",
++      "base_builtin_resource_id": "SEARCH_ENGINE_GOOGLE",
++      "search_url": "https://www.google.com/search?q={searchTerms}&ie={inputEncoding}",
++      "suggest_url": "https://www.google.com/complete/search?client=chrome&q={searchTerms}",
++      "alternate_urls": [
++        "https://www.google.com/#q={searchTerms}",
++        "https://www.google.com/search#q={searchTerms}",
++        "https://www.google.com/webhp#q={searchTerms}"
++      ],
+       "type": "SEARCH_ENGINE_GOOGLE",
+       "preconnect_to_search_url" : "ALLOWED",
+       "prefetch_likely_navigations" : "ALLOWED",
+-      "send_x_geo_header": true,
+       "id": 1
+     },
+ 
