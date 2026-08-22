@@ -86,6 +86,27 @@ def _link_overlay(source_tree):
         subdirs.clear()
 
 
+def _copy_branding(source_tree):
+    """Overwrite upstream icon assets with Rail's.
+
+    These targets live in directories Chromium already ships, so the overlay
+    junction cannot claim them, and they are binary, so `patches/` cannot carry
+    them either. Copying on every prepare keeps the checkout in sync with the
+    files versioned here.
+    """
+    branding_root = _ROOT_DIR / 'branding'
+    if not branding_root.is_dir():
+        return
+    for current, _, files in os.walk(branding_root):
+        for name in files:
+            source = Path(current) / name
+            target = source_tree / source.relative_to(branding_root)
+            if not target.parent.is_dir():
+                raise RuntimeError('Branding target directory is missing: {}'.format(target.parent))
+            shutil.copy2(source, target)
+            get_logger().info('Branded %s', target.relative_to(source_tree))
+
+
 def _is_junction(path):
     FILE_ATTRIBUTE_REPARSE_POINT = 0x400
     attributes = ctypes.windll.kernel32.GetFileAttributesW(str(path))
@@ -475,6 +496,7 @@ def main():
             subprocess.run([source_tree / 'third_party' / 'rust-toolchain-x64' / 'rustc' / 'bin' / 'rustc.exe', '--version'], stdout=f)
 
     _link_overlay(source_tree)
+    _copy_branding(source_tree)
     _ensure_chromium_clang(source_tree)
     _ensure_chromium_clang_format(source_tree)
 
