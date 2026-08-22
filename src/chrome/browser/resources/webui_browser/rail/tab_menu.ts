@@ -63,8 +63,9 @@ export class TabMenuElement extends CrLitElement {
   }
 
   protected closeLabel_(): string {
-    const target = this.target;
-    return target && target.pinned && !target.dormant ? 'Close Tab' : 'Remove';
+    // A dormant row has no tab left to close, so the command drops the row
+    // itself. Every other row, pinned or not, closes a live tab.
+    return this.target?.dormant ? 'Remove' : 'Close Tab';
   }
 
   protected onReloadClick_() {
