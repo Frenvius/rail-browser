@@ -229,7 +229,7 @@ index 08978c8e14..4c3672a256 100644
 -  border-radius: 0 16px 0 0;
 -}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 8ebad94626..30eb8aaab7 100644
+index 8ebad94626..0a2c7ae9de 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
 @@ -12,32 +12,6 @@ export function getHtml(this: WebuiBrowserAppElement) {
@@ -265,7 +265,7 @@ index 8ebad94626..30eb8aaab7 100644
        <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
          ?disabled="${this.backButtonDisabled_}"
          @click="${this.onBackClick_}"
-@@ -65,11 +39,35 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -65,14 +39,45 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button id="appMenuButton" iron-icon="cr:more-vert"
          title="$i18n{appMenuTooltip}"
          @click="${this.onAppMenuClick_}"></cr-icon-button>
@@ -290,6 +290,7 @@ index 8ebad94626..30eb8aaab7 100644
      </webui-browser-bookmark-bar>
    </div>
    <div id="main">
+-    <content-region id="contentRegion"
 +    <div class="tabstripDiv">
 +      <webui-browser-tab-strip id="tabstrip"
 +          @tab-activated="${this.onTabActivated_}"
@@ -298,11 +299,21 @@ index 8ebad94626..30eb8aaab7 100644
 +          @tab-updated="${this.onTabUpdated_}">
 +      </webui-browser-tab-strip>
 +    </div>
-     <content-region id="contentRegion"
++    <content-region id="contentRegion" ?hidden="${this.empty_}"
        ?showing-side-panel="${this.showingSidePanel_}">
      </content-region>
++    <div id="emptyState" ?hidden="${!this.empty_}">
++      <button id="emptyNewTab" @click="${this.onEmptyNewTabClick_}">
++        <cr-icon icon="cr:add"></cr-icon>
++        <span>$i18n{tooltipNewTab}</span>
++      </button>
++      <span id="emptyHint">Ctrl+T</span>
++    </div>
+     <side-panel id="sidePanel" @side-panel-closed="${this.onSidePanelClosed_}">
+     </side-panel>
+   </div>
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..50d655d9fb 100644
+index caed98ffda..ace0c2b01b 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -18,6 +18,7 @@ import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
@@ -313,7 +324,23 @@ index caed98ffda..50d655d9fb 100644
  import type {Tab as TabData} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
  import {TrackedElementManager} from 'chrome://resources/js/tracked_element/tracked_element_manager.js';
  import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
-@@ -92,6 +93,10 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -61,6 +62,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+   static override get properties() {
+     return {
+       backButtonDisabled_: {state: true, type: Boolean},
++      empty_: {state: true, type: Boolean},
+       forwardButtonDisabled_: {state: true, type: Boolean},
+       fullscreenMode_:
+           {type: String, reflect: true, attribute: 'fullscreen-mode'},
+@@ -75,6 +77,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+   private trackedElementManager_: TrackedElementManager;
+   private longPressTimer_: number = 0;
+   protected accessor backButtonDisabled_: boolean = true;
++  protected accessor empty_: boolean = false;
+   protected accessor forwardButtonDisabled_: boolean = true;
+   protected accessor fullscreenMode_: string = '';
+   protected accessor reloadOrStopIcon_: string = 'icon-refresh';
+@@ -92,6 +95,10 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const callbackRouter = browserProxyFactory.getInstance().callbackRouter;
      callbackRouter.showSidePanel.addListener(this.showSidePanel_.bind(this));
      callbackRouter.closeSidePanel.addListener(this.closeSidePanel_.bind(this));
@@ -324,7 +351,42 @@ index caed98ffda..50d655d9fb 100644
      callbackRouter.onFullscreenModeChanged.addListener(
          this.onFullscreenModeChanged_.bind(this));
    }
-@@ -361,6 +366,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,14 +239,34 @@ export class WebuiBrowserAppElement extends CrLitElement {
+ 
+   protected onTabAdded_(event: CustomEvent<TabAdded>) {
+     this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
++    this.updateEmptyState_();
+     this.refreshLayout();
+   }
+ 
+   protected onTabClosed_(event: CustomEvent<TabClosed>) {
+     this.$.contentRegion.removeTab(event.detail);
++    this.updateEmptyState_();
+     this.refreshLayout();
+   }
+ 
++  protected onEmptyNewTabClick_() {
++    this.$.tabstrip.newTab();
++  }
++
++  private updateEmptyState_() {
++    this.empty_ = this.$.contentRegion.isEmpty;
++    if (!this.empty_) {
++      return;
++    }
++    // Nothing will report an active tab from here, so the toolbar has to be
++    // reset by the transition itself.
++    this.backButtonDisabled_ = true;
++    this.forwardButtonDisabled_ = true;
++    this.showLocationIconButton_ = false;
++    this.$.address.setInputText('');
++    this.$.contentRegion.classList.remove('modalScrim');
++  }
++
+   protected onTabActivated_(event: CustomEvent<TabActivated>) {
+     this.$.contentRegion.activateTab(event.detail.id);
+     this.updateUrlForActiveTab_(event.detail);
+@@ -361,6 +388,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -356,7 +418,7 @@ index 485da70ac0..eb301584e3 100644
  
  :host {
 diff --git a/chrome/browser/resources/webui_browser/content_region.ts b/chrome/browser/resources/webui_browser/content_region.ts
-index 8ad3ede567..27d14963bc 100644
+index 8ad3ede567..b0bf09f96b 100644
 --- a/chrome/browser/resources/webui_browser/content_region.ts
 +++ b/chrome/browser/resources/webui_browser/content_region.ts
 @@ -5,8 +5,10 @@
@@ -387,7 +449,18 @@ index 8ad3ede567..27d14963bc 100644
    activateTab(tabId: string) {
      const webview = this.webviews.get(tabId);
      assert(webview);
-@@ -72,6 +84,7 @@ export class ContentRegionElement extends CrLitElement {
+@@ -52,6 +64,10 @@ export class ContentRegionElement extends CrLitElement {
+     return this.webviews.has(tabId);
+   }
+ 
++  get isEmpty(): boolean {
++    return this.webviews.size === 0;
++  }
++
+   createWebView(tabId: string, isActive: boolean) {
+     if (this.hasTab(tabId)) {
+       return;
+@@ -72,6 +88,7 @@ export class ContentRegionElement extends CrLitElement {
      if (this.activeWebview === webview) {
        this.activeWebview = undefined;
      }
@@ -697,7 +770,7 @@ index 65d7e76ce5..acbf31383d 100644
    // clang-format on
  }
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..1c07cd9510 100644
+index aa4e0fe69e..48343de65d 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -905,7 +978,23 @@ index aa4e0fe69e..1c07cd9510 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -339,6 +469,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,10 +441,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+     }
+   }
+ 
+-  protected onNewTabButtonClick_() {
++  newTab() {
+     this.tabStripService_.createTabAt(null, null);
+   }
+ 
++  protected onNewTabButtonClick_() {
++    this.newTab();
++  }
++
+   // Utility helpers:
+   private findItemIndex_(id: string, type?: 'tab'|'group'): number {
+     return this.items_.findIndex(
+@@ -339,6 +473,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    protected setItems_(items: TabStripItem[]) {
      this.items_ = items;
@@ -963,19 +1052,42 @@ index 77f5a0e8f4..3764ce07e1 100644
      browser_elements_ =
          GetUserDataFactory().CreateInstance<BrowserElementsWebUiBrowser>(
              *browser, *browser);
+diff --git a/chrome/browser/ui/unload_controller.cc b/chrome/browser/ui/unload_controller.cc
+index e17b41f80f..e7fddbb661 100644
+--- a/chrome/browser/ui/unload_controller.cc
++++ b/chrome/browser/ui/unload_controller.cc
+@@ -12,6 +12,7 @@
+ #include "chrome/browser/devtools/devtools_window.h"
+ #include "chrome/browser/lifetime/application_lifetime_desktop.h"
+ #include "chrome/browser/ui/browser.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_empty_window.h"
+ #include "chrome/browser/ui/browser_tabstrip.h"
+ #include "chrome/browser/ui/tabs/tab_group_model.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+@@ -393,6 +394,9 @@ void UnloadController::OnTabStripModelChanged(
+ }
+ 
+ void UnloadController::TabStripEmpty() {
++  if (rail::KeepsWindowOpenWhenEmpty(browser_)) {
++    return;
++  }
+   // Set is_attempting_to_close_browser_ here, so that extensions, etc, do not
+   // attempt to add tabs to the browser before it closes.
+   is_attempting_to_close_browser_ = true;
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..995fb8d2ea 100644
+index 3d4fe27f4f..154fa647da 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,7 @@ source_set("headers") {
+@@ -13,6 +13,8 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
++    "rail/rail_empty_window.h",
 +    "rail/rail_pinned_tabs.h",
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -25,6 +26,8 @@ source_set("webui_browser") {
+@@ -25,6 +27,8 @@ source_set("webui_browser") {
      ":browser_mojo_bindings",
      ":headers",
      "//base",
@@ -984,15 +1096,16 @@ index 3d4fe27f4f..995fb8d2ea 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -52,6 +55,7 @@ source_set("impl") {
+@@ -52,6 +56,8 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
++    "rail/rail_empty_window.cc",
 +    "rail/rail_pinned_tabs.cc",
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -75,6 +79,13 @@ source_set("impl") {
+@@ -75,6 +81,13 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -1006,7 +1119,7 @@ index 3d4fe27f4f..995fb8d2ea 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -140,6 +151,10 @@ source_set("impl") {
+@@ -140,6 +153,10 @@ source_set("impl") {
      ]
    }
  
@@ -1017,7 +1130,7 @@ index 3d4fe27f4f..995fb8d2ea 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -154,6 +169,7 @@ mojom("browser_mojo_bindings") {
+@@ -154,6 +171,7 @@ mojom("browser_mojo_bindings") {
      "//components/browser_apis/tab_strip:mojom",
      "//mojo/public/mojom/base",
      "//ui/base/mojom:ui_base_types",
@@ -1455,3 +1568,27 @@ diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browse
    chrome_browser_net::NetErrorTabHelper::RegisterProfilePrefs(registry);
    chrome_prefs::RegisterProfilePrefs(registry);
    collaboration::prefs::RegisterProfilePrefs(registry);
+diff --git a/chrome/browser/ui/browser.cc b/chrome/browser/ui/browser.cc
+--- a/chrome/browser/ui/browser.cc
++++ b/chrome/browser/ui/browser.cc
+@@ -153,6 +153,7 @@
+ #include "chrome/browser/ui/views/message_box_dialog.h"
+ #include "chrome/browser/ui/views/status_bubble_views.h"
+ #include "chrome/browser/ui/web_applications/app_browser_controller.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_empty_window.h"
+ #include "chrome/browser/ui/web_modal/browser_window_modal_dialog_delegate.h"
+ #include "chrome/browser/ui/webui/signin/login_ui_service.h"
+ #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
+@@ -1468,6 +1469,12 @@
+ 
+ 
+ void Browser::TabStripEmpty() {
++  // A Rail window is the product shell, not a container for the tab strip. It
++  // owns sidebar rows that outlive every tab, so an empty strip is a state it
++  // renders rather than a reason to close.
++  if (rail::KeepsWindowOpenWhenEmpty(this)) {
++    return;
++  }
+   // Note: even though the tab strip is empty, the call to Close() may not
+   // result in closing this Browser. This can happen in the case of closing
+   // the last Browser with ongoing downloads.

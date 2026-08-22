@@ -238,6 +238,51 @@ content-region {
   overflow: hidden;
 }
 
+content-region[hidden],
+#emptyState[hidden] {
+  display: none;
+}
+
+#emptyState {
+  align-items: center;
+  background: #252540;
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgb(10 10 24 / 50%);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+
+#emptyNewTab {
+  align-items: center;
+  background: var(--rail-elevated);
+  border: 1px solid var(--rail-border);
+  border-radius: 10px;
+  color: var(--rail-text);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+  padding: 10px 18px;
+  transition: background 120ms ease;
+}
+
+#emptyNewTab:hover {
+  background: var(--rail-hover);
+}
+
+#emptyNewTab cr-icon {
+  --iron-icon-height: 18px;
+  --iron-icon-width: 18px;
+}
+
+#emptyHint {
+  color: var(--rail-text-label);
+  font-size: 12px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
