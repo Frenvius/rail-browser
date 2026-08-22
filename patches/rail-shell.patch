@@ -229,10 +229,15 @@ index 08978c8e14..4c3672a256 100644
 -  border-radius: 0 16px 0 0;
 -}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 8ebad94626..0a2c7ae9de 100644
+index 8ebad94626..e5e7b092b5 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
-@@ -12,32 +12,6 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -9,35 +9,11 @@ import type {WebuiBrowserAppElement} from './app.js';
+ export function getHtml(this: WebuiBrowserAppElement) {
+   // clang-format off
+   return html`<!--_html_template_start_-->
++<div id="commandBarScrim" ?hidden="${!this.commandBar_}"
++  @click="${this.onCommandBarScrimClick_}"></div>
  <div class="activeFrame" id="rootContainer">
    <div id="topContainer">
      <div class="titlebarDiv" @mousedown="${this.onTabDragMousedown_}">
@@ -265,7 +270,35 @@ index 8ebad94626..0a2c7ae9de 100644
        <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
          ?disabled="${this.backButtonDisabled_}"
          @click="${this.onBackClick_}"
-@@ -65,14 +39,45 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -49,8 +25,25 @@ export function getHtml(this: WebuiBrowserAppElement) {
+       <cr-icon-button class="${this.reloadOrStopIcon_}"
+         title="${this.reloadOrStopTooltip_()}"
+         @click="${this.onReloadOrStopClick_}"></cr-icon-button>
+-      <div id="addressBox">
+-        <webui-browser-searchbox id="address"></webui-browser-searchbox>
++      <div id="addressBox" @keydown="${this.onCommandBarKeydown_}"
++        @input="${this.onCommandBarInput_}"
++        @searchbox-match-opened="${this.onSearchboxMatchOpened_}">
++        <webui-browser-searchbox id="address">
++          <div slot="tabMatches" id="commandBarTabs"
++            ?hidden="${!this.commandBarTabs_.length}">
++            ${this.commandBarTabs_.map((tab, i) => html`
++              <button class="commandBarTab" tabindex="-1"
++                data-index="${i}" data-tab-id="${tab.id}"
++                ?selected="${i === this.commandBarSelected_}"
++                @click="${this.onCommandBarTabClick_}">
++                <span class="commandBarFavicon"
++                  style="background-image: url(${tab.favicon.dataUrl})"></span>
++                <span class="commandBarTabTitle">${tab.title}</span>
++                <span class="commandBarSwitch">$i18n{commandBarSwitchToTab}</span>
++              </button>
++            `)}
++          </div>
++        </webui-browser-searchbox>
+         <cr-button id="locationIconButton" type="button"
+           ?hidden="${!this.showLocationIconButton_}"
+           @click="${this.onLocationIconClick_}">
+@@ -65,14 +58,45 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button id="appMenuButton" iron-icon="cr:more-vert"
          title="$i18n{appMenuTooltip}"
          @click="${this.onAppMenuClick_}"></cr-icon-button>
@@ -313,7 +346,7 @@ index 8ebad94626..0a2c7ae9de 100644
      </side-panel>
    </div>
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..ace0c2b01b 100644
+index caed98ffda..5e3545748f 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -18,6 +18,7 @@ import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
@@ -324,23 +357,40 @@ index caed98ffda..ace0c2b01b 100644
  import type {Tab as TabData} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
  import {TrackedElementManager} from 'chrome://resources/js/tracked_element/tracked_element_manager.js';
  import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
-@@ -61,6 +62,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -45,6 +46,8 @@ export interface WebuiBrowserAppElement {
+   };
+ }
+ 
++const COMMAND_BAR_TAB_LIMIT = 8;
++
+ export class WebuiBrowserAppElement extends CrLitElement {
+   static get is() {
+     return 'webui-browser-app';
+@@ -61,6 +64,10 @@ export class WebuiBrowserAppElement extends CrLitElement {
    static override get properties() {
      return {
        backButtonDisabled_: {state: true, type: Boolean},
++      commandBar_: {type: Boolean, reflect: true, attribute: 'command-bar'},
++      commandBarSelected_: {state: true, type: Number},
++      commandBarTabs_: {state: true, type: Array},
 +      empty_: {state: true, type: Boolean},
        forwardButtonDisabled_: {state: true, type: Boolean},
        fullscreenMode_:
            {type: String, reflect: true, attribute: 'fullscreen-mode'},
-@@ -75,6 +77,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -74,7 +81,12 @@ export class WebuiBrowserAppElement extends CrLitElement {
+ 
    private trackedElementManager_: TrackedElementManager;
    private longPressTimer_: number = 0;
++  private lastDisplayUrl_: string = '';
    protected accessor backButtonDisabled_: boolean = true;
++  protected accessor commandBar_: boolean = false;
++  protected accessor commandBarSelected_: number = -1;
++  protected accessor commandBarTabs_: TabData[] = [];
 +  protected accessor empty_: boolean = false;
    protected accessor forwardButtonDisabled_: boolean = true;
    protected accessor fullscreenMode_: string = '';
    protected accessor reloadOrStopIcon_: string = 'icon-refresh';
-@@ -92,6 +95,10 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -92,6 +104,10 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const callbackRouter = browserProxyFactory.getInstance().callbackRouter;
      callbackRouter.showSidePanel.addListener(this.showSidePanel_.bind(this));
      callbackRouter.closeSidePanel.addListener(this.closeSidePanel_.bind(this));
@@ -351,7 +401,7 @@ index caed98ffda..ace0c2b01b 100644
      callbackRouter.onFullscreenModeChanged.addListener(
          this.onFullscreenModeChanged_.bind(this));
    }
-@@ -232,14 +239,34 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,14 +248,34 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -366,7 +416,7 @@ index caed98ffda..ace0c2b01b 100644
    }
  
 +  protected onEmptyNewTabClick_() {
-+    this.$.tabstrip.newTab();
++    this.openCommandBarForNewTab();
 +  }
 +
 +  private updateEmptyState_() {
@@ -386,7 +436,140 @@ index caed98ffda..ace0c2b01b 100644
    protected onTabActivated_(event: CustomEvent<TabActivated>) {
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
-@@ -361,6 +388,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +323,13 @@ export class WebuiBrowserAppElement extends CrLitElement {
+       }
+     }
+     this.showLocationIconButton_ = !isNTP;
+-    this.$.address.setInputText(displayUrl);
++    this.lastDisplayUrl_ = displayUrl;
++    // Every update on the active tab lands here, including title, favicon and
++    // load progress. While the command bar is open the input belongs to the
++    // user, so page activity must not rewrite it or dismiss it.
++    if (!this.commandBar_) {
++      this.$.address.setInputText(displayUrl);
++    }
+     this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
+   }
+ 
+@@ -308,6 +350,9 @@ export class WebuiBrowserAppElement extends CrLitElement {
+     browserProxyFactory.getInstance()
+         .callbackRouter.setFocusToLocationBar.addListener(
+             this.setFocusToLocationBar.bind(this));
++    browserProxyFactory.getInstance()
++        .callbackRouter.openCommandBarForNewTab.addListener(
++            this.openCommandBarForNewTab.bind(this));
+     browserProxyFactory.getInstance()
+         .callbackRouter.setReloadStopState.addListener(
+             this.setReloadStopState.bind(this));
+@@ -331,8 +376,107 @@ export class WebuiBrowserAppElement extends CrLitElement {
+     this.$.tabstrip.elementDrag(e);
+   }
+ 
++  protected onCommandBarKeydown_(e: KeyboardEvent) {
++    if (e.key === 'Escape') {
++      this.closeCommandBar_();
++      return;
++    }
++    // The dropdown owns the arrows whenever it has matches of its own, so the
++    // idle list only claims them while nothing has been typed.
++    if (this.commandBarSelected_ < 0) {
++      return;
++    }
++    const count = this.commandBarTabs_.length;
++    if (e.key === 'ArrowDown') {
++      this.commandBarSelected_ = (this.commandBarSelected_ + 1) % count;
++    } else if (e.key === 'ArrowUp') {
++      this.commandBarSelected_ = (this.commandBarSelected_ - 1 + count) % count;
++    } else if (e.key === 'Enter') {
++      this.switchToCommandBarTab_(
++          this.commandBarTabs_[this.commandBarSelected_]!.id);
++    } else {
++      return;
++    }
++    e.preventDefault();
++  }
++
++  protected onCommandBarScrimClick_() {
++    this.closeCommandBar_();
++  }
++
++  protected onCommandBarInput_() {
++    this.refreshCommandBarTabs_();
++  }
++
++  protected onCommandBarTabClick_(e: Event) {
++    const id = (e.currentTarget as HTMLElement).dataset['tabId'];
++    assert(id);
++    this.switchToCommandBarTab_(id);
++  }
++
++  private switchToCommandBarTab_(tabId: string) {
++    this.closeCommandBar_();
++    this.$.tabstrip.switchToTab(tabId);
++  }
++
++  private refreshCommandBarTabs_() {
++    // Open tabs never carry a switch-to-tab affordance in an autocomplete
++    // result on desktop, so the rows are matched here instead of read off the
++    // dropdown.
++    if (!this.commandBar_) {
++      this.commandBarTabs_ = [];
++      this.commandBarSelected_ = -1;
++      return;
++    }
++    const query = this.commandBarQuery_();
++    const open = this.$.tabstrip.openTabs.filter(tab => !tab.isActive);
++    const matched = query ?
++        open.filter(
++            tab => tab.title.toLowerCase().includes(query) ||
++                tab.url.toLowerCase().includes(query)) :
++        open;
++    this.commandBarTabs_ = matched.slice(0, COMMAND_BAR_TAB_LIMIT);
++    this.commandBarSelected_ =
++        !query && this.commandBarTabs_.length ? 0 : -1;
++  }
++
++  private commandBarQuery_(): string {
++    return this.$.address.getInputElement()
++        .lastInput()
++        ?.text.trim()
++        .toLowerCase() ??
++        '';
++  }
++
++  private closeCommandBar_() {
++    if (!this.commandBar_) {
++      return;
++    }
++    this.commandBar_ = false;
++    this.commandBarTabs_ = [];
++    this.commandBarSelected_ = -1;
++    this.$.address.newTabMode = false;
++    this.$.address.setInputText(this.lastDisplayUrl_);
++    this.$.address.getInputElement().blur();
++  }
++
++  protected onSearchboxMatchOpened_() {
++    this.closeCommandBar_();
++  }
++
++  protected openCommandBarForNewTab() {
++    this.commandBar_ = true;
++    this.$.address.newTabMode = true;
++    this.$.address.setInputText('');
++    this.$.address.focusInput();
++    this.refreshCommandBarTabs_();
++  }
++
+   protected setFocusToLocationBar(isUserInitiated: boolean) {
++    this.commandBar_ = true;
++    this.$.address.newTabMode = false;
+     this.$.address.focusInput();
++    this.refreshCommandBarTabs_();
+ 
+     // If the user initiated the selection (e.g. by pressing Ctrl-L) we want to
+     // select everything in order to make it easy to replace the URL. This is
+@@ -361,6 +505,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -770,7 +953,7 @@ index 65d7e76ce5..acbf31383d 100644
    // clang-format on
  }
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..48343de65d 100644
+index aa4e0fe69e..351ea267bb 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -978,7 +1161,7 @@ index aa4e0fe69e..48343de65d 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -311,10 +441,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,10 +441,23 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -987,6 +1170,15 @@ index aa4e0fe69e..48343de65d 100644
      this.tabStripService_.createTabAt(null, null);
    }
  
++  get openTabs(): Tab[] {
++    return this.items_.filter(item => item.type === 'tab')
++        .map(item => item.tabData);
++  }
++
++  switchToTab(tabId: NodeId) {
++    this.activateTab(tabId);
++  }
++
 +  protected onNewTabButtonClick_() {
 +    this.newTab();
 +  }
@@ -994,7 +1186,7 @@ index aa4e0fe69e..48343de65d 100644
    // Utility helpers:
    private findItemIndex_(id: string, type?: 'tab'|'group'): number {
      return this.items_.findIndex(
-@@ -339,6 +473,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -339,6 +482,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    protected setItems_(items: TabStripItem[]) {
      this.items_ = items;
@@ -1022,6 +1214,55 @@ index 2a17afc37b..db2ba1e21d 100644
      }
    </style>
    <link rel="stylesheet" href="chrome://theme/colors.css?sets=ui,chrome">
+diff --git a/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts b/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts
+index 45603d71ea..c8fb24664f 100644
+--- a/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts
++++ b/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts
+@@ -42,6 +42,7 @@ export function getHtml(this: WebuiBrowserSearchboxElement) {
+           </div>
+         ` : ''}
+       </cr-searchbox-input>
++      <slot name="tabMatches"></slot>
+       <div class="dropdownContainer">
+         <cr-searchbox-dropdown id="matches" part="searchbox-dropdown"
+             exportparts="dropdown-content"
+diff --git a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts b/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
+index cee7a49569..30214d0500 100644
+--- a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
++++ b/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
+@@ -129,6 +129,32 @@ export class WebuiBrowserSearchboxElement extends
+     this.initialInputScrollHeight = this.$.input.scrollHeight;
+   }
+ 
++  // Set while the command bar was opened for a new tab: whatever the user
++  // picks has to land in a tab of its own instead of replacing the active one.
++  newTabMode: boolean = false;
++
++  override navigateToMatch(matchIndex: number, e: KeyboardEvent|MouseEvent) {
++    // Read before firing: the host closes the command bar synchronously on
++    // this event, and closing clears the mode.
++    const opensInNewTab = this.newTabMode;
++    this.fire('searchbox-match-opened');
++    if (!opensInNewTab) {
++      super.navigateToMatch(matchIndex, e);
++      return;
++    }
++    // Disposition is derived from the modifiers of the accepting event, so the
++    // new foreground tab is requested by forging ctrl+shift.
++    const forced = {
++      button: 0,
++      altKey: false,
++      ctrlKey: true,
++      metaKey: false,
++      shiftKey: true,
++      preventDefault: () => e.preventDefault(),
++    };
++    super.navigateToMatch(matchIndex, forced as unknown as MouseEvent);
++  }
++
+   focusInput() {
+     this.$.input.focus();
+   }
 diff --git a/chrome/browser/resources/webui_browser/webview.ts b/chrome/browser/resources/webui_browser/webview.ts
 index a94af80a25..4f3d9efed1 100644
 --- a/chrome/browser/resources/webui_browser/webview.ts
@@ -1139,7 +1380,7 @@ index 3d4fe27f4f..154fa647da 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..da45995cf1 100644
+index 15a65f7152..30cc075749 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -7,6 +7,7 @@ module webui_browser.mojom;
@@ -1150,7 +1391,18 @@ index 15a65f7152..da45995cf1 100644
  import "url/mojom/url.mojom";
  
  // Used by the WebUI page to bootstrap communication to/from the browser
-@@ -44,6 +45,18 @@ interface Page {
+@@ -33,6 +34,10 @@ interface Page {
+   // being done automatically.
+   SetFocusToLocationBar(bool is_user_initiated);
+ 
++  // Requests the command bar be opened for a new tab. What the user picks is
++  // opened in a tab of its own, so nothing is created until they commit.
++  OpenCommandBarForNewTab();
++
+   // Update the Reload/Stop button's state based on `is_loading`.
+   SetReloadStopState(bool is_loading);
+ 
+@@ -44,6 +49,18 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -1169,7 +1421,7 @@ index 15a65f7152..da45995cf1 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -90,6 +103,11 @@ interface PageHandler {
+@@ -90,6 +107,11 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -1356,7 +1608,7 @@ index 859da4ef00..2642b2631f 100644
   private:
    WebUIBrowserPageHandler(
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_ui.cc b/chrome/browser/ui/webui_browser/webui_browser_ui.cc
-index ec4912721f..71ade4fcbe 100644
+index ec4912721f..0c78a045bf 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_ui.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_ui.cc
 @@ -6,6 +6,7 @@
@@ -1367,7 +1619,14 @@ index ec4912721f..71ade4fcbe 100644
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/browser/ui/bookmarks/bookmark_bar_controller.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
-@@ -34,6 +35,7 @@
+@@ -28,12 +29,14 @@
+ #include "chrome/common/webui_url_constants.h"
+ #include "chrome/grit/branded_strings.h"
+ #include "chrome/grit/generated_resources.h"
++#include "components/strings/grit/components_strings.h"
+ #include "chrome/grit/tab_strip_api_resources_map.h"
+ #include "chrome/grit/webui_browser_resources.h"
+ #include "chrome/grit/webui_browser_resources_map.h"
  #include "components/contextual_search/contextual_search_service.h"
  #include "components/contextual_search/contextual_search_session_handle.h"
  #include "components/favicon_base/favicon_url_parser.h"
@@ -1375,7 +1634,15 @@ index ec4912721f..71ade4fcbe 100644
  #include "components/guest_contents/browser/guest_contents_host_impl.h"
  #include "components/surface_embed/common/features.h"
  #include "content/public/browser/browser_context.h"
-@@ -306,6 +308,26 @@ void WebUIBrowserUI::CloseSidePanel() {
+@@ -111,6 +114,7 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
+   static constexpr webui::LocalizedString kStrings[] = {
+       // Localized strings (alphabetical order).
+       {"appMenuTooltip", IDS_APPMENU_TOOLTIP},
++      {"commandBarSwitchToTab", IDS_OMNIBOX_TAB_SUGGEST_HINT},
+       {"tooltipExtensionsButton", IDS_TOOLTIP_EXTENSIONS_BUTTON},
+       {"tooltipNewTab", IDS_TOOLTIP_NEW_TAB},
+       {"tooltipReload", IDS_TOOLTIP_RELOAD},
+@@ -306,6 +310,26 @@ void WebUIBrowserUI::CloseSidePanel() {
    page_->CloseSidePanel();
  }
  
@@ -1425,7 +1692,7 @@ index 512f1c770b..1ddf68a4f6 100644
    Browser* browser() { return browser_; }
    WebUIBrowserWindow* browser_window() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..eff8009b61 100644
+index 3fabca0c2a..f790ca2c1a 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -1483,7 +1750,21 @@ index 3fabca0c2a..eff8009b61 100644
    LoadAccelerators();
  }
  
-@@ -691,6 +707,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -617,6 +633,13 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+     return false;
+   }
+ 
++  if (command_id == IDC_NEW_TAB) {
++    if (webui_browser::mojom::Page* page = GetWebUIBrowserUI()->page()) {
++      page->OpenCommandBarForNewTab();
++      return true;
++    }
++  }
++
+   return chrome::ExecuteCommand(browser_.get(), command_id,
+                                 accelerator.time_stamp());
+ }
+@@ -691,6 +714,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -1492,7 +1773,7 @@ index 3fabca0c2a..eff8009b61 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -1217,6 +1235,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1242,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  
