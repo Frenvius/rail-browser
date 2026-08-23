@@ -138,7 +138,7 @@ export const COMMANDS: Command[] = [
   {
     id: 'new-space',
     label: 'New Space',
-    hint: '',
+    hint: 'Ctrl+Alt+N',
     keywords: 'workspace context group',
     run: host => host.newSpace(),
   },
