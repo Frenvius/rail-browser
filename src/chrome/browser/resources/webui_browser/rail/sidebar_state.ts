@@ -28,6 +28,7 @@ export interface StoredSpace {
 export interface SidebarState {
   activeSpace: string;
   spaces: StoredSpace[];
+  essentials?: StoredPin[];
 }
 
 export async function readSidebarState(): Promise<SidebarState|null> {

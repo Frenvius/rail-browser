@@ -149,14 +149,17 @@ cr-action-menu {
 
 #glyph {
   align-items: center;
-  background: transparent;
+  background: color-mix(in srgb, var(--space-color, transparent) 22%, transparent);
   border: none;
   border-radius: 6px;
+  color: var(--space-color, var(--rail-text-label, #808098));
   cursor: pointer;
   display: flex;
   flex: 0 0 20px;
+  font-size: 12px;
   height: 20px;
   justify-content: center;
+  line-height: 1;
   padding: 0;
   width: 20px;
   --iron-icon-width: 14px;
@@ -165,13 +168,18 @@ cr-action-menu {
 }
 
 #glyph:hover {
-  background: var(--rail-elevated, #282840);
+  background: color-mix(in srgb, var(--space-color, #fff) 38%, transparent);
 }
 
 .palette {
   display: flex;
   gap: 4px;
   padding: 6px 12px;
+}
+
+.palette.wrap {
+  flex-wrap: wrap;
+  max-width: 216px;
 }
 
 .swatch,
@@ -195,7 +203,9 @@ cr-action-menu {
   background: transparent;
   border-radius: 5px;
   color: var(--rail-text-muted, #c0c0d8);
+  font-size: 13px;
   height: 22px;
+  line-height: 1;
   width: 22px;
   --iron-icon-width: 14px;
   --iron-icon-height: 14px;

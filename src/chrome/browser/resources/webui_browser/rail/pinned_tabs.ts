@@ -2,7 +2,9 @@ import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 
 import {TabNetworkState} from '../tabs.mojom-webui.js';
 
-import type {SidebarState} from './sidebar_state.js';
+import type {SidebarState, StoredPin} from './sidebar_state.js';
+
+export const ESSENTIALS = '';
 
 export interface PinnedEntry {
   key: string;
@@ -30,31 +32,37 @@ export class PinnedTabs {
     return this.entries_.filter(entry => entry.space === spaceId);
   }
 
+  essentials(): PinnedEntry[] {
+    return this.entriesIn(ESSENTIALS);
+  }
+
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
-    for (const space of state?.spaces ?? []) {
-      for (const stored of space.pinned ?? []) {
+    const groups: Array<[string, StoredPin[]]> =
+        (state?.spaces ?? []).map(space => [space.id, space.pinned ?? []]);
+    groups.push([ESSENTIALS, state?.essentials ?? []]);
+    for (const [spaceId, stored] of groups) {
+      for (const pin of stored) {
         const tab = tabs.find(
             candidate =>
-                candidate.url === stored.url && !claimed.has(candidate.id));
+                candidate.url === pin.url && !claimed.has(candidate.id));
         if (tab) {
           claimed.add(tab.id);
         }
         this.entries_.push({
           key: this.mintKey_(),
-          space: space.id,
-          home: stored.home,
-          url: stored.url,
-          title: stored.title,
-          favicon: stored.favicon,
+          space: spaceId,
+          home: pin.home,
+          url: pin.url,
+          title: pin.title,
+          favicon: pin.favicon,
           tabId: tab ? tab.id : '',
         });
       }
     }
   }
 
-  pin(tab: Tab, spaceId: string) {
-    this.entries_.push({
-      key: this.mintKey_(),
+  pin(tab: Tab, spaceId: string): PinnedEntry {
+    return this.add_({
       space: spaceId,
       home: tab.url,
       url: tab.url,
@@ -62,12 +70,10 @@ export class PinnedTabs {
       favicon: tab.favicon.dataUrl,
       tabId: tab.id,
     });
-    this.onChange_();
   }
 
-  pinDormant(row: DormantRow, spaceId: string) {
-    this.entries_.push({
-      key: this.mintKey_(),
+  pinDormant(row: DormantRow, spaceId: string): PinnedEntry {
+    return this.add_({
       space: spaceId,
       home: row.url,
       url: row.url,
@@ -75,7 +81,6 @@ export class PinnedTabs {
       favicon: row.favicon,
       tabId: '',
     });
-    this.onChange_();
   }
 
   unpin(key: string) {
@@ -140,6 +145,13 @@ export class PinnedTabs {
       return undefined;
     }
     return this.entries_.find(entry => entry.tabId === tabId);
+  }
+
+  private add_(fields: Omit<PinnedEntry, 'key'>): PinnedEntry {
+    const entry: PinnedEntry = {key: this.mintKey_(), ...fields};
+    this.entries_.push(entry);
+    this.onChange_();
+    return entry;
   }
 
   private mintKey_(): string {

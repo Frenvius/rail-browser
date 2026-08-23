@@ -7,14 +7,9 @@ export const SPACE_COLORS =
     ['#7c5cfc', '#4488ee', '#ee5577', '#44cc77', '#eeaa33'];
 
 export const SPACE_ICONS = [
-  'cr:domain',
-  'cr:person',
-  'cr:group',
-  'cr:star',
-  'cr:computer',
-  'cr:extension',
-  'cr:location-on',
-  'cr:schedule',
+  '🌐', '👤', '👥', '⭐', '💼', '🎓', '🧪', '🛠️',
+  '📚', '🎨', '🎮', '🎵', '🎬', '📷', '✈️', '🛒',
+  '💰', '📈', '🧠', '❤️', '🔥', '🌱', '☕', '🔒',
 ];
 
 export interface Space {
@@ -393,5 +388,14 @@ export function serializeSidebar(
       })),
     ],
   }));
-  return {activeSpace: spaces.activeId, spaces: stored};
+  return {
+    activeSpace: spaces.activeId,
+    spaces: stored,
+    essentials: pinned.essentials().map(({home, url, title, favicon}) => ({
+      home,
+      url,
+      title,
+      favicon,
+    })),
+  };
 }

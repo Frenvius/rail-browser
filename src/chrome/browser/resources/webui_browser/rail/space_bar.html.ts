@@ -6,9 +6,11 @@ export function getHtml(this: SpaceBarElement) {
   return html`<!--_html_template_start_-->
 ${this.variant === 'title' ? html`
   <div id="title" @contextmenu="${this.onNameContextmenu_}">
-    <button id="glyph" title="Space options" style="color: ${
+    <button id="glyph" title="Space options" style="--space-color: ${
     this.activeColor_()}" @click="${this.onGlyphClick_}">
-      <cr-icon icon="${this.activeIcon_()}"></cr-icon>
+      ${this.isGlyphIcon_(this.activeIcon_()) ? html`
+        <cr-icon icon="${this.activeIcon_()}"></cr-icon>
+      ` : this.activeIcon_()}
     </button>
     ${this.editing_ ? html`
       <input id="nameInput" .value="${this.activeName_()}" spellcheck="false"
@@ -57,12 +59,14 @@ ${this.variant === 'title' ? html`
           @click="${this.onColorClick_}"></button>
       `)}
     </div>
-    <div class="palette">
+    <div class="palette wrap">
       ${this.icons.map(icon => html`
         <button class="glyph" data-icon="${icon}"
           ?selected="${icon === this.targetSpace_()?.icon}"
           @click="${this.onIconClick_}">
-          <cr-icon icon="${icon}"></cr-icon>
+          ${this.isGlyphIcon_(icon) ? html`
+            <cr-icon icon="${icon}"></cr-icon>
+          ` : icon}
         </button>
       `)}
     </div>

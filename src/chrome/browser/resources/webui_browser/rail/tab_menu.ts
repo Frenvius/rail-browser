@@ -14,13 +14,14 @@ export interface TabMenuTarget {
   tabId: string|null;
   url: string;
   pinned: boolean;
+  essential: boolean;
   dormant: boolean;
   hasOthers: boolean;
   hasRight: boolean;
 }
 
 export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
-    'duplicate'|'move-to-space'|'pin'|'reload'|'unpin';
+    'duplicate'|'essential'|'move-to-space'|'pin'|'reload'|'unpin';
 
 export interface TabCommandDetail {
   command: TabCommand;
@@ -88,6 +89,15 @@ export class TabMenuElement extends CrLitElement {
 
   protected onDuplicateClick_() {
     this.fire_('duplicate');
+  }
+
+  protected essentialLabel_(): string {
+    return this.target?.essential ? 'Remove from Essentials' :
+                                    'Add to Essentials';
+  }
+
+  protected onEssentialClick_() {
+    this.fire_('essential');
   }
 
   protected onPinClick_() {

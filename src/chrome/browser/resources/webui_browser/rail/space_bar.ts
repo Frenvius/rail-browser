@@ -87,6 +87,14 @@ export class SpaceBarElement extends CrLitElement {
     return this.tabCounts[this.menuTarget_] ?? 0;
   }
 
+  protected isGlyphIcon_(icon: string): boolean {
+    return icon.startsWith('cr:');
+  }
+
+  beginRename() {
+    this.startEditing_();
+  }
+
   protected canMove_(delta: number): boolean {
     const index = this.spaces.findIndex(space => space.id === this.menuTarget_);
     const next = index + delta;

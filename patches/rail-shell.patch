@@ -1062,14 +1062,29 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..08ff8bdd80 100644
+index 65d7e76ce5..970813e72e 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -10,22 +10,55 @@ export function getHtml(this: TabStripElement) {
+@@ -10,22 +10,70 @@ export function getHtml(this: TabStripElement) {
    // clang-format off
    return html`<!--_html_template_start_-->
  <div id="tabstrip">
 -    ${this.items_.map(item => item.type === 'tab' ? html`
++  <div id="essentialsList" ?hidden="${!this.essentialRows_.length}">
++    ${this.essentialRows_.map(row => html`
++          <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
++              .tabData="${row.item.tabData}"
++              .dragInProgress="${this.dragInProgress_}"
++              .pinned="${true}"
++              .dormant="${row.dormant}"
++              @mousedown="${this.onTabMousedown_}"
++              @tab-close-click="${this.onTabCloseClick}"
++              @tab-context-menu="${this.onTabContextMenu_}"
++              @tab-select="${this.onTabSelect_}">
++          </webui-browser-tab>
++        `)}
++  </div>
++  <div id="essentialsDivider" ?hidden="${!this.essentialRows_.length}"></div>
 +  <rail-space-bar id="spaceTitle" variant="title"
 +      .spaces="${this.spaceRows_}" .activeId="${this.activeSpace_}"
 +      .tabCounts="${this.spaceCounts_}"
@@ -1127,7 +1142,7 @@ index 65d7e76ce5..08ff8bdd80 100644
    // clang-format on
  }
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..dc16a8bcd9 100644
+index aa4e0fe69e..102cb1098f 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -1145,11 +1160,11 @@ index aa4e0fe69e..dc16a8bcd9 100644
  
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
-+import {PinnedTabs} from '../rail/pinned_tabs.js';
++import {ESSENTIALS, PinnedTabs} from '../rail/pinned_tabs.js';
 +import type {PinnedRow} from '../rail/sections.js';
 +import {splitSections} from '../rail/sections.js';
 +import {readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
-+import type {SpaceCommandDetail} from '../rail/space_bar.js';
++import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
 +import {slideDirection, slideIn, slideOut} from '../rail/space_slide.js';
 +import type {Space} from '../rail/spaces.js';
 +import {serializeSidebar, Spaces} from '../rail/spaces.js';
@@ -1187,10 +1202,14 @@ index aa4e0fe69e..dc16a8bcd9 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -82,6 +99,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -82,6 +99,18 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        items_: {
          type: Array,
        },
++      essentialRows_: {
++        type: Array,
++        state: true,
++      },
 +      pinnedRows_: {
 +        type: Array,
 +        state: true,
@@ -1202,7 +1221,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -90,16 +115,44 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,16 +119,45 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -1226,6 +1245,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
    }
  
    protected accessor items_: TabStripItem[] = [];
++  protected accessor essentialRows_: PinnedRow[] = [];
 +  protected accessor pinnedRows_: PinnedRow[] = [];
 +  protected accessor looseItems_: TabStripItem[] = [];
    protected accessor activeTab_: string = '';
@@ -1248,7 +1268,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
  
    constructor() {
      super();
-@@ -117,6 +170,9 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -117,6 +175,9 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    private async loadTabStripModel_(observation: TabStripObservation) {
      const tabSnapshot = await this.tabStripService_.getTabs();
      const items = this.processModelContainer_(tabSnapshot.tabStrip);
@@ -1258,7 +1278,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +194,22 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +199,22 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -1281,7 +1301,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -171,8 +243,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -171,8 +248,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    onNodesClosed(nodesClosedEvent: OnNodesClosedEvent) {
      nodesClosedEvent.nodeIds.forEach(nodeId => {
@@ -1292,7 +1312,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -241,6 +315,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -241,6 +320,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    // End TabStripObserver impl:
  
    private addTab(tab: Tab) {
@@ -1300,7 +1320,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
      this.setItems_([
        ...this.items_,
        {
-@@ -261,16 +336,286 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -261,16 +341,303 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    protected onTabCloseClick(e: CustomEvent<{id: string}>) {
@@ -1344,6 +1364,9 @@ index aa4e0fe69e..dc16a8bcd9 100644
 +      case 'unpin':
 +        this.unpinTab_(target.id);
 +        break;
++      case 'essential':
++        this.toggleEssential_(target);
++        break;
 +      case 'close':
 +        this.closeTarget_(target.id);
 +        break;
@@ -1376,19 +1399,32 @@ index aa4e0fe69e..dc16a8bcd9 100644
 +    }
 +  }
 +
-+  private pinTab_(tabId: string) {
++  private pinTab_(tabId: string): PinnedEntry|undefined {
 +    const sleeping = this.spaces_.dormantByKey(tabId);
 +    if (sleeping) {
-+      this.pinnedTabs_.pinDormant(sleeping, sleeping.space);
++      const entry = this.pinnedTabs_.pinDormant(sleeping, sleeping.space);
 +      this.spaces_.wake(tabId);
 +      this.refreshSections_();
-+      return;
++      return entry;
 +    }
 +    const item = this.findItem_<TabItem>(tabId, 'tab');
 +    if (!item) {
++      return undefined;
++    }
++    const entry =
++        this.pinnedTabs_.pin(item.tabData, this.spaces_.spaceOf(tabId));
++    this.refreshSections_();
++    return entry;
++  }
++
++  private toggleEssential_(target: TabMenuTarget) {
++    const entry = this.entryFor_(target.id) ?? this.pinTab_(target.id);
++    if (!entry) {
 +      return;
 +    }
-+    this.pinnedTabs_.pin(item.tabData, this.spaces_.spaceOf(tabId));
++    this.pinnedTabs_.moveTo(
++        entry.key,
++        entry.space === ESSENTIALS ? this.spaces_.activeId : ESSENTIALS);
 +    this.refreshSections_();
 +  }
 +
@@ -1421,8 +1457,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
 +        this.selectSpace_(id);
 +        break;
 +      case 'create':
-+        this.spaces_.create();
-+        this.refreshSections_();
++        this.newSpace();
 +        break;
 +      case 'rename':
 +        this.spaces_.rename(id, name.trim());
@@ -1506,7 +1541,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
 +    this.pinnedTabs_.unpin(entry.key);
 +    if (!entry.tabId) {
 +      this.spaces_.addDormant(
-+          entry.space,
++          entry.space || this.spaces_.activeId,
 +          {url: entry.url, title: entry.title, favicon: entry.favicon});
 +    }
 +    this.refreshSections_();
@@ -1541,6 +1576,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
 +  private refreshSections_() {
 +    const sections =
 +        splitSections(this.items_, this.pinnedTabs_, this.spaces_);
++    this.essentialRows_ = sections.essentialRows;
 +    this.pinnedRows_ = sections.pinnedRows;
 +    this.looseItems_ = sections.looseItems;
 +    this.spaceRows_ = [...this.spaces_.all];
@@ -1558,7 +1594,8 @@ index aa4e0fe69e..dc16a8bcd9 100644
 +
 +  get hasActiveContent(): boolean {
 +    return this.looseItems_.some(item => item.type === 'tab') ||
-+        this.pinnedRows_.some(row => !row.dormant);
++        this.pinnedRows_.some(row => !row.dormant) ||
++        this.essentialRows_.some(row => !row.dormant);
    }
  
    protected activateTab(tabId: NodeId) {
@@ -1588,7 +1625,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
      this.tabStripService_.activateTab(tabId);
      this.fire<TabActivated>('tab-activated', item.tabData);
    }
-@@ -288,6 +633,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -288,6 +655,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
@@ -1597,7 +1634,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -303,6 +650,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -303,6 +672,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private removeItem(id: NodeId) {
@@ -1605,7 +1642,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
      const itemToRemove = this.findItem_<TabStripItem>(id);
      this.setItems_(this.items_.filter(item => item.id !== id));
  
-@@ -311,10 +659,66 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,10 +681,70 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -1614,9 +1651,12 @@ index aa4e0fe69e..dc16a8bcd9 100644
      this.tabStripService_.createTabAt(null, null);
    }
  
-+  newSpace() {
++  async newSpace() {
 +    this.spaces_.create();
 +    this.refreshSections_();
++    await this.updateComplete;
++    this.shadowRoot.querySelector<SpaceBarElement>('#spaceTitle')
++        ?.beginRename();
 +  }
 +
 +  stepSpace(delta: number) {
@@ -1646,6 +1686,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
 +      tabId: item ? item.id : null,
 +      url: item ? item.tabData.url : (entry?.url ?? sleeping!.url),
 +      pinned: entry !== undefined,
++      essential: entry?.space === ESSENTIALS,
 +      dormant: sleeping !== undefined || (entry !== undefined && !entry.tabId),
 +      hasOthers: loose.some(other => other !== id),
 +      hasRight: index >= 0 && index < loose.length - 1,
@@ -1673,7 +1714,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
    // Utility helpers:
    private findItemIndex_(id: string, type?: 'tab'|'group'): number {
      return this.items_.findIndex(
-@@ -335,10 +739,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -335,10 +765,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    private setActiveTab_(id: string) {
      this.activeTab_ = id;
@@ -1686,7 +1727,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
    }
  
    private updateItemAt_(index: number, item: TabStripItem) {
-@@ -367,8 +773,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -367,8 +799,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // TabDragHost impl:
  
@@ -1698,7 +1739,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
    }
  
    getTabElementForDrag(id: string) {
-@@ -376,7 +784,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -376,7 +810,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    setItemsForDrag(items: TabStripItem[]) {
@@ -1714,7 +1755,7 @@ index aa4e0fe69e..dc16a8bcd9 100644
    }
  
    activateTabForDrag(id: string) {
-@@ -391,16 +806,47 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -391,16 +832,47 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      this.$.tabstrip.classList.toggle('nodrag', noDrag);
    }
  
