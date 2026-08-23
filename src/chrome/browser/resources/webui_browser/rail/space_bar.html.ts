@@ -21,7 +21,6 @@ ${this.variant === 'title' ? html`
       ${this.spaces.map(space => html`
         <button class="dot" data-id="${space.id}" title="${space.name}"
           ?selected="${space.id === this.activeId}"
-          style="--dot-color: ${space.color}"
           @click="${this.onDotClick_}"
           @contextmenu="${this.onDotContextmenu_}"></button>
       `)}

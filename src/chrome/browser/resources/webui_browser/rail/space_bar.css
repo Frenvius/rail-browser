@@ -85,7 +85,7 @@ cr-action-menu,
 }
 
 .dot[selected] {
-  background: var(--dot-color, var(--rail-accent, #7c5cfc));
+  background: var(--rail-text, #f0f0ff);
   transform: scale(1.34);
 }
 
