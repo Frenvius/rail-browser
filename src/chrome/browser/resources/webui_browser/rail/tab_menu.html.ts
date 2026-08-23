@@ -20,6 +20,15 @@ export function getHtml(this: TabMenuElement) {
   <button class="dropdown-item" @click="${this.onPinClick_}">
     ${this.pinLabel_()}
   </button>
+  ${this.otherSpaces_().length ? html`
+    <div class="dropdown-divider"></div>
+    ${this.otherSpaces_().map(space => html`
+      <button class="dropdown-item" data-id="${space.id}"
+        @click="${this.onMoveToSpaceClick_}">
+        Move to ${space.name}
+      </button>
+    `)}
+  ` : ''}
   <div class="dropdown-divider"></div>
   <button class="dropdown-item" @click="${this.onCloseClick_}">
     ${this.closeLabel_()}

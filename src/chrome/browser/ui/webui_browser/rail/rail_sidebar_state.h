@@ -1,0 +1,23 @@
+#ifndef CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SIDEBAR_STATE_H_
+#define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SIDEBAR_STATE_H_
+
+#include <string>
+
+class PrefService;
+
+namespace user_prefs {
+class PrefRegistrySyncable;
+}
+
+namespace rail {
+
+void RegisterSidebarStateProfilePrefs(
+    user_prefs::PrefRegistrySyncable* registry);
+
+std::string GetSidebarState(PrefService* prefs);
+
+void SetSidebarState(PrefService* prefs, const std::string& value);
+
+}
+
+#endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SIDEBAR_STATE_H_

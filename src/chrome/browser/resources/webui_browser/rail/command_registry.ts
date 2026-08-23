@@ -4,10 +4,12 @@ export interface CommandBarHost {
   activeTab(): TabMenuTarget|null;
   goBack(): void;
   goForward(): void;
+  newSpace(): void;
   newTab(): void;
   openUrl(url: string): void;
   reload(): void;
   runTabCommand(command: TabCommand, target: TabMenuTarget): void;
+  stepSpace(delta: number): void;
 }
 
 export interface Command {
@@ -132,6 +134,27 @@ export const COMMANDS: Command[] = [
     keywords: 'next history',
     enabled: hasTab,
     run: host => host.goForward(),
+  },
+  {
+    id: 'new-space',
+    label: 'New Space',
+    hint: '',
+    keywords: 'workspace context group',
+    run: host => host.newSpace(),
+  },
+  {
+    id: 'next-space',
+    label: 'Next Space',
+    hint: 'Ctrl+Alt+Right',
+    keywords: 'workspace switch',
+    run: host => host.stepSpace(1),
+  },
+  {
+    id: 'previous-space',
+    label: 'Previous Space',
+    hint: 'Ctrl+Alt+Left',
+    keywords: 'workspace switch',
+    run: host => host.stepSpace(-1),
   },
   page('Settings', 'preferences options config', 'chrome://settings'),
   page('History', 'visited recent', 'chrome://history'),

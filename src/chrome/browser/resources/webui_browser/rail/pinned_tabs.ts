@@ -1,12 +1,12 @@
 import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 
-import {browserProxyFactory} from '../browser.mojom-webui.js';
 import {TabNetworkState} from '../tabs.mojom-webui.js';
 
-const SAVE_DELAY_MS = 500;
+import type {SidebarState} from './sidebar_state.js';
 
 export interface PinnedEntry {
   key: string;
+  space: string;
   home: string;
   url: string;
   title: string;
@@ -14,59 +14,74 @@ export interface PinnedEntry {
   tabId: string;
 }
 
-interface StoredEntry {
-  home: string;
-  url: string;
-  title: string;
-  favicon: string;
-}
-
 // A pinned row is not a tab. It owns the URL it was pinned at and may or may
 // not have a tab driving it, which is what lets the row outlive a close.
 export class PinnedTabs {
   private entries_: PinnedEntry[] = [];
   private nextKey_ = 0;
-  private saveTimer_ = 0;
+
+  constructor(private onChange_: () => void) {}
 
   get entries(): PinnedEntry[] {
     return this.entries_;
   }
 
-  async restore(tabs: Tab[]) {
-    const claimed = new Set<string>();
-    for (const stored of await this.read_()) {
-      const tab = tabs.find(
-          candidate =>
-              candidate.url === stored.url && !claimed.has(candidate.id));
-      if (tab) {
-        claimed.add(tab.id);
+  entriesIn(spaceId: string): PinnedEntry[] {
+    return this.entries_.filter(entry => entry.space === spaceId);
+  }
+
+  restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
+    for (const space of state?.spaces ?? []) {
+      for (const stored of space.pinned ?? []) {
+        const tab = tabs.find(
+            candidate =>
+                candidate.url === stored.url && !claimed.has(candidate.id));
+        if (tab) {
+          claimed.add(tab.id);
+        }
+        this.entries_.push({
+          key: this.mintKey_(),
+          space: space.id,
+          home: stored.home,
+          url: stored.url,
+          title: stored.title,
+          favicon: stored.favicon,
+          tabId: tab ? tab.id : '',
+        });
       }
-      this.entries_.push({
-        key: this.mintKey_(),
-        home: stored.home,
-        url: stored.url,
-        title: stored.title,
-        favicon: stored.favicon,
-        tabId: tab ? tab.id : '',
-      });
     }
   }
 
-  pin(tab: Tab) {
+  pin(tab: Tab, spaceId: string) {
     this.entries_.push({
       key: this.mintKey_(),
+      space: spaceId,
       home: tab.url,
       url: tab.url,
       title: tab.title,
       favicon: tab.favicon.dataUrl,
       tabId: tab.id,
     });
-    this.save_();
+    this.onChange_();
   }
 
   unpin(key: string) {
     this.entries_ = this.entries_.filter(entry => entry.key !== key);
-    this.save_();
+    this.onChange_();
+  }
+
+  moveTo(key: string, spaceId: string) {
+    const entry = this.byKey(key);
+    if (!entry) {
+      return;
+    }
+    entry.space = spaceId;
+    this.onChange_();
+  }
+
+  dropSpace(spaceId: string) {
+    this.entries_ = this.entries_.filter(entry => entry.space !== spaceId);
+    this.onChange_();
   }
 
   attach(key: string, tab: Tab) {
@@ -76,7 +91,7 @@ export class PinnedTabs {
     }
     entry.tabId = tab.id;
     entry.url = tab.url;
-    this.save_();
+    this.onChange_();
   }
 
   // The tab really is destroyed; the entry falls back to the URL it was pinned
@@ -88,7 +103,7 @@ export class PinnedTabs {
     }
     entry.tabId = '';
     entry.url = entry.home;
-    this.save_();
+    this.onChange_();
     return true;
   }
 
@@ -100,7 +115,7 @@ export class PinnedTabs {
     entry.url = tab.url;
     entry.title = tab.title;
     entry.favicon = tab.favicon.dataUrl;
-    this.save_();
+    this.onChange_();
   }
 
   byKey(key: string): PinnedEntry|undefined {
@@ -116,27 +131,6 @@ export class PinnedTabs {
 
   private mintKey_(): string {
     return `pinned${this.nextKey_++}`;
-  }
-
-  private async read_(): Promise<StoredEntry[]> {
-    const {value} =
-        await browserProxyFactory.getInstance().handler.getPinnedTabs();
-    try {
-      const parsed = JSON.parse(value || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  private save_() {
-    clearTimeout(this.saveTimer_);
-    this.saveTimer_ = setTimeout(() => {
-      const stored: StoredEntry[] = this.entries_.map(
-          ({home, url, title, favicon}) => ({home, url, title, favicon}));
-      browserProxyFactory.getInstance().handler.setPinnedTabs(
-          JSON.stringify(stored));
-    }, SAVE_DELAY_MS);
   }
 }
 

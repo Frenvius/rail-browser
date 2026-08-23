@@ -10,11 +10,7 @@
 }
 
 #tabstrip {
-  /* Make the window frame draggable.
-  * Children elements need to use "app-region: no-drag" to
-  * be excluded from the dragging area */
   -webkit-app-region: drag;
-
   align-items: stretch;
   display: flex;
   flex: 1;
@@ -33,6 +29,7 @@
   flex-direction: column;
   gap: 2px;
   max-height: 40%;
+  min-height: 8px;
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0 8px;
@@ -43,14 +40,10 @@
 }
 
 #pinnedDivider {
-  background: var(--rail-divider, #2a2a42);
+  background: rgb(255 255 255 / 14%);
   flex: 0 0 auto;
   height: 1px;
   margin: 6px 8px 4px;
-}
-
-#pinnedDivider[hidden] {
-  display: none;
 }
 
 #tabList {
@@ -58,7 +51,6 @@
   flex: 1;
   flex-direction: column;
   gap: 2px;
-  /* Fades the last rows out instead of cutting them at the scroll edge. */
   mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
   min-height: 0;
   overflow-x: hidden;

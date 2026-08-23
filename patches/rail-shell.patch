@@ -1,20 +1,87 @@
+diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
+index e2f470d579..a99306eed7 100644
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -91,6 +91,7 @@
+ #include "chrome/browser/ui/safety_hub/safety_hub_prefs.h"
+ #include "chrome/browser/ui/tabs/projects/projects_prefs.h"
+ #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
+ #include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_prefs.h"
+ #include "chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h"
+ #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
+@@ -177,7 +178,6 @@
+ #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
+ #include "components/regional_capabilities/regional_capabilities_prefs.h"
+ #include "components/safe_browsing/buildflags.h"
+-#include "components/safe_browsing/core/common/safe_browsing_prefs.h"
+ #include "components/safety_check/safety_check_prefs.h"
+ #include "components/saved_tab_groups/public/pref_names.h"
+ #include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
+@@ -189,7 +189,6 @@
+ #include "components/sessions/core/session_id_generator.h"
+ #include "components/sharing_message/sharing_sync_preference.h"
+ #include "components/signin/core/browser/active_primary_accounts_metrics_recorder.h"
+-#include "components/signin/public/base/signin_pref_names.h"
+ #include "components/signin/public/base/signin_prefs.h"
+ #include "components/signin/public/identity_manager/identity_manager.h"
+ #include "components/site_engagement/content/site_engagement_service.h"
+@@ -1371,7 +1370,6 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+   PushMessagingServiceImpl::RegisterPrefs(registry);
+ #endif
+   RegisterScreenshotPrefs(registry);
+-  safe_browsing::RegisterLocalStatePrefs(registry);
+   search_engines::SearchEngineChoiceService::RegisterLocalStatePrefs(registry);
+   secure_origin_allowlist::RegisterPrefs(registry);
+   segmentation_platform::SegmentationPlatformService::RegisterLocalStatePrefs(
+@@ -1573,9 +1571,6 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+   DeviceOAuth2TokenStoreDesktop::RegisterPrefs(registry);
+ #endif
+ 
+-#if !BUILDFLAG(IS_ANDROID)
+-  screen_ai::RegisterLocalStatePrefs(registry);
+-#endif  // !BUILDFLAG(IS_ANDROID)
+ 
+ #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
+   PlatformAuthPolicyObserver::RegisterPrefs(registry);
+@@ -1654,6 +1649,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+   ChromeLocationBarModelDelegate::RegisterProfilePrefs(registry);
+   content_settings::CookieSettings::RegisterProfilePrefs(registry);
+   ChromeVersionService::RegisterProfilePrefs(registry);
++  rail::RegisterSidebarStateProfilePrefs(registry);
+   chrome_browser_net::NetErrorTabHelper::RegisterProfilePrefs(registry);
+   chrome_prefs::RegisterProfilePrefs(registry);
+   collaboration::prefs::RegisterProfilePrefs(registry);
+@@ -1735,7 +1731,6 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+ #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
+   safe_browsing::file_type::RegisterProfilePrefs(registry);
+ #endif
+-  safe_browsing::RegisterProfilePrefs(registry);
+   safety_check::prefs::RegisterProfilePrefs(registry);
+   SearchPrefetchService::RegisterProfilePrefs(registry);
+   blocked_content::SafeBrowsingTriggeredPopupBlocker::RegisterProfilePrefs(
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..5a13bdf11a 100644
+index a75d80b00c..638a763817 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
-@@ -23,6 +23,11 @@ build_webui("build") {
+@@ -23,6 +23,16 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
 +    "rail/command_registry.ts",
 +    "rail/docked_devtools.ts",
 +    "rail/pinned_tabs.ts",
++    "rail/sections.ts",
++    "rail/sidebar_state.ts",
++    "rail/space_bar.html.ts",
++    "rail/space_bar.ts",
++    "rail/spaces.ts",
 +    "rail/tab_menu.html.ts",
 +    "rail/tab_menu.ts",
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +53,12 @@ build_webui("build") {
+@@ -48,6 +58,13 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -23,6 +90,7 @@ index a75d80b00c..5a13bdf11a 100644
 +    "rail/rail_tab.css",
 +    "rail/rail_tab_strip.css",
 +    "rail/rail_tokens.css",
++    "rail/space_bar.css",
 +    "rail/tab_menu.css",
      "side_panel.css",
      "tab_strip/tab.css",
@@ -230,7 +298,7 @@ index 08978c8e14..4c3672a256 100644
 -  border-radius: 0 16px 0 0;
 -}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 8ebad94626..6408373513 100644
+index 8ebad94626..16d88e4a33 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
 @@ -9,35 +9,11 @@ import type {WebuiBrowserAppElement} from './app.js';
@@ -298,7 +366,7 @@ index 8ebad94626..6408373513 100644
          <cr-button id="locationIconButton" type="button"
            ?hidden="${!this.showLocationIconButton_}"
            @click="${this.onLocationIconClick_}">
-@@ -65,14 +57,46 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -65,14 +57,47 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button id="appMenuButton" iron-icon="cr:more-vert"
          title="$i18n{appMenuTooltip}"
          @click="${this.onAppMenuClick_}"></cr-icon-button>
@@ -327,6 +395,7 @@ index 8ebad94626..6408373513 100644
 +    <div class="tabstripDiv">
 +      <webui-browser-tab-strip id="tabstrip"
 +          @rail-tab-command="${this.onRailTabCommand_}"
++          @space-content-changed="${this.onSpaceContentChanged_}"
 +          @tab-activated="${this.onTabActivated_}"
 +          @tab-added="${this.onTabAdded_}"
 +          @tab-closed="${this.onTabClosed_}"
@@ -347,7 +416,7 @@ index 8ebad94626..6408373513 100644
      </side-panel>
    </div>
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..953d1fe343 100644
+index caed98ffda..696f28dc7c 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -18,6 +18,7 @@ import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
@@ -413,7 +482,41 @@ index caed98ffda..953d1fe343 100644
      callbackRouter.onFullscreenModeChanged.addListener(
          this.onFullscreenModeChanged_.bind(this));
    }
-@@ -232,14 +252,34 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -116,11 +136,33 @@ export class WebuiBrowserAppElement extends CrLitElement {
+         this.$.contentRegion, 'kContentsContainerViewElementId');
+     this.setUpLongPress_(this.$.backButton, /*isBack=*/ true);
+     this.setUpLongPress_(this.$.forwardButton, /*isBack=*/ false);
++    // Reaches the shell only while the chrome holds focus; a focused page
++    // still swallows it until native key forwarding lands.
++    document.addEventListener('keydown', this.onSpaceKeydown_);
+     const {width} =
+         await browserProxyFactory.getInstance().handler.getTabStripInset();
+     this.tabStripInset_ = width;
+   }
+ 
++  override disconnectedCallback() {
++    super.disconnectedCallback();
++    document.removeEventListener('keydown', this.onSpaceKeydown_);
++  }
++
++  private onSpaceKeydown_ = (e: KeyboardEvent) => {
++    if (!e.ctrlKey || !e.altKey || e.shiftKey) {
++      return;
++    }
++    if (e.key === 'ArrowRight') {
++      this.$.tabstrip.stepSpace(1);
++    } else if (e.key === 'ArrowLeft') {
++      this.$.tabstrip.stepSpace(-1);
++    } else {
++      return;
++    }
++    e.preventDefault();
++  };
++
+   // TabStripControllerDelegate:
+   refreshLayout() {
+     this.updateToolbarButtons_();
+@@ -232,14 +274,41 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -431,8 +534,15 @@ index caed98ffda..953d1fe343 100644
 +    this.openCommandBarForNewTab();
 +  }
 +
++  protected onSpaceContentChanged_() {
++    this.updateEmptyState_();
++  }
++
 +  private updateEmptyState_() {
-+    this.empty_ = this.$.contentRegion.isEmpty;
++    // A space with no live tab of its own reads as empty even while other
++    // spaces keep theirs loaded.
++    this.empty_ =
++        this.$.contentRegion.isEmpty || !this.$.tabstrip.hasActiveContent;
 +    if (!this.empty_) {
 +      return;
 +    }
@@ -448,7 +558,7 @@ index caed98ffda..953d1fe343 100644
    protected onTabActivated_(event: CustomEvent<TabActivated>) {
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
-@@ -287,7 +327,13 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +356,13 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -463,7 +573,7 @@ index caed98ffda..953d1fe343 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -308,6 +354,9 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -308,6 +383,9 @@ export class WebuiBrowserAppElement extends CrLitElement {
      browserProxyFactory.getInstance()
          .callbackRouter.setFocusToLocationBar.addListener(
              this.setFocusToLocationBar.bind(this));
@@ -473,7 +583,7 @@ index caed98ffda..953d1fe343 100644
      browserProxyFactory.getInstance()
          .callbackRouter.setReloadStopState.addListener(
              this.setReloadStopState.bind(this));
-@@ -331,8 +380,150 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -331,8 +409,152 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.$.tabstrip.elementDrag(e);
    }
  
@@ -543,11 +653,13 @@ index caed98ffda..953d1fe343 100644
 +      },
 +      goBack: () => region.activeWebview?.goBack(),
 +      goForward: () => region.activeWebview?.goForward(),
++      newSpace: () => strip.newSpace(),
 +      newTab: () => strip.newTab(),
 +      openUrl: (url: string) => strip.openTab(url),
 +      reload: () => region.activeWebview?.reload(),
 +      runTabCommand: (command: TabCommand, target: TabMenuTarget) =>
 +          strip.runTabCommand(command, target),
++      stepSpace: (delta: number) => strip.stepSpace(delta),
 +    };
 +  }
 +
@@ -624,7 +736,7 @@ index caed98ffda..953d1fe343 100644
  
      // If the user initiated the selection (e.g. by pressing Ctrl-L) we want to
      // select everything in order to make it easy to replace the URL. This is
-@@ -361,6 +552,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +583,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -959,14 +1071,18 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..acbf31383d 100644
+index 65d7e76ce5..10776e48b0 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -10,22 +10,43 @@ export function getHtml(this: TabStripElement) {
+@@ -10,22 +10,51 @@ export function getHtml(this: TabStripElement) {
    // clang-format off
    return html`<!--_html_template_start_-->
  <div id="tabstrip">
 -    ${this.items_.map(item => item.type === 'tab' ? html`
++  <rail-space-bar id="spaceTitle" variant="title"
++      .spaces="${this.spaceRows_}" .activeId="${this.activeSpace_}"
++      @rail-space-command="${this.onRailSpaceCommand_}">
++  </rail-space-bar>
 +  <div id="pinnedList">
 +    ${this.pinnedRows_.map(row => html`
 +          <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
@@ -980,7 +1096,7 @@ index 65d7e76ce5..acbf31383d 100644
 +          </webui-browser-tab>
 +        `)}
 +  </div>
-+  <div id="pinnedDivider" ?hidden="${!this.pinnedRows_.length}"></div>
++  <div id="pinnedDivider"></div>
 +  <div id="tabList">
 +    ${this.looseItems_.map(item => item.type === 'tab' ? html`
            <webui-browser-tab id="${this.tabIdToDomId(item.id)}"
@@ -1005,6 +1121,10 @@ index 65d7e76ce5..acbf31383d 100644
 +    <cr-icon icon="cr:add"></cr-icon>
 +    <span>$i18n{tooltipNewTab}</span>
 +  </button>
++  <rail-space-bar id="spaceBar" .spaces="${this.spaceRows_}"
++      .activeId="${this.activeSpace_}"
++      @rail-space-command="${this.onRailSpaceCommand_}">
++  </rail-space-bar>
  </div>
 +<rail-tab-menu id="tabMenu" @rail-tab-command="${this.onRailTabCommand_}">
 +</rail-tab-menu>
@@ -1012,29 +1132,36 @@ index 65d7e76ce5..acbf31383d 100644
    // clang-format on
  }
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..6751ccf7de 100644
+index aa4e0fe69e..5efa4f0570 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,8 @@
  
  import './tab.js';
  import './tab_group.js';
++import '../rail/space_bar.js';
 +import '../rail/tab_menu.js';
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -20,6 +21,10 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
+@@ -20,6 +22,16 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
  import {TabStripObservation} from '/tab_strip_api/tab_strip_observation.js';
  import type {TabStripObserver} from '/tab_strip_api/tab_strip_observer.js';
  
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
-+import {dormantTabData, PinnedTabs} from '../rail/pinned_tabs.js';
++import {PinnedTabs} from '../rail/pinned_tabs.js';
++import type {PinnedRow} from '../rail/sections.js';
++import {splitSections} from '../rail/sections.js';
++import {readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
++import type {SpaceCommandDetail} from '../rail/space_bar.js';
++import type {Space} from '../rail/spaces.js';
++import {serializeSidebar, Spaces} from '../rail/spaces.js';
 +import type {TabCommand, TabCommandDetail, TabMenuElement, TabMenuTarget} from '../rail/tab_menu.js';
 +
  import type {TabActivated, TabAdded, TabClosed, TabUpdated} from './events.js';
  import type {TabGroupItem, TabItem, TabStripItem} from './items.js';
  import type {TabElement} from './tab.js';
-@@ -33,9 +38,15 @@ export type {TabGroupItem, TabItem, TabStripItem};
+@@ -33,9 +45,12 @@ export type {TabGroupItem, TabItem, TabStripItem};
  export interface TabStripElement {
    $: {
      tabstrip: HTMLElement,
@@ -1042,15 +1169,12 @@ index aa4e0fe69e..6751ccf7de 100644
    };
  }
  
-+export interface PinnedRow {
-+  item: TabItem;
-+  dormant: boolean;
-+}
++export type {PinnedRow};
 +
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -82,6 +93,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -82,6 +97,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        items_: {
          type: Array,
        },
@@ -1065,7 +1189,19 @@ index aa4e0fe69e..6751ccf7de 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -94,8 +113,11 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,12 +113,28 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+         type: Boolean,
+         state: true,
+       },
++      spaceRows_: {
++        type: Array,
++        state: true,
++      },
++      activeSpace_: {
++        type: String,
++        state: true,
++      },
+     };
    }
  
    protected accessor items_: TabStripItem[] = [];
@@ -1073,21 +1209,47 @@ index aa4e0fe69e..6751ccf7de 100644
 +  protected accessor looseItems_: TabStripItem[] = [];
    protected accessor activeTab_: string = '';
    protected accessor dragInProgress_ = false;
-+  private readonly pinnedTabs_ = new PinnedTabs();
++  protected accessor spaceRows_: Space[] = [];
++  protected accessor activeSpace_: string = '';
++  private readonly store_ =
++      new SidebarStore(() => serializeSidebar(this.spaces_, this.pinnedTabs_));
++  private readonly pinnedTabs_ = new PinnedTabs(() => this.store_.save());
++  private readonly spaces_ = new Spaces(() => this.store_.save());
  
    private readonly tabStripService_: TabStripServiceRemote;
    private tabStripObservation_: TabStripObservation|undefined;
-@@ -117,6 +139,9 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -117,6 +156,9 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    private async loadTabStripModel_(observation: TabStripObservation) {
      const tabSnapshot = await this.tabStripService_.getTabs();
      const items = this.processModelContainer_(tabSnapshot.tabStrip);
-+    await this.pinnedTabs_.restore(
++    await this.restoreSidebar_(
 +        items.filter((item): item is TabItem => item.type === 'tab')
 +            .map(item => item.tabData));
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -171,8 +196,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -140,6 +182,20 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+     assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
+   }
+ 
++  private async restoreSidebar_(tabs: Tab[]) {
++    const state = await readSidebarState();
++    // Pinned rows claim their tabs first: a tab driving one is restored from
++    // that half of the record and must not be matched twice.
++    const claimed = new Set<string>();
++    this.pinnedTabs_.restore(state, tabs, claimed);
++    this.spaces_.restore(state, tabs, claimed);
++    for (const entry of this.pinnedTabs_.entries) {
++      if (entry.tabId) {
++        this.spaces_.assign(entry.tabId, entry.space, entry.url);
++      }
++    }
++  }
++
+   private processModelContainer_(container: Container): TabStripItem[] {
+     if (!container || !container.children) {
+       return [];
+@@ -171,8 +227,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    onNodesClosed(nodesClosedEvent: OnNodesClosedEvent) {
      nodesClosedEvent.nodeIds.forEach(nodeId => {
@@ -1098,7 +1260,15 @@ index aa4e0fe69e..6751ccf7de 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -261,10 +288,143 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -241,6 +299,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+   // End TabStripObserver impl:
+ 
+   private addTab(tab: Tab) {
++    this.spaces_.adopt(tab.id, tab.url);
+     this.setItems_([
+       ...this.items_,
+       {
+@@ -261,16 +320,217 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    protected onTabCloseClick(e: CustomEvent<{id: string}>) {
@@ -1115,16 +1285,21 @@ index aa4e0fe69e..6751ccf7de 100644
 +    const {id, x, y} = e.detail;
 +    const target = this.targetFor(id);
 +    if (target) {
++      this.$.tabMenu.spaces = this.spaceRows_;
++      this.$.tabMenu.activeSpace = this.activeSpace_;
 +      this.$.tabMenu.openFor(target, x, y);
 +    }
 +  }
 +
 +  protected onRailTabCommand_(e: CustomEvent<TabCommandDetail>) {
-+    this.runTabCommand(e.detail.command, e.detail.target);
++    this.runTabCommand(e.detail.command, e.detail.target, e.detail.spaceId);
 +  }
 +
-+  runTabCommand(command: TabCommand, target: TabMenuTarget) {
++  runTabCommand(command: TabCommand, target: TabMenuTarget, spaceId = '') {
 +    switch (command) {
++      case 'move-to-space':
++        this.moveToSpace_(target, spaceId);
++        break;
 +      case 'copy-link':
 +        navigator.clipboard.writeText(target.url);
 +        break;
@@ -1173,8 +1348,72 @@ index aa4e0fe69e..6751ccf7de 100644
 +    if (!item) {
 +      return;
 +    }
-+    this.pinnedTabs_.pin(item.tabData);
++    this.pinnedTabs_.pin(item.tabData, this.spaces_.spaceOf(tabId));
 +    this.refreshSections_();
++  }
++
++  // A pinned row and the tab behind it move together, so a row never ends up
++  // in one space while its tab answers to another.
++  private moveToSpace_(target: TabMenuTarget, spaceId: string) {
++    const entry = this.entryFor_(target.id);
++    if (entry) {
++      this.pinnedTabs_.moveTo(entry.key, spaceId);
++    }
++    const tabId = entry ? entry.tabId : target.id;
++    if (tabId) {
++      const wasActive = tabId === this.activeTab_;
++      this.spaces_.assign(tabId, spaceId, target.url);
++      if (wasActive) {
++        this.focusSpace_();
++      }
++    }
++    this.refreshSections_();
++  }
++
++  protected onRailSpaceCommand_(e: CustomEvent<SpaceCommandDetail>) {
++    const {command, id, name} = e.detail;
++    switch (command) {
++      case 'select':
++        this.selectSpace_(id);
++        break;
++      case 'create':
++        this.spaces_.create();
++        this.refreshSections_();
++        break;
++      case 'rename':
++        this.spaces_.rename(id, name.trim());
++        this.refreshSections_();
++        break;
++      case 'remove':
++        this.removeSpace_(id);
++        break;
++    }
++  }
++
++  private selectSpace_(id: string) {
++    this.spaces_.select(id);
++    this.focusSpace_();
++    this.refreshSections_();
++  }
++
++  private removeSpace_(id: string) {
++    const orphans = this.spaces_.remove(id);
++    if (this.spaces_.byId(id)) {
++      return;
++    }
++    this.pinnedTabs_.dropSpace(id);
++    this.closeMany_(orphans);
++    this.focusSpace_();
++    this.refreshSections_();
++  }
++
++  // A space remembers the tab it was left on. With nothing to go back to the
++  // window keeps its empty state instead of borrowing another space's tab.
++  private focusSpace_() {
++    const tabId = this.spaces_.lastActiveIn(this.spaces_.activeId);
++    if (tabId && tabId !== this.activeTab_) {
++      this.activateTab(tabId);
++    }
 +  }
 +
 +  private unpinTab_(id: string) {
@@ -1214,23 +1453,18 @@ index aa4e0fe69e..6751ccf7de 100644
 +  }
 +
 +  private refreshSections_() {
-+    const claimed = new Set<string>();
-+    const rows: PinnedRow[] = [];
-+    for (const entry of this.pinnedTabs_.entries) {
-+      const item =
-+          entry.tabId ? this.findItem_<TabItem>(entry.tabId, 'tab') : undefined;
-+      if (item) {
-+        claimed.add(item.id);
-+        rows.push({item, dormant: false});
-+        continue;
-+      }
-+      rows.push({
-+        item: {type: 'tab', id: entry.key, tabData: dormantTabData(entry)},
-+        dormant: true,
-+      });
-+    }
-+    this.pinnedRows_ = rows;
-+    this.looseItems_ = this.items_.filter(item => !claimed.has(item.id));
++    const sections =
++        splitSections(this.items_, this.pinnedTabs_, this.spaces_);
++    this.pinnedRows_ = sections.pinnedRows;
++    this.looseItems_ = sections.looseItems;
++    this.spaceRows_ = [...this.spaces_.all];
++    this.activeSpace_ = this.spaces_.activeId;
++    this.fire('space-content-changed', {hasContent: this.hasActiveContent});
++  }
++
++  get hasActiveContent(): boolean {
++    return this.looseItems_.some(item => item.type === 'tab') ||
++        this.pinnedRows_.some(row => !row.dormant);
    }
  
    protected activateTab(tabId: NodeId) {
@@ -1243,15 +1477,34 @@ index aa4e0fe69e..6751ccf7de 100644
      const item = this.findItem_<TabItem>(tabId, 'tab');
      if (!item) {
        return;
-@@ -288,6 +448,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+     }
+ 
++    // Activating a tab of a hidden space follows it, so a command bar match
++    // never activates something the sidebar is not showing.
++    this.spaces_.noteActive(tabId);
+     this.setActiveTab_(tabId);
++    this.refreshSections_();
+     this.tabStripService_.activateTab(tabId);
+     this.fire<TabActivated>('tab-activated', item.tabData);
+   }
+@@ -288,6 +548,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
 +    this.pinnedTabs_.track(tab);
++    this.spaces_.track(tab);
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -311,10 +472,51 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -303,6 +565,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+   }
+ 
+   private removeItem(id: NodeId) {
++    this.spaces_.forget(id);
+     const itemToRemove = this.findItem_<TabStripItem>(id);
+     this.setItems_(this.items_.filter(item => item.id !== id));
+ 
+@@ -311,10 +574,62 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -1260,6 +1513,17 @@ index aa4e0fe69e..6751ccf7de 100644
      this.tabStripService_.createTabAt(null, null);
    }
  
++  newSpace() {
++    this.spaces_.create();
++    this.refreshSections_();
++  }
++
++  stepSpace(delta: number) {
++    this.spaces_.step(delta);
++    this.focusSpace_();
++    this.refreshSections_();
++  }
++
 +  openTab(url: string) {
 +    this.tabStripService_.createTabAt(null, url);
 +  }
@@ -1304,7 +1568,7 @@ index aa4e0fe69e..6751ccf7de 100644
    // Utility helpers:
    private findItemIndex_(id: string, type?: 'tab'|'group'): number {
      return this.items_.findIndex(
-@@ -339,6 +541,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -339,6 +654,7 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    protected setItems_(items: TabStripItem[]) {
      this.items_ = items;
@@ -1312,6 +1576,30 @@ index aa4e0fe69e..6751ccf7de 100644
    }
  
    private updateItemAt_(index: number, item: TabStripItem) {
+@@ -367,8 +683,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+ 
+   // TabDragHost impl:
+ 
++  // Only the rows on screen can be reordered: a hidden space has no elements
++  // for the drag delegate to measure against.
+   get itemsForDrag() {
+-    return this.items_;
++    return this.looseItems_;
+   }
+ 
+   getTabElementForDrag(id: string) {
+@@ -376,7 +694,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+   }
+ 
+   setItemsForDrag(items: TabStripItem[]) {
+-    this.setItems_(items);
++    const visible = new Set(items.map(item => item.id));
++    let next = 0;
++    this.setItems_(this.items_.map(
++        item => visible.has(item.id) ? items[next++]! : item));
+   }
+ 
+   activateTabForDrag(id: string) {
 diff --git a/chrome/browser/resources/webui_browser/webui_browser.html b/chrome/browser/resources/webui_browser/webui_browser.html
 index 2a17afc37b..db2ba1e21d 100644
 --- a/chrome/browser/resources/webui_browser/webui_browser.html
@@ -1397,6 +1685,150 @@ index a94af80a25..4f3d9efed1 100644
    override connectedCallback() {
      super.connectedCallback();
      this.tryToAttach();
+diff --git a/chrome/browser/ui/browser.cc b/chrome/browser/ui/browser.cc
+index b6bcac3e84..fae1dcd037 100644
+--- a/chrome/browser/ui/browser.cc
++++ b/chrome/browser/ui/browser.cc
+@@ -150,8 +150,10 @@
+ #include "chrome/browser/ui/unload_controller.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/frame/contents_web_view.h"
++#include "chrome/browser/ui/views/message_box_dialog.h"
+ #include "chrome/browser/ui/views/status_bubble_views.h"
+ #include "chrome/browser/ui/web_applications/app_browser_controller.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_empty_window.h"
+ #include "chrome/browser/ui/web_modal/browser_window_modal_dialog_delegate.h"
+ #include "chrome/browser/ui/webui/signin/login_ui_service.h"
+ #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
+@@ -533,6 +535,7 @@ Browser::Browser(const CreateParams& params)
+       should_trigger_session_restore_(params.should_trigger_session_restore),
+       cancel_download_confirmation_state_(
+           CancelDownloadConfirmationState::kNotPrompted),
++      close_multitab_confirmation_state_(CancelDownloadConfirmationState::kNotPrompted),
+       override_bounds_(params.initial_bounds),
+       initial_show_state_(params.initial_show_state),
+       initial_workspace_(params.initial_workspace),
+@@ -897,10 +900,12 @@ Browser::WarnBeforeClosingResult Browser::MaybeWarnBeforeClosing(
+     return WarnBeforeClosingResult::kOkToClose;
+   }
+ 
+-  // `CanCloseWithInProgressDownloads()` may trigger a modal dialog.
+-  bool can_close_with_downloads = CanCloseWithInProgressDownloads();
+-  if (can_close_with_downloads) {
+-    return WarnBeforeClosingResult::kOkToClose;
++  if (CanCloseWithMultipleTabs()) {
++    // `CanCloseWithInProgressDownloads()` may trigger a modal dialog.
++    bool can_close_with_downloads = CanCloseWithInProgressDownloads();
++    if (can_close_with_downloads) {
++      return WarnBeforeClosingResult::kOkToClose;
++    }
+   }
+ 
+   DCHECK(!warn_before_closing_callback_)
+@@ -954,6 +959,7 @@ bool Browser::TryToCloseWindow(
+ void Browser::ResetTryToCloseWindow() {
+   cancel_download_confirmation_state_ =
+       CancelDownloadConfirmationState::kNotPrompted;
++  close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kNotPrompted;
+   UnloadController::From(this)->ResetTryToCloseWindow();
+ }
+ 
+@@ -1463,6 +1469,12 @@ void Browser::OnTabStripModelChanged(TabStripModel* tab_strip_model,
+ 
+ 
+ void Browser::TabStripEmpty() {
++  // A Rail window is the product shell, not a container for the tab strip. It
++  // owns sidebar rows that outlive every tab, so an empty strip is a state it
++  // renders rather than a reason to close.
++  if (rail::KeepsWindowOpenWhenEmpty(this)) {
++    return;
++  }
+   // Note: even though the tab strip is empty, the call to Close() may not
+   // result in closing this Browser. This can happen in the case of closing
+   // the last Browser with ongoing downloads.
+@@ -3128,6 +3140,59 @@ bool Browser::CanCloseWithInProgressDownloads() {
+   return false;
+ }
+ 
++bool Browser::CanCloseWithMultipleTabs() {
++  if (!base::CommandLine::ForCurrentProcess()->HasSwitch("close-confirmation"))
++    return true;
++
++  // If we've prompted, we need to hear from the user before we
++  // can close.
++  if (close_multitab_confirmation_state_ != CancelDownloadConfirmationState::kNotPrompted)
++    return close_multitab_confirmation_state_ != CancelDownloadConfirmationState::kWaitingForResponse;
++
++  // If we're not running a full browser process with a profile manager
++  // (testing), it's ok to close the browser.
++  if (!g_browser_process->profile_manager())
++    return true;
++
++  // Figure out how many windows are open total
++  int total_window_count = 0;
++  GlobalBrowserCollection::GetInstance()->ForEach([&total_window_count, this](BrowserWindowInterface* browser) {
++    // Don't count this browser window or any other in the process of closing.
++    // Window closing may be delayed, and windows that are in the process of
++    // closing don't count against our totals.
++    if (browser != this && !browser->capabilities()->IsAttemptingToCloseBrowser()) {
++      total_window_count++;
++    }
++    return true;
++  });
++
++  const auto flag_value = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII("close-confirmation");
++  bool show_confirmation_last_window = flag_value == "last";
++
++  if (show_confirmation_last_window) {
++    if (total_window_count >= 1 || this->tab_strip_model()->count() <= 1)
++      return true;
++  } else {
++    if (total_window_count == 0)
++      return true;
++    if (this->tab_strip_model()->count() == 0)
++      tab_strip_model_delegate_->AddTabAt(GURL(), -1, true);
++  }
++
++  close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kWaitingForResponse;
++
++  auto callback = base::BindOnce(&Browser::MultitabResponse,
++                                 weak_factory_.GetWeakPtr());
++  MessageBoxDialog::Show(window_->GetNativeWindow(),
++                         u"Do you want to close this window?", std::u16string(),
++                         chrome::MESSAGE_BOX_TYPE_QUESTION, u"Close", u"Cancel",
++                         std::u16string(), std::move(callback));
++
++  // Return false so the browser does not close.  We'll close if the user
++  // confirms in the dialog.
++  return false;
++}
++
+ void Browser::InProgressDownloadResponse(bool cancel_downloads) {
+   if (cancel_downloads) {
+     cancel_download_confirmation_state_ =
+@@ -3151,6 +3216,22 @@ void Browser::InProgressDownloadResponse(bool cancel_downloads) {
+       .Run(WarnBeforeClosingResult::kDoNotClose);
+ }
+ 
++void Browser::MultitabResponse(chrome::MessageBoxResult result) {
++  if (result == chrome::MESSAGE_BOX_RESULT_YES) {
++    close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kResponseReceived;
++    std::move(warn_before_closing_callback_)
++        .Run(WarnBeforeClosingResult::kOkToClose);
++    return;
++  }
++
++  // Sets the confirmation state to kNotPrompted so that if the user tries to
++  // close again we'll show the warning again.
++  close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kNotPrompted;
++
++  std::move(warn_before_closing_callback_)
++      .Run(WarnBeforeClosingResult::kDoNotClose);
++}
++
+ void Browser::FinishWarnBeforeClosing(WarnBeforeClosingResult result) {
+   switch (result) {
+     case WarnBeforeClosingResult::kOkToClose:
 diff --git a/chrome/browser/ui/browser_window/internal/browser_window_features.cc b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
 index 77f5a0e8f4..3764ce07e1 100644
 --- a/chrome/browser/ui/browser_window/internal/browser_window_features.cc
@@ -1434,7 +1866,7 @@ index e17b41f80f..e7fddbb661 100644
    // attempt to add tabs to the browser before it closes.
    is_attempting_to_close_browser_ = true;
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..154fa647da 100644
+index 3d4fe27f4f..8be37a57bd 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,8 @@ source_set("headers") {
@@ -1442,7 +1874,7 @@ index 3d4fe27f4f..154fa647da 100644
    sources = [
      "browser_elements_webui_browser.h",
 +    "rail/rail_empty_window.h",
-+    "rail/rail_pinned_tabs.h",
++    "rail/rail_sidebar_state.h",
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
@@ -1460,7 +1892,7 @@ index 3d4fe27f4f..154fa647da 100644
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
 +    "rail/rail_empty_window.cc",
-+    "rail/rail_pinned_tabs.cc",
++    "rail/rail_sidebar_state.cc",
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
@@ -1498,7 +1930,7 @@ index 3d4fe27f4f..154fa647da 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..30cc075749 100644
+index 15a65f7152..55434c51c8 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -7,6 +7,7 @@ module webui_browser.mojom;
@@ -1539,15 +1971,16 @@ index 15a65f7152..30cc075749 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -90,6 +107,11 @@ interface PageHandler {
+@@ -90,6 +107,12 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
 +
-+  // Rail's pinned sidebar rows, serialized by the WebUI. A row outlives the tab
-+  // behind it, so it cannot be derived from the tab strip model.
-+  GetPinnedTabs() => (string value);
-+  SetPinnedTabs(string value);
++  // Rail's spaces and pinned sidebar rows, serialized by the WebUI. Both
++  // outlive the tabs behind them, so neither can be derived from the tab strip
++  // model.
++  GetSidebarState() => (string value);
++  SetSidebarState(string value);
  };
  
  // These are all the different icons that can be displayed in the chip next to
@@ -1674,7 +2107,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..f431fd2125 100644
+index 3ba14e7289..4ed2f1e27d 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -1689,39 +2122,41 @@ index 3ba14e7289..f431fd2125 100644
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
-+#include "chrome/browser/ui/webui_browser/rail/rail_pinned_tabs.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
  #include "components/browser_apis/tab_strip/types/node_id.h"
-@@ -332,6 +334,18 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +334,20 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
-+void WebUIBrowserPageHandler::GetPinnedTabs(GetPinnedTabsCallback callback) {
++void WebUIBrowserPageHandler::GetSidebarState(
++    GetSidebarStateCallback callback) {
 +  Browser* browser = GetBrowser();
 +  std::move(callback).Run(
-+      rail::GetPinnedTabs(browser ? browser->profile()->GetPrefs() : nullptr));
++      rail::GetSidebarState(browser ? browser->profile()->GetPrefs()
++                                    : nullptr));
 +}
 +
-+void WebUIBrowserPageHandler::SetPinnedTabs(const std::string& value) {
++void WebUIBrowserPageHandler::SetSidebarState(const std::string& value) {
 +  Browser* browser = GetBrowser();
-+  rail::SetPinnedTabs(browser ? browser->profile()->GetPrefs() : nullptr,
-+                      value);
++  rail::SetSidebarState(browser ? browser->profile()->GetPrefs() : nullptr,
++                        value);
 +}
 +
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..2642b2631f 100644
+index 859da4ef00..e817885692 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -56,6 +56,8 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
-+  void GetPinnedTabs(GetPinnedTabsCallback callback) override;
-+  void SetPinnedTabs(const std::string& value) override;
++  void GetSidebarState(GetSidebarStateCallback callback) override;
++  void SetSidebarState(const std::string& value) override;
  
   private:
    WebUIBrowserPageHandler(
@@ -1948,46 +2383,3 @@ index 9d8b4ade5a..42d5a4e25b 100644
      "includes": [5250],
    },
    "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/webui_browser/internal/resources.grd": {
-diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
---- a/chrome/browser/prefs/browser_prefs.cc
-+++ b/chrome/browser/prefs/browser_prefs.cc
-@@ -91,6 +91,7 @@
- #include "chrome/browser/ui/safety_hub/safety_hub_prefs.h"
- #include "chrome/browser/ui/tabs/projects/projects_prefs.h"
- #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
-+#include "chrome/browser/ui/webui_browser/rail/rail_pinned_tabs.h"
- #include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_prefs.h"
- #include "chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h"
- #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
-@@ -1648,6 +1649,7 @@
-   ChromeLocationBarModelDelegate::RegisterProfilePrefs(registry);
-   content_settings::CookieSettings::RegisterProfilePrefs(registry);
-   ChromeVersionService::RegisterProfilePrefs(registry);
-+  rail::RegisterPinnedTabsProfilePrefs(registry);
-   chrome_browser_net::NetErrorTabHelper::RegisterProfilePrefs(registry);
-   chrome_prefs::RegisterProfilePrefs(registry);
-   collaboration::prefs::RegisterProfilePrefs(registry);
-diff --git a/chrome/browser/ui/browser.cc b/chrome/browser/ui/browser.cc
---- a/chrome/browser/ui/browser.cc
-+++ b/chrome/browser/ui/browser.cc
-@@ -153,6 +153,7 @@
- #include "chrome/browser/ui/views/message_box_dialog.h"
- #include "chrome/browser/ui/views/status_bubble_views.h"
- #include "chrome/browser/ui/web_applications/app_browser_controller.h"
-+#include "chrome/browser/ui/webui_browser/rail/rail_empty_window.h"
- #include "chrome/browser/ui/web_modal/browser_window_modal_dialog_delegate.h"
- #include "chrome/browser/ui/webui/signin/login_ui_service.h"
- #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
-@@ -1468,6 +1469,12 @@
- 
- 
- void Browser::TabStripEmpty() {
-+  // A Rail window is the product shell, not a container for the tab strip. It
-+  // owns sidebar rows that outlive every tab, so an empty strip is a state it
-+  // renders rather than a reason to close.
-+  if (rail::KeepsWindowOpenWhenEmpty(this)) {
-+    return;
-+  }
-   // Note: even though the tab strip is empty, the call to Close() may not
-   // result in closing this Browser. This can happen in the case of closing
-   // the last Browser with ongoing downloads.

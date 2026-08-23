@@ -3,6 +3,7 @@ import '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
+import type {Space} from './spaces.js';
 import {getCss} from './tab_menu.css.js';
 import {getHtml} from './tab_menu.html.js';
 
@@ -19,11 +20,12 @@ export interface TabMenuTarget {
 }
 
 export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
-    'duplicate'|'pin'|'reload'|'unpin';
+    'duplicate'|'move-to-space'|'pin'|'reload'|'unpin';
 
 export interface TabCommandDetail {
   command: TabCommand;
   target: TabMenuTarget;
+  spaceId: string;
 }
 
 export interface TabMenuElement {
@@ -48,10 +50,18 @@ export class TabMenuElement extends CrLitElement {
   static override get properties() {
     return {
       target: {type: Object},
+      spaces: {type: Array},
+      activeSpace: {type: String},
     };
   }
 
   accessor target: TabMenuTarget|null = null;
+  accessor spaces: Space[] = [];
+  accessor activeSpace: string = '';
+
+  protected otherSpaces_(): Space[] {
+    return this.spaces.filter(space => space.id !== this.activeSpace);
+  }
 
   openFor(target: TabMenuTarget, x: number, y: number) {
     this.target = target;
@@ -96,13 +106,18 @@ export class TabMenuElement extends CrLitElement {
     this.fire_('close-right');
   }
 
-  private fire_(command: TabCommand) {
+  protected onMoveToSpaceClick_(e: Event) {
+    const spaceId = (e.currentTarget as HTMLElement).dataset['id'] ?? '';
+    this.fire_('move-to-space', spaceId);
+  }
+
+  private fire_(command: TabCommand, spaceId: string = '') {
     const target = this.target;
     if (!target) {
       return;
     }
     this.$.menu.close();
-    this.fire<TabCommandDetail>('rail-tab-command', {command, target});
+    this.fire<TabCommandDetail>('rail-tab-command', {command, target, spaceId});
   }
 }
 
