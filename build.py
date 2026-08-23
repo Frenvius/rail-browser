@@ -532,8 +532,16 @@ def main():
 
     if (args.regenerate or not reuse or
             not (source_tree / output_dir / 'build.ninja').exists()):
-        # Run gn gen
-        _run_build_process(str(gn_exe), 'gen', str(output_dir), '--fail-on-unused-args')
+        # The dotfile asks for "python3", which GN resolves through PATH and
+        # bakes as an absolute path into every action it writes. A version
+        # manager moves that path between shells and upgrades, and each move
+        # rewrites the buildflag headers every translation unit includes, so a
+        # one-line edit costs a full rebuild. Pin the interpreter instead; GN
+        # copies the switch into the regeneration command, which keeps later
+        # implicit gens on the same path.
+        _run_build_process(str(gn_exe), 'gen', str(output_dir), '--fail-on-unused-args',
+                           '--script-executable={}'.format(
+                               Path(sys.executable).resolve().as_posix()))
 
     if not reuse or not os.path.exists('third_party\\rust-toolchain\\bin\\bindgen.exe'):
         # Build bindgen
