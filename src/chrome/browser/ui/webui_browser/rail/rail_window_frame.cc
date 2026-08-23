@@ -90,7 +90,7 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
   return ::DefSubclassProc(hwnd, message, w_param, l_param);
 }
 
-}  // namespace
+}
 
 void ApplyMicaBackdrop(views::Widget* widget) {
   if (!SystemTitlebarCanUseMicaMaterial()) {
@@ -200,6 +200,6 @@ bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event) {
   return true;
 }
 
-}  // namespace rail
+}
 
 #endif  // BUILDFLAG(IS_WIN)

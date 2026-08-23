@@ -10,6 +10,6 @@ namespace rail {
 // and both have to agree or the window is left half-closed.
 bool KeepsWindowOpenWhenEmpty(Browser* browser);
 
-}  // namespace rail
+}
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_EMPTY_WINDOW_H_

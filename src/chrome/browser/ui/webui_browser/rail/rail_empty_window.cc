@@ -10,4 +10,4 @@ bool KeepsWindowOpenWhenEmpty(Browser* browser) {
          WebUIBrowserWindow::FromBrowser(browser) != nullptr;
 }
 
-}  // namespace rail
+}

@@ -8,7 +8,7 @@
 namespace gfx {
 class Point;
 class Size;
-}  // namespace gfx
+}
 
 namespace ui {
 class MouseEvent;
@@ -40,7 +40,7 @@ int ResizeComponentForPoint(const views::Widget* widget,
 // move/resize loop. Returns true when the event was consumed.
 bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event);
 
-}  // namespace rail
+}
 
 #endif  // BUILDFLAG(IS_WIN)
 
