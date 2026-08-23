@@ -82,7 +82,42 @@
     background: var(--rail-hover-strong, #3d3d5c);
 }
 
-/* The unload glyph is a stroked path, unlike the filled cross it replaces. */
+:host([dormant]) #faviconContainer {
+    background: transparent;
+    position: relative;
+}
+
+:host([dormant]) #faviconContainer::after {
+    color: var(--rail-text-label, #808098);
+    content: '';
+    height: 17.5px;
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 17.5px;
+    background: conic-gradient(
+        transparent 0deg 10deg, currentcolor 10deg 35deg,
+        transparent 35deg 55deg, currentcolor 55deg 80deg,
+        transparent 80deg 100deg, currentcolor 100deg 125deg,
+        transparent 125deg 145deg, currentcolor 145deg 170deg,
+        transparent 170deg 190deg, currentcolor 190deg 350deg,
+        transparent 350deg 360deg);
+    mask-image: radial-gradient(
+        circle, transparent 7.45px, #000 7.45px, #000 8.75px,
+        transparent 8.75px);
+}
+
+:host([dormant]) #favicon {
+    border-radius: 50%;
+    height: 12.25px;
+    width: 12.25px;
+}
+
+:host([dormant]) #title {
+    color: var(--rail-text-label, #808098);
+}
+
 :host([pinned]:not([dormant])) .close {
     --iron-icon-fill-color: transparent;
     --iron-icon-stroke-color: var(--rail-text-dim, #b0b0c8);

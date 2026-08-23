@@ -65,6 +65,19 @@ export class PinnedTabs {
     this.onChange_();
   }
 
+  pinDormant(row: DormantRow, spaceId: string) {
+    this.entries_.push({
+      key: this.mintKey_(),
+      space: spaceId,
+      home: row.url,
+      url: row.url,
+      title: row.title,
+      favicon: row.favicon,
+      tabId: '',
+    });
+    this.onChange_();
+  }
+
   unpin(key: string) {
     this.entries_ = this.entries_.filter(entry => entry.key !== key);
     this.onChange_();
@@ -134,7 +147,14 @@ export class PinnedTabs {
   }
 }
 
-export function dormantTabData(entry: PinnedEntry): Tab {
+export interface DormantRow {
+  key: string;
+  url: string;
+  title: string;
+  favicon: string;
+}
+
+export function dormantTabData(entry: DormantRow): Tab {
   return {
     alertStates: [],
     favicon: {dataUrl: entry.favicon},
@@ -143,7 +163,7 @@ export function dormantTabData(entry: PinnedEntry): Tab {
     isBlocked: false,
     isSelected: false,
     networkState: TabNetworkState.kNone,
-    title: entry.title,
+    title: entry.title || entry.url,
     url: entry.url,
   };
 }

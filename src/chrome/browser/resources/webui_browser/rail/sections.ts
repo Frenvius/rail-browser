@@ -36,9 +36,13 @@ export function splitSections(
     });
   }
 
-  const looseItems = items.filter(
+  const looseItems: TabStripItem[] = items.filter(
       item => !claimed.has(item.id) && spaces.owns(item.id) &&
           !pinned.byTab(item.id));
+
+  for (const row of spaces.dormantIn(spaces.activeId)) {
+    looseItems.push({type: 'tab', id: row.key, tabData: dormantTabData(row)});
+  }
 
   return {pinnedRows, looseItems};
 }

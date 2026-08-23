@@ -1,27 +1,56 @@
 import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 
 import type {PinnedTabs} from './pinned_tabs.js';
-import type {SidebarState, StoredSpace} from './sidebar_state.js';
+import type {SidebarState, StoredSpace, StoredTab} from './sidebar_state.js';
 
 export const SPACE_COLORS =
     ['#7c5cfc', '#4488ee', '#ee5577', '#44cc77', '#eeaa33'];
+
+export const SPACE_ICONS = [
+  'cr:domain',
+  'cr:person',
+  'cr:group',
+  'cr:star',
+  'cr:computer',
+  'cr:extension',
+  'cr:location-on',
+  'cr:schedule',
+];
 
 export interface Space {
   id: string;
   name: string;
   color: string;
+  icon: string;
   activeTabId: string;
 }
 
 interface Assignment {
   space: string;
   url: string;
+  title: string;
+  favicon: string;
+}
+
+export interface DormantTab {
+  key: string;
+  space: string;
+  url: string;
+  title: string;
+  favicon: string;
+}
+
+function storedTab(entry: StoredTab|string): StoredTab {
+  return typeof entry === 'string' ? {url: entry, title: '', favicon: ''} :
+                                     entry;
 }
 
 export class Spaces {
   private spaces_: Space[] = [];
   private activeId_ = '';
   private tabs_ = new Map<string, Assignment>();
+  private dormant_: DormantTab[] = [];
+  private nextKey_ = 0;
 
   constructor(private onChange_: () => void) {}
 
@@ -47,21 +76,37 @@ export class Spaces {
         id: stored.id || crypto.randomUUID(),
         name: stored.name,
         color: stored.color,
+        icon: stored.icon || SPACE_ICONS[0]!,
         activeTabId: '',
       };
       this.spaces_.push(space);
-      for (const url of stored.tabs ?? []) {
+      const dormant: DormantTab[] = [];
+      for (const entry of stored.tabs ?? []) {
+        const {url, title, favicon} = storedTab(entry);
         const tab = tabs.find(
             candidate => candidate.url === url && !claimed.has(candidate.id));
         if (!tab) {
+          const row: DormantTab = {
+            key: this.mintKey_(),
+            space: space.id,
+            url,
+            title,
+            favicon,
+          };
+          if (url === stored.activeUrl) {
+            dormant.unshift(row);
+          } else {
+            dormant.push(row);
+          }
           continue;
         }
         claimed.add(tab.id);
-        this.tabs_.set(tab.id, {space: space.id, url});
+        this.tabs_.set(tab.id, {space: space.id, url, title, favicon});
         if (url === stored.activeUrl) {
           space.activeTabId = tab.id;
         }
       }
+      this.dormant_.push(...dormant);
     }
 
     if (!this.spaces_.length) {
@@ -94,6 +139,27 @@ export class Spaces {
     this.onChange_();
   }
 
+  restyle(id: string, color: string, icon: string) {
+    const space = this.byId(id);
+    if (!space) {
+      return;
+    }
+    space.color = color || space.color;
+    space.icon = icon || space.icon;
+    this.onChange_();
+  }
+
+  move(id: string, delta: number) {
+    const index = this.spaces_.findIndex(space => space.id === id);
+    const next = index + delta;
+    if (index === -1 || next < 0 || next >= this.spaces_.length) {
+      return;
+    }
+    const [space] = this.spaces_.splice(index, 1);
+    this.spaces_.splice(next, 0, space!);
+    this.onChange_();
+  }
+
   remove(id: string): string[] {
     if (this.spaces_.length < 2 || !this.byId(id)) {
       return [];
@@ -102,6 +168,7 @@ export class Spaces {
     for (const tabId of orphans) {
       this.tabs_.delete(tabId);
     }
+    this.dormant_ = this.dormant_.filter(row => row.space !== id);
     this.spaces_ = this.spaces_.filter(space => space.id !== id);
     if (this.activeId_ === id) {
       this.activeId_ = this.spaces_[0]!.id;
@@ -118,10 +185,14 @@ export class Spaces {
     this.onChange_();
   }
 
-  step(delta: number) {
+  peek(delta: number): string {
     const index = this.spaces_.findIndex(space => space.id === this.activeId_);
     const next = (index + delta + this.spaces_.length) % this.spaces_.length;
-    this.select(this.spaces_[next]!.id);
+    return this.spaces_[next]!.id;
+  }
+
+  step(delta: number) {
+    this.select(this.peek(delta));
   }
 
   adopt(tabId: string, url: string) {
@@ -132,16 +203,29 @@ export class Spaces {
     if (!this.byId(spaceId)) {
       return;
     }
-    this.tabs_.set(tabId, {space: spaceId, url});
+    const previous = this.tabs_.get(tabId);
+    this.tabs_.set(tabId, {
+      space: spaceId,
+      url,
+      title: previous?.title ?? '',
+      favicon: previous?.favicon ?? '',
+    });
     this.onChange_();
   }
 
   track(tab: Tab) {
     const assignment = this.tabs_.get(tab.id);
-    if (!assignment || assignment.url === tab.url) {
+    if (!assignment) {
+      return;
+    }
+    const favicon = tab.favicon.dataUrl;
+    if (assignment.url === tab.url && assignment.title === tab.title &&
+        assignment.favicon === favicon) {
       return;
     }
     assignment.url = tab.url;
+    assignment.title = tab.title;
+    assignment.favicon = favicon;
     this.onChange_();
   }
 
@@ -158,12 +242,16 @@ export class Spaces {
   }
 
   noteActive(tabId: string) {
-    const owner = this.spaceOf(tabId);
-    this.activeId_ = owner;
-    const space = this.byId(owner);
-    if (space) {
-      space.activeTabId = tabId;
+    this.activeId_ = this.spaceOf(tabId);
+    this.markActive(tabId);
+  }
+
+  markActive(tabId: string) {
+    const space = this.byId(this.spaceOf(tabId));
+    if (!space || space.activeTabId === tabId) {
+      return;
     }
+    space.activeTabId = tabId;
     this.onChange_();
   }
 
@@ -186,6 +274,64 @@ export class Spaces {
         .map(([tabId]) => tabId);
   }
 
+  dormantIn(spaceId: string): DormantTab[] {
+    return this.dormant_.filter(row => row.space === spaceId);
+  }
+
+  dormantByKey(key: string): DormantTab|undefined {
+    return this.dormant_.find(row => row.key === key);
+  }
+
+  wake(key: string): DormantTab|undefined {
+    const row = this.dormantByKey(key);
+    if (!row) {
+      return undefined;
+    }
+    this.dormant_ = this.dormant_.filter(other => other !== row);
+    this.onChange_();
+    return row;
+  }
+
+  addDormant(spaceId: string, tab: StoredTab): DormantTab|undefined {
+    if (!this.byId(spaceId)) {
+      return undefined;
+    }
+    const row: DormantTab = {key: this.mintKey_(), space: spaceId, ...tab};
+    this.dormant_.push(row);
+    this.onChange_();
+    return row;
+  }
+
+  reorderDormant(spaceId: string, keys: string[]) {
+    const rows = this.dormantIn(spaceId);
+    const ordered = keys.map(key => rows.find(row => row.key === key))
+                        .filter(row => row !== undefined);
+    if (ordered.length !== rows.length) {
+      return;
+    }
+    let next = 0;
+    this.dormant_ = this.dormant_.map(
+        row => row.space === spaceId ? ordered[next++]! : row);
+    this.onChange_();
+  }
+
+  moveDormant(key: string, spaceId: string): boolean {
+    const row = this.dormantByKey(key);
+    if (!row || !this.byId(spaceId)) {
+      return false;
+    }
+    row.space = spaceId;
+    this.onChange_();
+    return true;
+  }
+
+  wakeActive(spaceId: string): DormantTab|undefined {
+    if (this.tabsIn(spaceId).length) {
+      return undefined;
+    }
+    return this.wake(this.dormantIn(spaceId)[0]?.key ?? '');
+  }
+
   lastActiveIn(spaceId: string): string {
     const space = this.byId(spaceId);
     const tabs = this.tabsIn(spaceId);
@@ -195,12 +341,26 @@ export class Spaces {
     return tabs[tabs.length - 1] ?? '';
   }
 
+  storedOf(tabId: string): StoredTab {
+    const assignment = this.tabs_.get(tabId);
+    return {
+      url: assignment?.url ?? '',
+      title: assignment?.title ?? '',
+      favicon: assignment?.favicon ?? '',
+    };
+  }
+
+  private mintKey_(): string {
+    return `dormant${this.nextKey_++}`;
+  }
+
   private mint_(): Space {
     const index = this.spaces_.length;
     return {
       id: crypto.randomUUID(),
       name: `Space ${index + 1}`,
       color: SPACE_COLORS[index % SPACE_COLORS.length]!,
+      icon: SPACE_ICONS[index % SPACE_ICONS.length]!,
       activeTabId: '',
     };
   }
@@ -212,18 +372,26 @@ export function serializeSidebar(
     id: space.id,
     name: space.name,
     color: space.color,
+    icon: space.icon,
     activeUrl: space.activeTabId ?
         spaces.urlOf(space.activeTabId) :
-        '',
+        spaces.dormantIn(space.id)[0]?.url ?? '',
     pinned: pinned.entriesIn(space.id).map(({home, url, title, favicon}) => ({
       home,
       url,
       title,
       favicon,
     })),
-    tabs: spaces.tabsIn(space.id)
-              .filter(tabId => !pinned.byTab(tabId))
-              .map(tabId => spaces.urlOf(tabId)),
+    tabs: [
+      ...spaces.tabsIn(space.id)
+          .filter(tabId => !pinned.byTab(tabId))
+          .map(tabId => spaces.storedOf(tabId)),
+      ...spaces.dormantIn(space.id).map(({url, title, favicon}) => ({
+        url,
+        title,
+        favicon,
+      })),
+    ],
   }));
   return {activeSpace: spaces.activeId, spaces: stored};
 }

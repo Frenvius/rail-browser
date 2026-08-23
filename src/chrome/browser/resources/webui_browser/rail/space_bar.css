@@ -22,6 +22,7 @@ cr-action-menu,
 #title {
   align-items: center;
   display: flex;
+  gap: 2px;
   height: 24px;
   margin: 0 8px 2px;
 }
@@ -70,23 +71,30 @@ cr-action-menu,
 }
 
 .dot {
-  background: var(--rail-placeholder, #707088);
+  background: var(--dot-color, var(--rail-placeholder, #707088));
   border: none;
   border-radius: 50%;
   cursor: pointer;
   height: 6px;
+  opacity: 0.55;
   padding: 0;
-  transition: background-color 120ms ease, transform 120ms ease;
+  transition: opacity 120ms ease, transform 120ms ease;
   width: 6px;
 }
 
 .dot:hover {
-  background: var(--rail-text-dim, #b0b0c8);
+  opacity: 0.8;
 }
 
 .dot[selected] {
-  background: var(--rail-text, #f0f0ff);
+  opacity: 1;
   transform: scale(1.34);
+}
+
+.dot.droptarget {
+  background: var(--rail-accent, #7c5cfc);
+  opacity: 1;
+  transform: scale(2);
 }
 
 .dot:focus-visible {
@@ -133,4 +141,83 @@ cr-action-menu {
 .dropdown-item:hover {
   background: var(--rail-hover, #303048);
   color: var(--rail-text, #f0f0ff);
+}
+
+.dropdown-item.danger {
+  color: var(--rail-danger, #e57);
+}
+
+#glyph {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 20px;
+  height: 20px;
+  justify-content: center;
+  padding: 0;
+  width: 20px;
+  --iron-icon-width: 14px;
+  --iron-icon-height: 14px;
+  --iron-icon-fill-color: currentcolor;
+}
+
+#glyph:hover {
+  background: var(--rail-elevated, #282840);
+}
+
+.palette {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+}
+
+.swatch,
+.glyph {
+  align-items: center;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.swatch {
+  border-radius: 50%;
+  height: 16px;
+  outline-offset: 2px;
+  width: 16px;
+}
+
+.glyph {
+  background: transparent;
+  border-radius: 5px;
+  color: var(--rail-text-muted, #c0c0d8);
+  height: 22px;
+  width: 22px;
+  --iron-icon-width: 14px;
+  --iron-icon-height: 14px;
+  --iron-icon-fill-color: currentcolor;
+}
+
+.glyph:hover {
+  background: var(--rail-hover, #303048);
+}
+
+.swatch[selected] {
+  outline: 2px solid var(--rail-text, #f0f0ff);
+}
+
+.glyph[selected] {
+  background: var(--rail-hover-strong, #3d3d5c);
+  color: var(--rail-text, #f0f0ff);
+}
+
+#confirm {
+  color: var(--rail-text-muted, #c0c0d8);
+  font-size: 12px;
+  max-width: 200px;
+  padding: 10px 16px 4px;
 }

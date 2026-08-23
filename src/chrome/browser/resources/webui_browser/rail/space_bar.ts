@@ -8,13 +8,18 @@ import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
 import type {Space} from './spaces.js';
+import {SPACE_COLORS, SPACE_ICONS} from './spaces.js';
 
-export type SpaceCommand = 'create'|'remove'|'rename'|'select';
+export type SpaceCommand =
+    'create'|'move'|'remove'|'rename'|'restyle'|'select';
 
 export interface SpaceCommandDetail {
   command: SpaceCommand;
   id: string;
   name: string;
+  color: string;
+  icon: string;
+  delta: number;
 }
 
 export interface SpaceBarElement {
@@ -40,19 +45,52 @@ export class SpaceBarElement extends CrLitElement {
     return {
       spaces: {type: Array},
       activeId: {type: String},
+      tabCounts: {type: Object},
       variant: {type: String},
       editing_: {type: Boolean, state: true},
+      confirming_: {type: Boolean, state: true},
+      menuTarget_: {type: String, state: true},
     };
   }
 
   accessor spaces: Space[] = [];
   accessor activeId: string = '';
+  accessor tabCounts: Record<string, number> = {};
   accessor variant: 'dots'|'title' = 'dots';
   protected accessor editing_ = false;
-  private menuTarget_ = '';
+  protected accessor confirming_ = false;
+  protected accessor menuTarget_ = '';
+  protected readonly colors = SPACE_COLORS;
+  protected readonly icons = SPACE_ICONS;
+
+  protected activeSpace_(): Space|undefined {
+    return this.spaces.find(space => space.id === this.activeId);
+  }
 
   protected activeName_(): string {
-    return this.spaces.find(space => space.id === this.activeId)?.name ?? '';
+    return this.activeSpace_()?.name ?? '';
+  }
+
+  protected activeIcon_(): string {
+    return this.activeSpace_()?.icon ?? '';
+  }
+
+  protected activeColor_(): string {
+    return this.activeSpace_()?.color ?? '';
+  }
+
+  protected targetSpace_(): Space|undefined {
+    return this.spaces.find(space => space.id === this.menuTarget_);
+  }
+
+  protected removeCount_(): number {
+    return this.tabCounts[this.menuTarget_] ?? 0;
+  }
+
+  protected canMove_(delta: number): boolean {
+    const index = this.spaces.findIndex(space => space.id === this.menuTarget_);
+    const next = index + delta;
+    return index !== -1 && next >= 0 && next < this.spaces.length;
   }
 
   protected onDotClick_(e: Event) {
@@ -73,6 +111,11 @@ export class SpaceBarElement extends CrLitElement {
     this.startEditing_();
   }
 
+  protected onGlyphClick_(e: MouseEvent) {
+    this.menuTarget_ = this.activeId;
+    this.$.menu.showAtPosition({top: e.clientY, left: e.clientX});
+  }
+
   protected onNameContextmenu_(e: MouseEvent) {
     e.preventDefault();
     this.menuTarget_ = this.activeId;
@@ -85,8 +128,45 @@ export class SpaceBarElement extends CrLitElement {
   }
 
   protected onRemoveClick_() {
+    if (this.removeCount_()) {
+      this.confirming_ = true;
+      return;
+    }
     this.$.menu.close();
     this.fire_('remove', this.menuTarget_);
+  }
+
+  protected onConfirmRemoveClick_() {
+    this.$.menu.close();
+    this.fire_('remove', this.menuTarget_);
+  }
+
+  protected onCancelRemoveClick_() {
+    this.confirming_ = false;
+  }
+
+  protected onMenuClose_() {
+    this.confirming_ = false;
+  }
+
+  protected onColorClick_(e: Event) {
+    const color = (e.currentTarget as HTMLElement).dataset['color'] ?? '';
+    this.fire_('restyle', this.menuTarget_, {color});
+  }
+
+  protected onIconClick_(e: Event) {
+    const icon = (e.currentTarget as HTMLElement).dataset['icon'] ?? '';
+    this.fire_('restyle', this.menuTarget_, {icon});
+  }
+
+  protected onMoveLeftClick_() {
+    this.$.menu.close();
+    this.fire_('move', this.menuTarget_, {delta: -1});
+  }
+
+  protected onMoveRightClick_() {
+    this.$.menu.close();
+    this.fire_('move', this.menuTarget_, {delta: 1});
   }
 
   protected onInputKeydown_(e: KeyboardEvent) {
@@ -126,7 +206,7 @@ export class SpaceBarElement extends CrLitElement {
         'pointerdown', this.onOutsidePointerdown_, true);
     window.removeEventListener('blur', this.onWindowBlur_);
     if (commit) {
-      this.fire_('rename', this.activeId, value);
+      this.fire_('rename', this.activeId, {name: value});
     }
   }
 
@@ -148,8 +228,12 @@ export class SpaceBarElement extends CrLitElement {
     return (e.currentTarget as HTMLElement).dataset['id'] ?? '';
   }
 
-  private fire_(command: SpaceCommand, id: string, name: string = '') {
-    this.fire<SpaceCommandDetail>('rail-space-command', {command, id, name});
+  private fire_(
+      command: SpaceCommand, id: string,
+      extra: Partial<SpaceCommandDetail> = {}) {
+    this.fire<SpaceCommandDetail>(
+        'rail-space-command',
+        {command, id, name: '', color: '', icon: '', delta: 0, ...extra});
   }
 }
 

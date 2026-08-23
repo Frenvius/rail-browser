@@ -9,13 +9,20 @@ export interface StoredPin {
   favicon: string;
 }
 
+export interface StoredTab {
+  url: string;
+  title: string;
+  favicon: string;
+}
+
 export interface StoredSpace {
   id: string;
   name: string;
   color: string;
+  icon: string;
   activeUrl: string;
   pinned: StoredPin[];
-  tabs: string[];
+  tabs: Array<StoredTab|string>;
 }
 
 export interface SidebarState {
