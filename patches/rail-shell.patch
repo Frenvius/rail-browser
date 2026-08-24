@@ -5935,6 +5935,44 @@ index 77f5a0e8f4..3764ce07e1 100644
      browser_elements_ =
          GetUserDataFactory().CreateInstance<BrowserElementsWebUiBrowser>(
              *browser, *browser);
+diff --git a/chrome/browser/ui/extensions/BUILD.gn b/chrome/browser/ui/extensions/BUILD.gn
+index a63323152c..ac235f220e 100644
+--- a/chrome/browser/ui/extensions/BUILD.gn
++++ b/chrome/browser/ui/extensions/BUILD.gn
+@@ -209,7 +209,11 @@ source_set("impl") {
+     }
+     if (toolkit_views) {
+       sources += [ "extension_dialog_utils_views.cc" ]
+-      deps += [ "//chrome/browser/ui/views/frame:toolbar_button_provider" ]
++      deps += [
++        "//chrome/browser/ui/views/frame:toolbar_button_provider",
++        "//chrome/browser/ui/webui_browser",
++        "//chrome/browser/ui/webui_browser:impl",
++      ]
+     }
+     if (is_win || is_mac) {
+       deps += [ "//chrome/browser/ui/views/extensions:settings_overridden_dialog_view_utils" ]
+diff --git a/chrome/browser/ui/extensions/extension_dialog_utils_views.cc b/chrome/browser/ui/extensions/extension_dialog_utils_views.cc
+index 011fcf743f..50bb64b01d 100644
+--- a/chrome/browser/ui/extensions/extension_dialog_utils_views.cc
++++ b/chrome/browser/ui/extensions/extension_dialog_utils_views.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/extensions/extension_dialog_utils.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_extension_dialog.h"
+ #include "chrome/browser/ui/views/extensions/extension_view_utils.h"
+ #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
+ #include "chrome/browser/ui/views/extensions/extensions_toolbar_desktop.h"
+@@ -56,7 +57,7 @@ void ShowDialog(gfx::NativeWindow parent,
+       parent ? GetExtensionsToolbarDesktop(parent) : nullptr;
+   if (container && container->GetVisible()) {
+     ShowDialog(container, extension_ids, std::move(dialog_model));
+-  } else {
++  } else if (!rail::ShowExtensionDialogBubble(parent, dialog_model)) {
+     // If the container is not available, show a modal dialog.
+     ShowModalDialog(parent, std::move(dialog_model));
+   }
 diff --git a/chrome/browser/ui/unload_controller.cc b/chrome/browser/ui/unload_controller.cc
 index e17b41f80f..e7fddbb661 100644
 --- a/chrome/browser/ui/unload_controller.cc
@@ -5958,23 +5996,24 @@ index e17b41f80f..e7fddbb661 100644
    // attempt to add tabs to the browser before it closes.
    is_attempting_to_close_browser_ = true;
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..bfa81fd593 100644
+index 3d4fe27f4f..75a588227c 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,12 @@ source_set("headers") {
+@@ -13,6 +13,13 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
 +    "rail/rail_accelerators.h",
 +    "rail/rail_empty_window.h",
 +    "rail/rail_drag_ghost.h",
++    "rail/rail_extension_dialog.h",
 +    "rail/rail_sidebar_state.h",
 +    "rail/rail_space_partition.h",
 +    "rail/rail_tab_transfer.h",
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -25,6 +31,8 @@ source_set("webui_browser") {
+@@ -25,6 +32,8 @@ source_set("webui_browser") {
      ":browser_mojo_bindings",
      ":headers",
      "//base",
@@ -5983,7 +6022,7 @@ index 3d4fe27f4f..bfa81fd593 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -52,6 +60,14 @@ source_set("impl") {
+@@ -52,6 +61,15 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -5992,13 +6031,14 @@ index 3d4fe27f4f..bfa81fd593 100644
 +    "rail/rail_app_menu_model.h",
 +    "rail/rail_empty_window.cc",
 +    "rail/rail_drag_ghost.cc",
++    "rail/rail_extension_dialog.cc",
 +    "rail/rail_sidebar_state.cc",
 +    "rail/rail_space_partition.cc",
 +    "rail/rail_tab_transfer.cc",
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -75,6 +91,13 @@ source_set("impl") {
+@@ -75,6 +93,13 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -6012,7 +6052,7 @@ index 3d4fe27f4f..bfa81fd593 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -140,6 +163,10 @@ source_set("impl") {
+@@ -140,6 +165,10 @@ source_set("impl") {
      ]
    }
  
@@ -6023,7 +6063,7 @@ index 3d4fe27f4f..bfa81fd593 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -154,6 +181,7 @@ mojom("browser_mojo_bindings") {
+@@ -154,6 +183,7 @@ mojom("browser_mojo_bindings") {
      "//components/browser_apis/tab_strip:mojom",
      "//mojo/public/mojom/base",
      "//ui/base/mojom:ui_base_types",
@@ -6439,7 +6479,7 @@ index 512f1c770b..1ddf68a4f6 100644
    Browser* browser() { return browser_; }
    WebUIBrowserWindow* browser_window() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..41f4e30aa6 100644
+index 3fabca0c2a..6b19276802 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -6505,7 +6545,21 @@ index 3fabca0c2a..41f4e30aa6 100644
    LoadAccelerators();
  }
  
-@@ -617,10 +634,23 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -336,8 +353,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
+ }
+ 
+ bool WebUIBrowserWindow::IsOnCurrentWorkspace() const {
+-  NOTIMPLEMENTED_LOG_ONCE();
+-  return false;
++#if BUILDFLAG(IS_WIN)
++  return rail::IsWidgetOnCurrentWorkspace(widget_.get());
++#else
++  return true;
++#endif
+ }
+ 
+ bool WebUIBrowserWindow::IsVisibleOnScreen() const {
+@@ -617,10 +637,23 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -6529,7 +6583,7 @@ index 3fabca0c2a..41f4e30aa6 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -691,6 +721,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +724,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -6538,7 +6592,7 @@ index 3fabca0c2a..41f4e30aa6 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -947,6 +979,11 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,6 +982,11 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -6550,7 +6604,7 @@ index 3fabca0c2a..41f4e30aa6 100644
    int command_id;
    if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
-@@ -1217,6 +1254,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1257,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  

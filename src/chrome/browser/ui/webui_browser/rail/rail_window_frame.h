@@ -26,6 +26,8 @@ namespace rail {
 // Does nothing on Windows versions without Mica.
 void ApplyMicaBackdrop(views::Widget* widget);
 
+bool IsWidgetOnCurrentWorkspace(const views::Widget* widget);
+
 // A frameless window has no native frame to grab, so the client area answers
 // for the resize edges and the caption itself.
 

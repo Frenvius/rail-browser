@@ -6,14 +6,21 @@
 
 #include <commctrl.h>
 #include <dwmapi.h>
+#include <shobjidl.h>
+#include <wrl/client.h>
+
+#include <optional>
 
 #include "chrome/browser/win/mica_titlebar.h"
 
+#include "ui/aura/window.h"
+#include "ui/aura/window_tree_host.h"
 #include "ui/display/screen.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/win/hwnd_util.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/win/hwnd_util.h"
@@ -118,6 +125,32 @@ void ApplyMicaBackdrop(views::Widget* widget) {
   const DWM_SYSTEMBACKDROP_TYPE backdrop = DWMSBT_TABBEDWINDOW;
   ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
                           sizeof(backdrop));
+}
+
+bool IsWidgetOnCurrentWorkspace(const views::Widget* widget) {
+  if (!widget) {
+    return true;
+  }
+  gfx::NativeWindow window = widget->GetNativeWindow();
+  if (!window || !window->GetHost()) {
+    return true;
+  }
+  const std::optional<bool> cached = window->GetHost()->on_current_workspace();
+  if (cached.has_value()) {
+    return cached.value();
+  }
+  const HWND hwnd = window->GetHost()->GetAcceleratedWidget();
+  if (!gfx::IsWindowCloaked(hwnd)) {
+    return true;
+  }
+  Microsoft::WRL::ComPtr<IVirtualDesktopManager> virtual_desktop_manager;
+  if (!SUCCEEDED(::CoCreateInstance(__uuidof(VirtualDesktopManager), nullptr,
+                                    CLSCTX_ALL,
+                                    IID_PPV_ARGS(&virtual_desktop_manager)))) {
+    return true;
+  }
+  return gfx::IsWindowOnCurrentVirtualDesktop(
+             hwnd, virtual_desktop_manager) != false;
 }
 
 void InstallResizeCursorSubclass(views::Widget* widget) {
