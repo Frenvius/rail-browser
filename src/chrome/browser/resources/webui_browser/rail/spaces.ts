@@ -6,17 +6,78 @@ import type {SidebarState, StoredSpace, StoredTab} from './sidebar_state.js';
 export const SPACE_COLORS =
     ['#7c5cfc', '#4488ee', '#ee5577', '#44cc77', '#eeaa33'];
 
-export const SPACE_ICONS = [
-  '🌐', '👤', '👥', '⭐', '💼', '🎓', '🧪', '🛠️',
-  '📚', '🎨', '🎮', '🎵', '🎬', '📷', '✈️', '🛒',
-  '💰', '📈', '🧠', '❤️', '🔥', '🌱', '☕', '🔒',
+export const SPACE_ICONS: ReadonlyArray<readonly[string, string]> = [
+  ['🌐', 'globe web world internet'],
+  ['👤', 'person personal profile user me'],
+  ['👥', 'people team group shared'],
+  ['⭐', 'star favorite important'],
+  ['💼', 'work job briefcase office business'],
+  ['🎓', 'study school college learning'],
+  ['🧪', 'lab test experiment research'],
+  ['🛠️', 'tools build dev engineering'],
+  ['📚', 'books reading library docs'],
+  ['🎨', 'art design paint creative'],
+  ['🎮', 'game gaming play console'],
+  ['🎵', 'music song audio sound'],
+  ['🎬', 'movie film video cinema'],
+  ['📷', 'photo camera picture'],
+  ['✈️', 'travel flight plane trip'],
+  ['🛒', 'shopping cart store buy'],
+  ['💰', 'money finance cash budget'],
+  ['📈', 'chart stats growth analytics'],
+  ['🧠', 'brain ideas think learning'],
+  ['❤️', 'heart love favorite'],
+  ['🔥', 'fire hot trending'],
+  ['🌱', 'plant grow nature seed'],
+  ['☕', 'coffee break cafe morning'],
+  ['🔒', 'lock private secure vault'],
+  ['🏠', 'home house personal'],
+  ['🏢', 'office company building corporate'],
+  ['📅', 'calendar schedule planning'],
+  ['📝', 'notes writing todo journal'],
+  ['📬', 'mail inbox email messages'],
+  ['💬', 'chat talk messages social'],
+  ['🐛', 'bug issue debug'],
+  ['⚙️', 'settings config gear system'],
+  ['💻', 'laptop code computer dev'],
+  ['🖥️', 'desktop monitor screen'],
+  ['📱', 'phone mobile app'],
+  ['🗂️', 'files folders archive'],
+  ['🔍', 'search research find'],
+  ['🚀', 'launch rocket ship startup'],
+  ['🧩', 'puzzle plugin extension pieces'],
+  ['🗺️', 'map travel navigation'],
+  ['⚡', 'fast energy power quick'],
+  ['🌙', 'night moon sleep dark'],
+  ['☀️', 'sun day light morning'],
+  ['🌊', 'wave water ocean sea'],
+  ['🍿', 'popcorn movie watch entertainment'],
+  ['🍔', 'food burger eat lunch'],
+  ['🏋️', 'gym fitness workout health'],
+  ['⚽', 'sports soccer football game'],
+  ['🐱', 'cat pet animal'],
+  ['🐶', 'dog pet animal'],
+  ['🎯', 'target goal focus aim'],
+  ['🏆', 'trophy win award goals'],
+  ['🎁', 'gift present shopping'],
+  ['🔔', 'bell alert notification'],
+  ['🧭', 'compass explore discover'],
+  ['🪐', 'planet space astronomy'],
 ];
+
+export const DEFAULT_PROFILE_NAME = 'Default';
+
+export interface SpaceProfile {
+  id: string;
+  name: string;
+}
 
 export interface Space {
   id: string;
   name: string;
   color: string;
   icon: string;
+  partition: string;
   activeTabId: string;
 }
 
@@ -45,6 +106,8 @@ export class Spaces {
   private activeId_ = '';
   private tabs_ = new Map<string, Assignment>();
   private dormant_: DormantTab[] = [];
+  private claims_ = new Map<string, string>();
+  private profiles_: SpaceProfile[] = [];
   private nextKey_ = 0;
 
   constructor(private onChange_: () => void) {}
@@ -61,20 +124,52 @@ export class Spaces {
     return this.byId(this.activeId_) ?? this.spaces_[0]!;
   }
 
+  get profiles(): SpaceProfile[] {
+    return this.profiles_;
+  }
+
   byId(id: string): Space|undefined {
     return this.spaces_.find(space => space.id === id);
   }
 
+  profileName(id: string): string {
+    return this.profiles_.find(profile => profile.id === id)?.name ??
+        DEFAULT_PROFILE_NAME;
+  }
+
+  createProfile(name: string): SpaceProfile {
+    const profile: SpaceProfile = {
+      id: crypto.randomUUID(),
+      name: name.trim() || `Profile ${this.profiles_.length + 1}`,
+    };
+    this.profiles_.push(profile);
+    this.onChange_();
+    return profile;
+  }
+
+  setProfile(spaceId: string, profileId: string): boolean {
+    const space = this.byId(spaceId);
+    if (!space || space.partition === profileId) {
+      return false;
+    }
+    space.partition = profileId;
+    this.onChange_();
+    return true;
+  }
+
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
+    this.profiles_ = (state?.profiles ?? []).map(({id, name}) => ({id, name}));
     for (const stored of state?.spaces ?? []) {
       const space: Space = {
         id: stored.id || crypto.randomUUID(),
         name: stored.name,
         color: stored.color,
-        icon: stored.icon || SPACE_ICONS[0]!,
+        icon: stored.icon || SPACE_ICONS[0]![0],
+        partition: stored.partition ?? '',
         activeTabId: '',
       };
       this.spaces_.push(space);
+      this.adoptProfile_(space.partition);
       const dormant: DormantTab[] = [];
       for (const entry of stored.tabs ?? []) {
         const {url, title, favicon} = storedTab(entry);
@@ -190,8 +285,21 @@ export class Spaces {
     this.select(this.peek(delta));
   }
 
+  claim(tabId: string, spaceId: string) {
+    if (!tabId || !this.byId(spaceId)) {
+      return;
+    }
+    if (this.tabs_.has(tabId)) {
+      this.assign(tabId, spaceId, this.urlOf(tabId));
+      return;
+    }
+    this.claims_.set(tabId, spaceId);
+  }
+
   adopt(tabId: string, url: string) {
-    this.assign(tabId, this.activeId_, url);
+    const claimed = this.claims_.get(tabId);
+    this.claims_.delete(tabId);
+    this.assign(tabId, claimed ?? this.activeId_, url);
   }
 
   assign(tabId: string, spaceId: string, url: string) {
@@ -252,6 +360,10 @@ export class Spaces {
 
   spaceOf(tabId: string): string {
     return this.tabs_.get(tabId)?.space ?? this.activeId_;
+  }
+
+  partitionOf(spaceId: string): string {
+    return this.byId(spaceId)?.partition ?? '';
   }
 
   owns(id: string): boolean {
@@ -345,17 +457,28 @@ export class Spaces {
     };
   }
 
+  private adoptProfile_(partition: string) {
+    if (!partition ||
+        this.profiles_.some(profile => profile.id === partition)) {
+      return;
+    }
+    this.profiles_.push(
+        {id: partition, name: `Profile ${this.profiles_.length + 1}`});
+  }
+
   private mintKey_(): string {
     return `dormant${this.nextKey_++}`;
   }
 
   private mint_(): Space {
     const index = this.spaces_.length;
+    const id = crypto.randomUUID();
     return {
-      id: crypto.randomUUID(),
+      id,
       name: `Space ${index + 1}`,
       color: SPACE_COLORS[index % SPACE_COLORS.length]!,
-      icon: SPACE_ICONS[index % SPACE_ICONS.length]!,
+      icon: SPACE_ICONS[index % SPACE_ICONS.length]![0],
+      partition: '',
       activeTabId: '',
     };
   }
@@ -368,6 +491,7 @@ export function serializeSidebar(
     name: space.name,
     color: space.color,
     icon: space.icon,
+    partition: space.partition,
     activeUrl: space.activeTabId ?
         spaces.urlOf(space.activeTabId) :
         spaces.dormantIn(space.id)[0]?.url ?? '',
@@ -390,6 +514,7 @@ export function serializeSidebar(
   }));
   return {
     activeSpace: spaces.activeId,
+    profiles: spaces.profiles.map(({id, name}) => ({id, name})),
     spaces: stored,
     essentials: pinned.essentials().map(({home, url, title, favicon}) => ({
       home,

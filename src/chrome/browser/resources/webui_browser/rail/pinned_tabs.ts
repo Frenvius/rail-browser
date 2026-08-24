@@ -102,13 +102,12 @@ export class PinnedTabs {
     this.onChange_();
   }
 
-  attach(key: string, tab: Tab) {
+  attach(key: string, tabId: string) {
     const entry = this.byKey(key);
     if (!entry) {
       return;
     }
-    entry.tabId = tab.id;
-    entry.url = tab.url;
+    entry.tabId = tabId;
     this.onChange_();
   }
 

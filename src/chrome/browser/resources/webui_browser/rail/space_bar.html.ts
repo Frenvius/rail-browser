@@ -26,7 +26,6 @@ ${this.variant === 'title' ? html`
     <div id="dots">
       ${this.spaces.map(space => html`
         <button class="dot" data-id="${space.id}" title="${space.name}"
-          style="--dot-color: ${space.color}"
           ?selected="${space.id === this.activeId}"
           @click="${this.onDotClick_}"
           @contextmenu="${this.onDotContextmenu_}"></button>
@@ -50,6 +49,28 @@ ${this.variant === 'title' ? html`
       @click="${this.onConfirmRemoveClick_}">
       Delete Space
     </button>
+  ` : this.picking_ ? html`
+    <div id="picker">
+      <div class="panelhead">
+        <button class="panelback" title="Back"
+          @click="${this.onPickerBackClick_}">
+          <cr-icon icon="cr:arrow-back"></cr-icon>
+        </button>
+        <input id="iconSearch" placeholder="Search icons" spellcheck="false"
+          .value="${this.iconQuery_}" @input="${this.onIconSearchInput_}"
+          @keydown="${this.onIconSearchKeydown_}">
+      </div>
+      <div id="iconGrid">
+        ${this.filteredIcons_().map(([icon, terms]) => html`
+          <button class="glyph" data-icon="${icon}" title="${terms}"
+            ?selected="${icon === this.targetSpace_()?.icon}"
+            @click="${this.onIconClick_}">${icon}</button>
+        `)}
+      </div>
+      <div id="noicons" ?hidden="${this.filteredIcons_().length > 0}">
+        No icon matches
+      </div>
+    </div>
   ` : html`
     <div class="palette">
       ${this.colors.map(color => html`
@@ -59,21 +80,18 @@ ${this.variant === 'title' ? html`
           @click="${this.onColorClick_}"></button>
       `)}
     </div>
-    <div class="palette wrap">
-      ${this.icons.map(icon => html`
-        <button class="glyph" data-icon="${icon}"
-          ?selected="${icon === this.targetSpace_()?.icon}"
-          @click="${this.onIconClick_}">
-          ${this.isGlyphIcon_(icon) ? html`
-            <cr-icon icon="${icon}"></cr-icon>
-          ` : icon}
-        </button>
-      `)}
-    </div>
+    <button class="dropdown-item" @click="${this.onChangeIconClick_}">
+      Change Icon
+    </button>
     <button class="dropdown-item" ?hidden="${this.variant !== 'title'}"
       @click="${this.onRenameClick_}">
       Rename Space
     </button>
+    <button class="dropdown-item submenu" @click="${this.onSetProfileClick_}">
+      Set Profile
+      <cr-icon icon="cr:arrow-forward"></cr-icon>
+    </button>
+    <hr ?hidden="${!this.canMove_(-1) && !this.canMove_(1)}">
     <button class="dropdown-item" ?hidden="${!this.canMove_(-1)}"
       @click="${this.onMoveLeftClick_}">
       Move Left
@@ -82,12 +100,56 @@ ${this.variant === 'title' ? html`
       @click="${this.onMoveRightClick_}">
       Move Right
     </button>
-    <button class="dropdown-item" ?hidden="${!this.canRemove_()}"
+    <hr ?hidden="${!this.canRemove_()}">
+    <button class="dropdown-item danger" ?hidden="${!this.canRemove_()}"
       @click="${this.onRemoveClick_}">
       Delete Space
     </button>
   `}
 </cr-action-menu>
+<cr-action-menu id="profileMenu">
+  ${this.profileRows_().map(profile => html`
+    <button class="dropdown-item profile" data-profile="${profile.id}"
+      @click="${this.onProfileClick_}">
+      <cr-icon class="${this.checkClass_(profile.id)}" icon="cr:check">
+      </cr-icon>
+      ${profile.name}
+    </button>
+  `)}
+  <hr>
+  <button class="dropdown-item profile" @click="${this.onNewProfileClick_}">
+    <cr-icon class="check" icon="cr:add"></cr-icon>
+    New Profile
+  </button>
+</cr-action-menu>
+<cr-dialog id="profileDialog">
+  <div slot="title">
+    <div id="profileMark">
+      <cr-icon icon="cr:person"></cr-icon>
+    </div>
+    Create a new Profile
+  </div>
+  <div slot="body">
+    <p id="profileBlurb">
+      A profile keeps a space's browsing to itself: its own cookies, logins and
+      site data, so the same site can stay signed in as two different accounts.
+    </p>
+    <label id="profileLabel" for="profileNameInput">
+      What do you want to call this Profile?
+    </label>
+    <input id="profileNameInput" placeholder="Profile name" spellcheck="false"
+      .value="${this.profileName_}" @input="${this.onProfileNameInput_}"
+      @keydown="${this.onProfileNameKeydown_}">
+  </div>
+  <div slot="button-container">
+    <cr-button @click="${this.onCancelProfileClick_}">Cancel</cr-button>
+    <cr-button class="action-button"
+      ?disabled="${!this.profileName_.trim()}"
+      @click="${this.onCreateProfileClick_}">
+      Create
+    </cr-button>
+  </div>
+</cr-dialog>
 <!--_html_template_end_-->`;
   // clang-format on
 }
