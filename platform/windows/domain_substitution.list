@@ -2427,7 +2427,6 @@ chrome/common/chrome_switches.cc
 chrome/common/conflicts/module_watcher_win.cc
 chrome/common/extensions/PRESUBMIT.py
 chrome/common/extensions/api/PRESUBMIT.py
-chrome/common/extensions/api/_api_features.json
 chrome/common/extensions/api/common_extension_api_unittest.cc
 chrome/common/extensions/api/content_settings.json
 chrome/common/extensions/api/cookies.json
@@ -4731,7 +4730,6 @@ extensions/browser/updater/safe_manifest_parser.h
 extensions/browser/updater/safe_manifest_parser_unittest.cc
 extensions/browser/url_loader_factory_manager.h
 extensions/common/api/PRESUBMIT.py
-extensions/common/api/_api_features.json
 extensions/common/api/extensions_manifest_types.json
 extensions/common/api/i18n.json
 extensions/common/api/scripting.idl
@@ -4751,9 +4749,6 @@ extensions/common/extension_features.cc
 extensions/common/extension_features.h
 extensions/common/extension_l10n_util_unittest.cc
 extensions/common/extension_set_unittest.cc
-extensions/common/extension_urls.cc
-extensions/common/extension_urls.h
-extensions/common/extension_urls_unittest.cc
 extensions/common/file_util_unittest.cc
 extensions/common/manifest_constants.h
 extensions/common/manifest_handlers/content_capabilities_manifest_unittest.cc
