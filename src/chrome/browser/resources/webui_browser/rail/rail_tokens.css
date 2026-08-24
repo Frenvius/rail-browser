@@ -9,13 +9,21 @@
   --rail-accent: #7c5cfc;
   --rail-accent-soft: rgb(124 92 252 / 22%);
   --rail-border: rgb(255 255 255 / 8%);
-  --rail-chrome: rgb(30 30 50 / 84%);
-  --rail-chrome-strong: rgb(30 30 50 / 92%);
+  --rail-chrome: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
+      rgb(30 30 50 / 84%));
+  --rail-chrome-strong: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
+      rgb(30 30 50 / 92%));
+  --rail-surface: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 10%,
+      #252540);
   --rail-danger: #e57;
-  --rail-divider: rgb(42 42 66 / 90%);
-  --rail-elevated: rgb(40 40 64 / 92%);
-  --rail-hover: rgb(48 48 72 / 92%);
-  --rail-hover-strong: rgb(61 61 92 / 95%);
+  --rail-divider: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
+      rgb(42 42 66 / 90%));
+  --rail-elevated: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
+      rgb(40 40 64 / 92%));
+  --rail-hover: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
+      rgb(48 48 72 / 92%));
+  --rail-hover-strong: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 14%,
+      rgb(61 61 92 / 95%));
   --rail-placeholder: #707088;
   --rail-sidebar-width: 208px;
   --rail-text: #f0f0ff;
