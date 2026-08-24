@@ -9,8 +9,10 @@
 
 #include "chrome/browser/win/mica_titlebar.h"
 
+#include "ui/display/screen.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -84,6 +86,18 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
     }
   }
 
+  POINT cursor;
+  if (message == WM_RBUTTONUP && ::GetCursorPos(&cursor)) {
+    const LPARAM cursor_position = MAKELPARAM(static_cast<WORD>(cursor.x),
+                                              static_cast<WORD>(cursor.y));
+    if (static_cast<int>(
+            ::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position)) ==
+        HTCAPTION) {
+      ::ReleaseCapture();
+      return 0;
+    }
+  }
+
   if (message == WM_NCDESTROY) {
     ::RemoveWindowSubclass(hwnd, ResizeCursorSubclassProc, subclass_id);
   }
@@ -150,6 +164,37 @@ int ResizeComponentForPoint(const views::Widget* widget,
     return in_right ? HTBOTTOMRIGHT : HTBOTTOM;
   }
   return in_left ? HTLEFT : HTRIGHT;
+}
+
+bool HandleFramelessContextMenu(views::Widget* widget,
+                                ui::MouseEvent* event,
+                                webui_browser::mojom::Page* page) {
+  if (!page || event->type() != ui::EventType::kMousePressed ||
+      !event->IsOnlyRightMouseButton()) {
+    return false;
+  }
+
+  HWND hwnd = views::HWNDForWidget(widget);
+  if (!hwnd) {
+    return false;
+  }
+
+  POINT physical;
+  if (!::GetCursorPos(&physical)) {
+    return false;
+  }
+  const LPARAM cursor_position = MAKELPARAM(static_cast<WORD>(physical.x),
+                                            static_cast<WORD>(physical.y));
+  if (static_cast<int>(::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position)) !=
+      HTCAPTION) {
+    return false;
+  }
+
+  event->StopPropagation();
+  const gfx::Point cursor = display::Screen::Get()->GetCursorScreenPoint();
+  page->OnSidebarContextMenu(
+      cursor - widget->GetClientAreaBoundsInScreen().OffsetFromOrigin());
+  return true;
 }
 
 bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event) {

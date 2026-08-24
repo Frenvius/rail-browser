@@ -5,6 +5,8 @@
 
 #if BUILDFLAG(IS_WIN)
 
+#include "chrome/browser/ui/webui_browser/browser.mojom.h"
+
 namespace gfx {
 class Point;
 class Size;
@@ -39,6 +41,10 @@ int ResizeComponentForPoint(const views::Widget* widget,
 // Applies the resize cursor on hover and hands a left press to the native
 // move/resize loop. Returns true when the event was consumed.
 bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event);
+
+bool HandleFramelessContextMenu(views::Widget* widget,
+                                ui::MouseEvent* event,
+                                webui_browser::mojom::Page* page);
 
 }
 
