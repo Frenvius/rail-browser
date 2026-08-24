@@ -8,6 +8,7 @@ import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/c
 import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
+import {announceMenuOpen} from './menu_overlay.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
 import type {Space, SpaceProfile} from './spaces.js';
@@ -113,6 +114,7 @@ export class SpaceBarElement extends CrLitElement {
   openMenuAt(x: number, y: number) {
     this.menuTarget_ = this.activeId;
     this.$.menu.showAtPosition({top: y, left: x});
+    announceMenuOpen(this.$.menu);
   }
 
   protected filteredIcons_(): ReadonlyArray<readonly[string, string]> {
@@ -155,6 +157,7 @@ export class SpaceBarElement extends CrLitElement {
     const item = (e.currentTarget as HTMLElement).getBoundingClientRect();
     this.choosing_ = true;
     this.$.profileMenu.showAtPosition({top: item.top - 6, left: item.right});
+    announceMenuOpen(this.$.profileMenu);
   }
 
   protected onProfileClick_(e: Event) {
@@ -223,6 +226,7 @@ export class SpaceBarElement extends CrLitElement {
     e.preventDefault();
     this.menuTarget_ = this.idOf_(e);
     this.$.menu.showAtPosition({top: e.clientY, left: e.clientX});
+    announceMenuOpen(this.$.menu);
   }
 
   protected onAddClick_() {

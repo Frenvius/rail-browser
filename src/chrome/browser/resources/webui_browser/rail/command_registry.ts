@@ -5,7 +5,6 @@ export interface CommandBarHost {
   goBack(): void;
   goForward(): void;
   newSpace(): void;
-  newTab(): void;
   openUrl(url: string): void;
   reload(): void;
   runTabCommand(command: TabCommand, target: TabMenuTarget): void;
@@ -45,13 +44,6 @@ function page(label: string, keywords: string, url: string): Command {
 }
 
 export const COMMANDS: Command[] = [
-  {
-    id: 'new-tab',
-    label: 'New Tab',
-    hint: 'Ctrl+T',
-    keywords: 'open create',
-    run: host => host.newTab(),
-  },
   {
     id: 'close-tab',
     label: 'Close Tab',

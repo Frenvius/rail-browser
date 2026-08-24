@@ -3,6 +3,7 @@ import '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
+import {announceMenuOpen} from './menu_overlay.js';
 import type {Space} from './spaces.js';
 import {getCss} from './tab_menu.css.js';
 import {getHtml} from './tab_menu.html.js';
@@ -67,6 +68,7 @@ export class TabMenuElement extends CrLitElement {
   openFor(target: TabMenuTarget, x: number, y: number) {
     this.target = target;
     this.$.menu.showAtPosition({top: y, left: x});
+    announceMenuOpen(this.$.menu);
   }
 
   protected pinLabel_(): string {

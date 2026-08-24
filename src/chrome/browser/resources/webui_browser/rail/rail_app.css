@@ -134,15 +134,28 @@ webui-browser-tab-strip {
 
 webui-browser-searchbox {
   --color-searchbox-background: var(--rail-elevated);
-  --color-searchbox-foreground: var(--rail-text-muted);
+  --color-searchbox-dropdown-divider: var(--rail-border);
+  --color-searchbox-foreground: var(--rail-text);
   --color-searchbox-placeholder: var(--rail-placeholder);
-  --color-searchbox-results-background: var(--rail-chrome-strong);
+  --color-searchbox-results-background: var(--rail-surface);
+  --color-searchbox-results-background-hovered: var(--rail-hover);
+  --color-searchbox-results-background-selected: var(--rail-hover-strong);
+  --color-searchbox-results-dim-selected: var(--rail-text-dim);
+  --color-searchbox-results-focus-indicator: var(--rail-accent);
+  --color-searchbox-results-foreground: var(--rail-text);
+  --color-searchbox-results-foreground-dimmed: var(--rail-text-dim);
+  --color-searchbox-results-foreground-selected: var(--rail-text);
+  --color-searchbox-results-icon: var(--rail-text-dim);
+  --color-searchbox-results-icon-selected: var(--rail-text);
+  --color-searchbox-results-typed-prefix: var(--rail-text);
+  --color-searchbox-results-url: var(--rail-accent);
+  --color-searchbox-results-url-selected: var(--rail-accent);
   --color-searchbox-selection-background: var(--rail-accent);
   --color-searchbox-selection-foreground: var(--rail-text);
   --cr-searchbox-background: var(--rail-elevated);
   --cr-searchbox-border-radius: 8px;
   --cr-searchbox-font-size: 13px;
-  --cr-searchbox-foreground: var(--rail-text-muted);
+  --cr-searchbox-foreground: var(--rail-text);
   --cr-searchbox-height: 30px;
   --cr-searchbox-input-height: 30px;
   --cr-searchbox-icon-left-position: 12px;
@@ -352,6 +365,20 @@ content-region[hidden],
   display: none;
 }
 
+#dragBlocker {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  display: none;
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+}
+
+:host([command-bar]) #dragBlocker,
+:host([menu-open]) #dragBlocker {
+  display: block;
+}
+
 :host([command-bar]) #address {
   left: 50%;
   position: fixed;
@@ -368,6 +395,9 @@ content-region[hidden],
   --cr-searchbox-input-height: 48px;
   --cr-searchbox-match-padding: 8px 0;
   --cr-searchbox-shadow: 0 24px 60px rgb(4 4 12 / 70%);
+
+  --color-searchbox-background: var(--rail-surface);
+  --cr-searchbox-background: var(--rail-surface);
 }
 
 :host([command-bar]) #address:focus-within {

@@ -28,13 +28,12 @@ constexpr char kPartitionDomain[] = "railspace";
 content::WebContents* CreateTabInPartition(Browser* browser,
                                            const std::string& partition,
                                            const GURL& url) {
-  if (!browser) {
+  if (!browser || url.is_empty()) {
     return nullptr;
   }
 
-  const GURL target = url.is_empty() ? browser->GetNewTabURL() : url;
   if (partition.empty()) {
-    return chrome::AddAndReturnTabAt(browser, target, -1, true, std::nullopt,
+    return chrome::AddAndReturnTabAt(browser, url, -1, true, std::nullopt,
                                      false);
   }
 
@@ -42,12 +41,12 @@ content::WebContents* CreateTabInPartition(Browser* browser,
   std::unique_ptr<content::WebContents> contents =
       content::WebContents::Create(content::WebContents::CreateParams(
           profile, content::SiteInstance::CreateForFixedStoragePartition(
-                       profile, target,
+                       profile, url,
                        content::StoragePartitionConfig::Create(
                            profile, kPartitionDomain, partition,
                            /*in_memory=*/false))));
   contents->GetController().LoadURLWithParams(
-      content::NavigationController::LoadURLParams(target));
+      content::NavigationController::LoadURLParams(url));
 
   NavigateParams params(browser, std::move(contents));
   params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
