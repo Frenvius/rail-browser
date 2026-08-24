@@ -28,6 +28,19 @@ export function initSidebarResize(host: HTMLElement) {
 
   let width = 0;
 
+  const setHover = (hovered: boolean) => {
+    host.toggleAttribute('sidebar-resizer-hover', hovered);
+  };
+
+  handle.addEventListener('pointerenter', () => setHover(true));
+  handle.addEventListener('pointerleave', () => setHover(false));
+  window.addEventListener('blur', () => setHover(false));
+  host.addEventListener('pointermove', (e: Event) => {
+    if (e.composedPath()[0] !== handle) {
+      setHover(false);
+    }
+  });
+
   const onPointerMove = (e: PointerEvent) => {
     width = clampWidth(e.clientX - host.getBoundingClientRect().left);
     applyWidth(host, width);
@@ -37,6 +50,7 @@ export function initSidebarResize(host: HTMLElement) {
     handle.removeEventListener('pointermove', onPointerMove);
     handle.releasePointerCapture(e.pointerId);
     host.removeAttribute('sidebar-resizing');
+    setHover(false);
     if (width) {
       localStorage.setItem(STORAGE_KEY, String(width));
     }
