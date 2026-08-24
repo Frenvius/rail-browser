@@ -13,16 +13,22 @@ namespace {
 constexpr char kWebstoreHost[] = "chromewebstore.google.com";
 
 constexpr char kBrandingCss[] =
-    "button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]{"
+    "button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"],"
+    "button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]{"
     "visibility:hidden !important;position:relative !important}"
-    "button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]::after{"
+    "button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]::after,"
+    "button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]::after{"
     "visibility:visible !important;position:absolute !important;"
     "left:50% !important;top:0 !important;"
     "transform:translateX(-50%) !important;white-space:nowrap !important}"
     "html:lang(pt) button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]::after{"
     "content:\"Usar no Rail\" !important}"
     "html:lang(en) button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]::after{"
-    "content:\"Add to Rail\" !important}";
+    "content:\"Add to Rail\" !important}"
+    "html:lang(pt) button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]::after{"
+    "content:\"Remover do Rail\" !important}"
+    "html:lang(en) button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]::after{"
+    "content:\"Remove from Rail\" !important}";
 
 class WebstoreBranding : public content::RenderFrameObserver {
  public:
