@@ -159,7 +159,6 @@ export const COMMANDS: Command[] = [
   page('Settings', 'preferences options config', 'chrome://settings'),
   page('History', 'visited recent', 'chrome://history'),
   page('Downloads', 'files saved', 'chrome://downloads'),
-  page('Bookmarks', 'favorites saved', 'chrome://bookmarks'),
   page('Extensions', 'addons plugins', 'chrome://extensions'),
 ];
 

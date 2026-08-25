@@ -24,6 +24,9 @@ class RailAppMenuModel : public AppMenuModel {
 
   void ExecuteCommand(int command_id, int event_flags) override;
 
+ protected:
+  void Build() override;
+
  private:
   raw_ptr<WebUIBrowserWindow> window_;
 };

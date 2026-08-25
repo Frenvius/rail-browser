@@ -150,7 +150,7 @@ export class SpaceBarElement extends CrLitElement {
   }
 
   protected currentProfile_(): string {
-    return this.targetSpace_()?.partition ?? '';
+    return this.targetSpace_()?.profile ?? '';
   }
 
   protected onSetProfileClick_(e: Event) {

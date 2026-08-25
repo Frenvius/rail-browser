@@ -1,5 +1,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_app_menu_model.h"
 
+#include <optional>
+
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 
@@ -11,6 +13,13 @@ RailAppMenuModel::RailAppMenuModel(ui::AcceleratorProvider* provider,
     : AppMenuModel(provider, browser), window_(window) {}
 
 RailAppMenuModel::~RailAppMenuModel() = default;
+
+void RailAppMenuModel::Build() {
+  AppMenuModel::Build();
+  if (std::optional<size_t> index = GetIndexOfCommandId(IDC_BOOKMARKS_MENU)) {
+    RemoveItemAt(*index);
+  }
+}
 
 void RailAppMenuModel::ExecuteCommand(int command_id, int event_flags) {
   if (command_id == IDC_NEW_TAB && window_ &&

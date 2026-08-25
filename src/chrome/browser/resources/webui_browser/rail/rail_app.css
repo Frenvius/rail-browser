@@ -100,15 +100,6 @@ cr-icon-button:focus-visible,
   background: #e81123;
 }
 
-#bookmarkBar {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  user-select: none;
-  margin-left: 8px;
-  margin-right: 8px;
-}
-
 cr-icon-button {
   --cr-icon-button-icon-size: 18px;
   --cr-icon-button-margin-end: 0;

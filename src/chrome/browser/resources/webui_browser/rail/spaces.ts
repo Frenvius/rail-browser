@@ -77,7 +77,7 @@ export interface Space {
   name: string;
   color: string;
   icon: string;
-  partition: string;
+  profile: string;
   activeTabId: string;
 }
 
@@ -137,39 +137,35 @@ export class Spaces {
         DEFAULT_PROFILE_NAME;
   }
 
-  createProfile(name: string): SpaceProfile {
-    const profile: SpaceProfile = {
-      id: crypto.randomUUID(),
-      name: name.trim() || `Profile ${this.profiles_.length + 1}`,
-    };
+  setProfiles(profiles: SpaceProfile[]) {
+    this.profiles_ = profiles;
+  }
+
+  addProfile(profile: SpaceProfile) {
     this.profiles_.push(profile);
-    this.onChange_();
-    return profile;
   }
 
   setProfile(spaceId: string, profileId: string): boolean {
     const space = this.byId(spaceId);
-    if (!space || space.partition === profileId) {
+    if (!space || space.profile === profileId) {
       return false;
     }
-    space.partition = profileId;
+    space.profile = profileId;
     this.onChange_();
     return true;
   }
 
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
-    this.profiles_ = (state?.profiles ?? []).map(({id, name}) => ({id, name}));
     for (const stored of state?.spaces ?? []) {
       const space: Space = {
         id: stored.id || crypto.randomUUID(),
         name: stored.name,
         color: stored.color,
         icon: stored.icon || SPACE_ICONS[0]![0],
-        partition: stored.partition ?? '',
+        profile: stored.profile ?? '',
         activeTabId: '',
       };
       this.spaces_.push(space);
-      this.adoptProfile_(space.partition);
       const dormant: DormantTab[] = [];
       for (const entry of stored.tabs ?? []) {
         const {url, title, favicon} = storedTab(entry);
@@ -362,8 +358,8 @@ export class Spaces {
     return this.tabs_.get(tabId)?.space ?? this.activeId_;
   }
 
-  partitionOf(spaceId: string): string {
-    return this.byId(spaceId)?.partition ?? '';
+  profileOf(spaceId: string): string {
+    return this.byId(spaceId)?.profile ?? '';
   }
 
   owns(id: string): boolean {
@@ -457,15 +453,6 @@ export class Spaces {
     };
   }
 
-  private adoptProfile_(partition: string) {
-    if (!partition ||
-        this.profiles_.some(profile => profile.id === partition)) {
-      return;
-    }
-    this.profiles_.push(
-        {id: partition, name: `Profile ${this.profiles_.length + 1}`});
-  }
-
   private mintKey_(): string {
     return `dormant${this.nextKey_++}`;
   }
@@ -478,7 +465,7 @@ export class Spaces {
       name: `Space ${index + 1}`,
       color: SPACE_COLORS[index % SPACE_COLORS.length]!,
       icon: SPACE_ICONS[index % SPACE_ICONS.length]![0],
-      partition: '',
+      profile: '',
       activeTabId: '',
     };
   }
@@ -491,7 +478,7 @@ export function serializeSidebar(
     name: space.name,
     color: space.color,
     icon: space.icon,
-    partition: space.partition,
+    profile: space.profile,
     activeUrl: space.activeTabId ?
         spaces.urlOf(space.activeTabId) :
         spaces.dormantIn(space.id)[0]?.url ?? '',
@@ -514,7 +501,6 @@ export function serializeSidebar(
   }));
   return {
     activeSpace: spaces.activeId,
-    profiles: spaces.profiles.map(({id, name}) => ({id, name})),
     spaces: stored,
     essentials: pinned.essentials().map(({home, url, title, favicon}) => ({
       home,

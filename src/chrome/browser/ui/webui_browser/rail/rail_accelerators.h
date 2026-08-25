@@ -16,6 +16,8 @@ namespace rail {
 bool HandleRailAccelerator(const ui::Accelerator& accelerator,
                            webui_browser::mojom::Page* page);
 
+bool IsCommandDisabledInShell(int command_id);
+
 }
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_ACCELERATORS_H_

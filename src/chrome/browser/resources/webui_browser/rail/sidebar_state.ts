@@ -20,20 +20,14 @@ export interface StoredSpace {
   name: string;
   color: string;
   icon: string;
-  partition?: string;
+  profile?: string;
   activeUrl: string;
   pinned: StoredPin[];
   tabs: Array<StoredTab|string>;
 }
 
-export interface StoredProfile {
-  id: string;
-  name: string;
-}
-
 export interface SidebarState {
   activeSpace: string;
-  profiles?: StoredProfile[];
   spaces: StoredSpace[];
   essentials?: StoredPin[];
 }
