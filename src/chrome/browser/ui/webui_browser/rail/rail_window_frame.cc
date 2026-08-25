@@ -13,8 +13,14 @@
 
 #include "chrome/browser/win/mica_titlebar.h"
 
+#include "base/supports_user_data.h"
+#include "content/public/browser/render_widget_host_view.h"
+#include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/compositor/compositor.h"
 #include "ui/display/screen.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/point.h"
@@ -32,6 +38,60 @@ namespace {
 constexpr UINT_PTR kResizeCursorSubclassId = 0x57425549;
 constexpr int kResizeBorder = 6;
 constexpr int kResizeCorner = 16;
+
+bool g_backdrop_enabled = false;
+
+constexpr char kShellTransparencyKey[] = "rail_shell_transparency";
+
+class ShellTransparency : public content::WebContentsObserver,
+                          public base::SupportsUserData::Data {
+ public:
+  explicit ShellTransparency(content::WebContents* contents)
+      : content::WebContentsObserver(contents) {
+    Apply();
+  }
+
+  void RenderViewReady() override { Apply(); }
+
+  void RenderFrameHostChanged(content::RenderFrameHost* old_host,
+                              content::RenderFrameHost* new_host) override {
+    Apply();
+  }
+
+  void PrimaryMainFrameRenderProcessGone(
+      base::TerminationStatus status) override {
+    Apply();
+  }
+
+ private:
+  void Apply() {
+    content::WebContents* contents = web_contents();
+    if (!contents) {
+      return;
+    }
+    contents->SetPageBaseBackgroundColor(SK_ColorTRANSPARENT);
+    if (content::RenderWidgetHostView* view =
+            contents->GetRenderWidgetHostView()) {
+      view->SetBackgroundColor(SK_ColorTRANSPARENT);
+    }
+  }
+};
+
+void EnsureBackdropStyles(HWND hwnd) {
+  if (!g_backdrop_enabled) {
+    return;
+  }
+  const LONG style = ::GetWindowLong(hwnd, GWL_STYLE);
+  const LONG wanted =
+      (style | WS_THICKFRAME | WS_MAXIMIZEBOX) & ~static_cast<LONG>(WS_CAPTION);
+  if (wanted == style) {
+    return;
+  }
+  ::SetWindowLong(hwnd, GWL_STYLE, wanted);
+  ::SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                     SWP_FRAMECHANGED);
+}
 
 int ResizeCommandForComponent(int component) {
   switch (component) {
@@ -108,6 +168,22 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
   if (message == WM_NCDESTROY) {
     ::RemoveWindowSubclass(hwnd, ResizeCursorSubclassProc, subclass_id);
   }
+
+  if (message == WM_NCACTIVATE && g_backdrop_enabled) {
+    const LRESULT result =
+        ::DefSubclassProc(hwnd, message, w_param, l_param);
+    ::DefWindowProc(hwnd, WM_NCACTIVATE, w_param, static_cast<LPARAM>(-1));
+    return result;
+  }
+
+  if (message == WM_WINDOWPOSCHANGED || message == WM_SIZE ||
+      message == WM_DWMCOMPOSITIONCHANGED || message == WM_THEMECHANGED) {
+    const LRESULT result =
+        ::DefSubclassProc(hwnd, message, w_param, l_param);
+    EnsureBackdropStyles(hwnd);
+    return result;
+  }
+
   return ::DefSubclassProc(hwnd, message, w_param, l_param);
 }
 
@@ -122,9 +198,36 @@ void ApplyMicaBackdrop(views::Widget* widget) {
       widget->GetColorMode() == ui::ColorProviderKey::ColorMode::kDark;
   ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark_mode,
                           sizeof(use_dark_mode));
+  g_backdrop_enabled = true;
+  EnsureBackdropStyles(hwnd);
   const DWM_SYSTEMBACKDROP_TYPE backdrop = DWMSBT_TABBEDWINDOW;
   ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
                           sizeof(backdrop));
+  const COLORREF caption_color = DWMWA_COLOR_NONE;
+  ::DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption_color,
+                          sizeof(caption_color));
+
+  aura::Window* window = widget->GetNativeWindow();
+  if (!window) {
+    return;
+  }
+  window->SetTransparent(true);
+  if (aura::Window* root = window->GetRootWindow()) {
+    root->SetTransparent(true);
+  }
+  if (aura::WindowTreeHost* host = window->GetHost();
+      host && host->compositor()) {
+    host->compositor()->SetBackgroundColor(SK_ColorTRANSPARENT);
+  }
+}
+
+void MakeShellContentsTransparent(content::WebContents* contents) {
+  if (!g_backdrop_enabled || !contents ||
+      contents->GetUserData(kShellTransparencyKey)) {
+    return;
+  }
+  contents->SetUserData(kShellTransparencyKey,
+                        std::make_unique<ShellTransparency>(contents));
 }
 
 bool IsWidgetOnCurrentWorkspace(const views::Widget* widget) {

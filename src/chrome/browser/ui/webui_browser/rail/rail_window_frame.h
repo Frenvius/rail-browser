@@ -7,6 +7,10 @@
 
 #include "chrome/browser/ui/webui_browser/browser.mojom.h"
 
+namespace content {
+class WebContents;
+}
+
 namespace gfx {
 class Point;
 class Size;
@@ -25,6 +29,8 @@ namespace rail {
 // Asks DWM for the Mica backdrop and matches the titlebar to the color mode.
 // Does nothing on Windows versions without Mica.
 void ApplyMicaBackdrop(views::Widget* widget);
+
+void MakeShellContentsTransparent(content::WebContents* contents);
 
 bool IsWidgetOnCurrentWorkspace(const views::Widget* widget);
 

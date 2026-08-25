@@ -6271,7 +6271,7 @@ index 806ff8ed9e..739ef0e7ad 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..79aebb3b85 100644
+index 3d4fe27f4f..e82b0181d0 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,14 @@ source_set("headers") {
@@ -6329,18 +6329,21 @@ index 3d4fe27f4f..79aebb3b85 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -140,6 +167,10 @@ source_set("impl") {
+@@ -140,6 +167,13 @@ source_set("impl") {
      ]
    }
  
 +  if (is_win) {
-+    deps += [ "//ui/aura" ]
++    deps += [
++      "//ui/aura",
++      "//ui/compositor",
++    ]
 +  }
 +
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -154,6 +185,7 @@ mojom("browser_mojo_bindings") {
+@@ -154,6 +188,7 @@ mojom("browser_mojo_bindings") {
      "//components/browser_apis/tab_strip:mojom",
      "//mojo/public/mojom/base",
      "//ui/base/mojom:ui_base_types",
@@ -6922,7 +6925,7 @@ index 512f1c770b..e020b38418 100644
  };
  
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..e56b6cbc53 100644
+index 3fabca0c2a..5f12a06f71 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -6953,13 +6956,16 @@ index 3fabca0c2a..e56b6cbc53 100644
  #if BUILDFLAG(IS_CHROMEOS)
  #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
  #endif  // BUILDFLAG(IS_CHROMEOS)
-@@ -127,16 +134,21 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -127,16 +134,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
    params.bounds = gfx::Rect(0, 0, 800, 600);
    params.delegate = widget_delegate_.get();
    params.native_widget = CreateNativeWidget();
 -#if BUILDFLAG(IS_CHROMEOS)
 +#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
    params.remove_standard_frame = true;
++#endif
++#if BUILDFLAG(IS_WIN)
++  params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
  #endif
    widget_->Init(std::move(params));
    widget_->SetNativeWindowProperty(kWebUIBrowserWindowKey, this);
@@ -6973,10 +6979,13 @@ index 3fabca0c2a..e56b6cbc53 100644
  
    auto* ui_web_contents = web_view->GetWebContents();
 +  ui_web_contents->SetPageBaseBackgroundColor(SK_ColorTRANSPARENT);
++#if BUILDFLAG(IS_WIN)
++  rail::MakeShellContentsTransparent(ui_web_contents);
++#endif
    web_contents_delegate_->SetUIWebContents(ui_web_contents);
    ui_web_contents->SetDelegate(web_contents_delegate_.get());
    ui_web_contents->SetUserData(
-@@ -182,6 +194,11 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -182,6 +200,11 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
            base::BindRepeating(&WebUIBrowserWindow::OnContentsElementShown,
                                base::Unretained(this)));
  
@@ -6988,7 +6997,7 @@ index 3fabca0c2a..e56b6cbc53 100644
    LoadAccelerators();
  }
  
-@@ -336,8 +353,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
+@@ -336,8 +359,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
  }
  
  bool WebUIBrowserWindow::IsOnCurrentWorkspace() const {
@@ -7002,7 +7011,7 @@ index 3fabca0c2a..e56b6cbc53 100644
  }
  
  bool WebUIBrowserWindow::IsVisibleOnScreen() const {
-@@ -584,6 +604,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
+@@ -584,6 +610,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
        continue;
      }
  
@@ -7013,7 +7022,7 @@ index 3fabca0c2a..e56b6cbc53 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -617,10 +641,23 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -617,10 +647,23 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -7037,7 +7046,7 @@ index 3fabca0c2a..e56b6cbc53 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -691,6 +728,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +734,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -7046,7 +7055,7 @@ index 3fabca0c2a..e56b6cbc53 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -947,6 +986,11 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,6 +992,11 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -7058,7 +7067,7 @@ index 3fabca0c2a..e56b6cbc53 100644
    int command_id;
    if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
-@@ -1217,6 +1261,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1267,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  

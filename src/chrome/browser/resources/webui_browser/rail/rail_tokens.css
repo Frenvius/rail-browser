@@ -9,8 +9,8 @@
   --rail-accent: #7c5cfc;
   --rail-accent-soft: rgb(124 92 252 / 22%);
   --rail-border: rgb(255 255 255 / 8%);
-  --rail-chrome: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
-      rgb(30 30 50 / 84%));
+  --rail-chrome: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 14%,
+      transparent);
   --rail-chrome-strong: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
       rgb(30 30 50 / 92%));
   --rail-surface: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 10%,

@@ -29,7 +29,7 @@
 }
 
 #topContainer {
-  background: var(--rail-chrome-strong);
+  background: var(--rail-chrome);
   grid-row: 1;
   min-width: 0;
   transition: background-color 260ms ease;
