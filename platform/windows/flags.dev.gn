@@ -1,5 +1,6 @@
 # Fast local build for the WebUI browser shell. Keep distribution settings in
 # flags.windows.gn; this file deliberately optimizes iteration time instead.
+cc_wrapper="sccache"
 chrome_pgo_phase=0
 enable_swiftshader=false
 ffmpeg_branding="Chrome"
