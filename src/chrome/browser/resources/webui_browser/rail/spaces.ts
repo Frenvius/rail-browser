@@ -78,22 +78,32 @@ export interface Space {
   color: string;
   icon: string;
   profile: string;
-  activeTabId: string;
+  activeKey: string;
 }
 
-interface Assignment {
-  space: string;
-  url: string;
-  title: string;
-  favicon: string;
-}
-
-export interface DormantTab {
+export interface TabRow {
   key: string;
   space: string;
+  tabId: string;
+  pending: boolean;
+  asleep: boolean;
+  opener: string;
   url: string;
   title: string;
   favicon: string;
+}
+
+interface RowFields {
+  space: string;
+  tabId: string;
+  url: string;
+  title: string;
+  favicon: string;
+  opener?: string;
+}
+
+export function isNewTabUrl(url: string): boolean {
+  return !url || url.startsWith('chrome://newtab');
 }
 
 function storedTab(entry: StoredTab|string): StoredTab {
@@ -104,8 +114,7 @@ function storedTab(entry: StoredTab|string): StoredTab {
 export class Spaces {
   private spaces_: Space[] = [];
   private activeId_ = '';
-  private tabs_ = new Map<string, Assignment>();
-  private dormant_: DormantTab[] = [];
+  private rows_: TabRow[] = [];
   private claims_ = new Map<string, string>();
   private profiles_: SpaceProfile[] = [];
   private nextKey_ = 0;
@@ -163,36 +172,22 @@ export class Spaces {
         color: stored.color,
         icon: stored.icon || SPACE_ICONS[0]![0],
         profile: stored.profile ?? '',
-        activeTabId: '',
+        activeKey: '',
       };
       this.spaces_.push(space);
-      const dormant: DormantTab[] = [];
       for (const entry of stored.tabs ?? []) {
         const {url, title, favicon} = storedTab(entry);
         const tab = tabs.find(
             candidate => candidate.url === url && !claimed.has(candidate.id));
-        if (!tab) {
-          const row: DormantTab = {
-            key: this.mintKey_(),
-            space: space.id,
-            url,
-            title,
-            favicon,
-          };
-          if (url === stored.activeUrl) {
-            dormant.unshift(row);
-          } else {
-            dormant.push(row);
-          }
-          continue;
+        if (tab) {
+          claimed.add(tab.id);
         }
-        claimed.add(tab.id);
-        this.tabs_.set(tab.id, {space: space.id, url, title, favicon});
-        if (url === stored.activeUrl) {
-          space.activeTabId = tab.id;
+        const row = this.push_(
+            {space: space.id, tabId: tab ? tab.id : '', url, title, favicon});
+        if (url === stored.activeUrl && !space.activeKey) {
+          space.activeKey = row.key;
         }
       }
-      this.dormant_.push(...dormant);
     }
 
     if (!this.spaces_.length) {
@@ -251,10 +246,7 @@ export class Spaces {
       return [];
     }
     const orphans = this.tabsIn(id);
-    for (const tabId of orphans) {
-      this.tabs_.delete(tabId);
-    }
-    this.dormant_ = this.dormant_.filter(row => row.space !== id);
+    this.rows_ = this.rows_.filter(row => row.space !== id);
     this.spaces_ = this.spaces_.filter(space => space.id !== id);
     if (this.activeId_ === id) {
       this.activeId_ = this.spaces_[0]!.id;
@@ -285,7 +277,7 @@ export class Spaces {
     if (!tabId || !this.byId(spaceId)) {
       return;
     }
-    if (this.tabs_.has(tabId)) {
+    if (this.byTab(tabId)) {
       this.assign(tabId, spaceId, this.urlOf(tabId));
       return;
     }
@@ -295,46 +287,74 @@ export class Spaces {
   adopt(tabId: string, url: string) {
     const claimed = this.claims_.get(tabId);
     this.claims_.delete(tabId);
-    this.assign(tabId, claimed ?? this.activeId_, url);
+    const spaceId = claimed ?? this.activeId_;
+    const waiting = this.rows_.find(
+        row => row.space === spaceId && row.pending && !row.tabId);
+    if (waiting) {
+      waiting.tabId = tabId;
+      waiting.pending = false;
+      waiting.url = url;
+      this.onChange_();
+      return;
+    }
+    this.push_({space: spaceId, tabId, url, title: '', favicon: ''});
+    this.onChange_();
+  }
+
+  setOpener(tabId: string, openerTabId: string) {
+    const row = this.byTab(tabId);
+    const opener = this.byTab(openerTabId);
+    if (!row || !opener || row.opener === opener.key ||
+        row.space !== opener.space) {
+      return;
+    }
+    row.opener = opener.key;
+    this.onChange_();
   }
 
   assign(tabId: string, spaceId: string, url: string) {
     if (!this.byId(spaceId)) {
       return;
     }
-    const previous = this.tabs_.get(tabId);
-    this.tabs_.set(tabId, {
-      space: spaceId,
-      url,
-      title: previous?.title ?? '',
-      favicon: previous?.favicon ?? '',
-    });
+    const row = this.byTab(tabId);
+    if (!row) {
+      this.push_({space: spaceId, tabId, url, title: '', favicon: ''});
+      this.onChange_();
+      return;
+    }
+    row.url = url;
+    if (row.space !== spaceId) {
+      row.space = spaceId;
+      this.toEnd_(row);
+    }
     this.onChange_();
   }
 
   track(tab: Tab) {
-    const assignment = this.tabs_.get(tab.id);
-    if (!assignment) {
+    const row = this.byTab(tab.id);
+    if (!row) {
       return;
     }
     const favicon = tab.favicon.dataUrl;
-    if (assignment.url === tab.url && assignment.title === tab.title &&
-        assignment.favicon === favicon) {
+    if (row.url === tab.url && row.title === tab.title &&
+        row.favicon === favicon) {
       return;
     }
-    assignment.url = tab.url;
-    assignment.title = tab.title;
-    assignment.favicon = favicon;
+    row.url = tab.url;
+    row.title = tab.title;
+    row.favicon = favicon;
     this.onChange_();
   }
 
   forget(tabId: string) {
-    if (!this.tabs_.delete(tabId)) {
+    const row = this.byTab(tabId);
+    if (!row) {
       return;
     }
+    this.rows_ = this.rows_.filter(other => other !== row);
     for (const space of this.spaces_) {
-      if (space.activeTabId === tabId) {
-        space.activeTabId = '';
+      if (space.activeKey === row.key) {
+        space.activeKey = '';
       }
     }
     this.onChange_();
@@ -346,16 +366,17 @@ export class Spaces {
   }
 
   markActive(tabId: string) {
-    const space = this.byId(this.spaceOf(tabId));
-    if (!space || space.activeTabId === tabId) {
+    const row = this.byTab(tabId);
+    const space = row ? this.byId(row.space) : undefined;
+    if (!row || !space || space.activeKey === row.key) {
       return;
     }
-    space.activeTabId = tabId;
+    space.activeKey = row.key;
     this.onChange_();
   }
 
   spaceOf(tabId: string): string {
-    return this.tabs_.get(tabId)?.space ?? this.activeId_;
+    return this.byTab(tabId)?.space ?? this.activeId_;
   }
 
   profileOf(spaceId: string): string {
@@ -363,58 +384,107 @@ export class Spaces {
   }
 
   owns(id: string): boolean {
-    const assignment = this.tabs_.get(id);
-    return !assignment || assignment.space === this.activeId_;
+    const row = this.byTab(id);
+    return !row || row.space === this.activeId_;
   }
 
   urlOf(tabId: string): string {
-    return this.tabs_.get(tabId)?.url ?? '';
+    return this.byTab(tabId)?.url ?? '';
+  }
+
+  rowsIn(spaceId: string): TabRow[] {
+    return this.rows_.filter(row => row.space === spaceId);
   }
 
   tabsIn(spaceId: string): string[] {
-    return [...this.tabs_.entries()]
-        .filter(([, assignment]) => assignment.space === spaceId)
-        .map(([tabId]) => tabId);
+    return this.rowsIn(spaceId).filter(row => row.tabId).map(row => row.tabId);
   }
 
-  dormantIn(spaceId: string): DormantTab[] {
-    return this.dormant_.filter(row => row.space === spaceId);
+  dormantIn(spaceId: string): TabRow[] {
+    return this.rowsIn(spaceId).filter(row => !row.tabId);
   }
 
-  dormantByKey(key: string): DormantTab|undefined {
-    return this.dormant_.find(row => row.key === key);
+  dormantByKey(key: string): TabRow|undefined {
+    const row = this.rows_.find(other => other.key === key);
+    return row && !row.tabId ? row : undefined;
   }
 
-  wake(key: string): DormantTab|undefined {
+  byTab(tabId: string): TabRow|undefined {
+    if (!tabId) {
+      return undefined;
+    }
+    return this.rows_.find(row => row.tabId === tabId);
+  }
+
+  wake(key: string): TabRow|undefined {
     const row = this.dormantByKey(key);
     if (!row) {
       return undefined;
     }
-    this.dormant_ = this.dormant_.filter(other => other !== row);
+    row.pending = true;
     this.onChange_();
     return row;
   }
 
-  addDormant(spaceId: string, tab: StoredTab): DormantTab|undefined {
+  detach(tabId: string): string {
+    const row = this.byTab(tabId);
+    if (!row) {
+      return '';
+    }
+    row.tabId = '';
+    row.pending = true;
+    row.asleep = false;
+    this.onChange_();
+    return row.key;
+  }
+
+  bind(key: string, tabId: string) {
+    const row = this.rows_.find(other => other.key === key);
+    if (!row) {
+      return;
+    }
+    row.pending = false;
+    row.asleep = false;
+    if (tabId) {
+      this.rows_ =
+          this.rows_.filter(other => other === row || other.tabId !== tabId);
+      row.tabId = tabId;
+    }
+    this.onChange_();
+  }
+
+  drop(key: string): boolean {
+    const row = this.dormantByKey(key);
+    if (!row) {
+      return false;
+    }
+    this.rows_ = this.rows_.filter(other => other !== row);
+    this.onChange_();
+    return true;
+  }
+
+  addDormant(spaceId: string, tab: StoredTab): TabRow|undefined {
     if (!this.byId(spaceId)) {
       return undefined;
     }
-    const row: DormantTab = {key: this.mintKey_(), space: spaceId, ...tab};
-    this.dormant_.push(row);
+    const row =
+        this.push_({space: spaceId, tabId: '', ...tab});
     this.onChange_();
     return row;
   }
 
-  reorderDormant(spaceId: string, keys: string[]) {
-    const rows = this.dormantIn(spaceId);
-    const ordered = keys.map(key => rows.find(row => row.key === key))
-                        .filter(row => row !== undefined);
-    if (ordered.length !== rows.length) {
+  reorder(spaceId: string, ids: string[]) {
+    const rows = this.rowsIn(spaceId);
+    const ordered =
+        ids.map(id => rows.find(
+                    row => row.key === id || (!!row.tabId && row.tabId === id)))
+            .filter(row => row !== undefined);
+    if (!ordered.length) {
       return;
     }
+    const moving = new Set(ordered);
     let next = 0;
-    this.dormant_ = this.dormant_.map(
-        row => row.space === spaceId ? ordered[next++]! : row);
+    this.rows_ = this.rows_.map(row => moving.has(row) ? ordered[next++]! : row);
     this.onChange_();
   }
 
@@ -424,37 +494,176 @@ export class Spaces {
       return false;
     }
     row.space = spaceId;
+    this.toEnd_(row);
     this.onChange_();
     return true;
   }
 
-  wakeActive(spaceId: string): DormantTab|undefined {
-    if (this.tabsIn(spaceId).length) {
+  successorOf(tabId: string): TabRow|undefined {
+    const row = this.byTab(tabId);
+    if (!row) {
       return undefined;
     }
-    return this.wake(this.dormantIn(spaceId)[0]?.key ?? '');
+    const rows = this.rowsIn(row.space);
+    const index = rows.indexOf(row);
+    const after = rows.slice(index + 1);
+
+    const child = after.find(other => other.opener === row.key);
+    if (child) {
+      return child;
+    }
+    if (row.opener) {
+      const sibling = after.find(other => other.opener === row.opener);
+      if (sibling) {
+        return sibling;
+      }
+      const opener = rows.find(other => other.key === row.opener);
+      if (opener) {
+        return opener;
+      }
+    }
+    return rows[index + 1] ?? rows[index - 1];
+  }
+
+  relatedRows(first: string, second: string): boolean {
+    const one = this.byTab(first);
+    const other = this.byTab(second);
+    if (!one || !other) {
+      return true;
+    }
+    return one.opener === other.key || other.opener === one.key ||
+        (!!one.opener && one.opener === other.opener);
+  }
+
+  hasOpeners(): boolean {
+    return this.rows_.some(row => !!row.opener);
+  }
+
+  retainOpeners(openers: Map<string, string>): boolean {
+    let changed = false;
+    for (const row of this.rows_) {
+      if (!row.opener || !row.tabId) {
+        continue;
+      }
+      const opener = this.byTab(openers.get(row.tabId) ?? '');
+      if (opener && opener.key === row.opener) {
+        continue;
+      }
+      row.opener = '';
+      changed = true;
+    }
+    if (changed) {
+      this.onChange_();
+    }
+    return changed;
+  }
+
+  forgetOpeners(spaceId: string) {
+    for (const row of this.rowsIn(spaceId)) {
+      row.opener = '';
+    }
+  }
+
+  placeAfter(tabId: string, afterTabId: string) {
+    this.place_(tabId, afterTabId, 1);
+  }
+
+  placeBefore(tabId: string, beforeTabId: string) {
+    this.place_(tabId, beforeTabId, 0);
+  }
+
+  sleep(tabId: string): boolean {
+    const row = this.byTab(tabId);
+    if (!row || row.asleep) {
+      return false;
+    }
+    row.asleep = true;
+    this.onChange_();
+    return true;
+  }
+
+  stir(tabId: string) {
+    const row = this.byTab(tabId);
+    if (!row || !row.asleep) {
+      return;
+    }
+    row.asleep = false;
+    this.onChange_();
+  }
+
+  isAsleep(tabId: string): boolean {
+    return this.byTab(tabId)?.asleep === true;
+  }
+
+  activeRow(spaceId: string): TabRow|undefined {
+    const space = this.byId(spaceId);
+    const rows = this.rowsIn(spaceId);
+    return rows.find(row => row.key === space?.activeKey) ?? rows[0];
+  }
+
+  wakeActive(spaceId: string): TabRow|undefined {
+    if (this.rowsIn(spaceId).some(row => row.tabId || row.pending)) {
+      return undefined;
+    }
+    return this.wake(this.activeRow(spaceId)?.key ?? '');
   }
 
   lastActiveIn(spaceId: string): string {
-    const space = this.byId(spaceId);
-    const tabs = this.tabsIn(spaceId);
-    if (space && tabs.includes(space.activeTabId)) {
-      return space.activeTabId;
+    const remembered = this.activeRow(spaceId);
+    if (remembered?.tabId) {
+      return remembered.tabId;
     }
+    const tabs = this.tabsIn(spaceId);
     return tabs[tabs.length - 1] ?? '';
   }
 
+  activeUrlIn(spaceId: string): string {
+    return this.activeRow(spaceId)?.url ?? '';
+  }
+
   storedOf(tabId: string): StoredTab {
-    const assignment = this.tabs_.get(tabId);
+    const row = this.byTab(tabId);
     return {
-      url: assignment?.url ?? '',
-      title: assignment?.title ?? '',
-      favicon: assignment?.favicon ?? '',
+      url: row?.url ?? '',
+      title: row?.title ?? '',
+      favicon: row?.favicon ?? '',
     };
   }
 
+  private toEnd_(row: TabRow) {
+    this.rows_ = [...this.rows_.filter(other => other !== row), row];
+  }
+
+  private place_(tabId: string, anchorTabId: string, offset: number) {
+    const row = this.byTab(tabId);
+    const anchor = this.byTab(anchorTabId);
+    if (!row || !anchor || row === anchor || row.space !== anchor.space) {
+      return;
+    }
+    const rest = this.rows_.filter(other => other !== row);
+    rest.splice(rest.indexOf(anchor) + offset, 0, row);
+    this.rows_ = rest;
+    this.onChange_();
+  }
+
+  private push_(fields: RowFields): TabRow {
+    const row: TabRow = {
+      key: this.mintKey_(),
+      pending: false,
+      asleep: false,
+      opener: fields.opener ?? '',
+      space: fields.space,
+      tabId: fields.tabId,
+      url: fields.url,
+      title: fields.title,
+      favicon: fields.favicon,
+    };
+    this.rows_.push(row);
+    return row;
+  }
+
   private mintKey_(): string {
-    return `dormant${this.nextKey_++}`;
+    return `row${this.nextKey_++}`;
   }
 
   private mint_(): Space {
@@ -466,7 +675,7 @@ export class Spaces {
       color: SPACE_COLORS[index % SPACE_COLORS.length]!,
       icon: SPACE_ICONS[index % SPACE_ICONS.length]![0],
       profile: '',
-      activeTabId: '',
+      activeKey: '',
     };
   }
 }
@@ -479,25 +688,16 @@ export function serializeSidebar(
     color: space.color,
     icon: space.icon,
     profile: space.profile,
-    activeUrl: space.activeTabId ?
-        spaces.urlOf(space.activeTabId) :
-        spaces.dormantIn(space.id)[0]?.url ?? '',
+    activeUrl: spaces.activeUrlIn(space.id),
     pinned: pinned.entriesIn(space.id).map(({home, url, title, favicon}) => ({
       home,
       url,
       title,
       favicon,
     })),
-    tabs: [
-      ...spaces.tabsIn(space.id)
-          .filter(tabId => !pinned.byTab(tabId))
-          .map(tabId => spaces.storedOf(tabId)),
-      ...spaces.dormantIn(space.id).map(({url, title, favicon}) => ({
-        url,
-        title,
-        favicon,
-      })),
-    ],
+    tabs: spaces.rowsIn(space.id)
+              .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
+              .map(({url, title, favicon}) => ({url, title, favicon})),
   }));
   return {
     activeSpace: spaces.activeId,

@@ -62,6 +62,45 @@
     text-overflow: ellipsis;
 }
 
+#audio {
+    align-items: center;
+    background: none;
+    border: none;
+    border-radius: 5px;
+    color: var(--rail-text-dim, #b0b0c8);
+    cursor: pointer;
+    display: flex;
+    flex: 0 0 auto;
+    height: 20px;
+    justify-content: center;
+    padding: 0;
+    width: 20px;
+}
+
+#audio[hidden],
+#audio svg[hidden] {
+    display: none;
+}
+
+#audio[muted] {
+    color: var(--rail-text-label, #808098);
+}
+
+#audio:hover {
+    background: var(--rail-hover-strong, #3d3d5c);
+}
+
+#audio:focus-visible {
+    outline: 2px solid var(--rail-accent, #7c5cfc);
+    outline-offset: 1px;
+}
+
+#audio svg {
+    fill: currentcolor;
+    height: 14px;
+    width: 14px;
+}
+
 .close {
     border: none;
     border-radius: 5px;

@@ -17,12 +17,14 @@ export interface TabMenuTarget {
   pinned: boolean;
   essential: boolean;
   dormant: boolean;
+  muted: boolean;
   hasOthers: boolean;
   hasRight: boolean;
 }
 
 export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
-    'duplicate'|'essential'|'move-to-space'|'pin'|'reload'|'unpin';
+    'duplicate'|'essential'|'move-to-space'|'mute'|'pin'|'reload'|'sleep'|
+    'unpin';
 
 export interface TabCommandDetail {
   command: TabCommand;
@@ -91,6 +93,18 @@ export class TabMenuElement extends CrLitElement {
 
   protected onDuplicateClick_() {
     this.fire_('duplicate');
+  }
+
+  protected onSleepClick_() {
+    this.fire_('sleep');
+  }
+
+  protected muteLabel_(): string {
+    return this.target?.muted ? 'Unmute Tab' : 'Mute Tab';
+  }
+
+  protected onMuteClick_() {
+    this.fire_('mute');
   }
 
   protected essentialLabel_(): string {

@@ -16,6 +16,14 @@ export function getHtml(this: TabMenuElement) {
   <button class="dropdown-item" @click="${this.onDuplicateClick_}">
     Duplicate
   </button>
+  <button class="dropdown-item" ?hidden="${!!this.target?.dormant}"
+    @click="${this.onSleepClick_}">
+    Sleep Tab
+  </button>
+  <button class="dropdown-item" ?hidden="${!!this.target?.dormant}"
+    @click="${this.onMuteClick_}">
+    ${this.muteLabel_()}
+  </button>
   <div class="dropdown-divider"></div>
   <button class="dropdown-item" @click="${this.onPinClick_}">
     ${this.pinLabel_()}

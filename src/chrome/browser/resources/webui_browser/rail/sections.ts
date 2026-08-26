@@ -32,19 +32,31 @@ export function splitSections(
       };
     }
     claimed.add(item.id);
-    return {item, dormant: false};
+    return {item, dormant: spaces.isAsleep(item.id)};
   });
 
   const essentialRows = rowsFor(pinned.essentials());
   const pinnedRows = rowsFor(pinned.entriesIn(spaces.activeId));
 
-  const looseItems: TabStripItem[] = items.filter(
-      item => !claimed.has(item.id) && spaces.owns(item.id) &&
-          !pinned.byTab(item.id));
-
-  for (const row of spaces.dormantIn(spaces.activeId)) {
-    looseItems.push({type: 'tab', id: row.key, tabData: dormantTabData(row)});
+  const looseItems: TabStripItem[] = [];
+  for (const row of spaces.rowsIn(spaces.activeId)) {
+    if (!row.tabId) {
+      looseItems.push({type: 'tab', id: row.key, tabData: dormantTabData(row)});
+      continue;
+    }
+    if (claimed.has(row.tabId) || pinned.byTab(row.tabId)) {
+      continue;
+    }
+    const item = items.find(
+        (candidate): candidate is TabItem =>
+            candidate.type === 'tab' && candidate.id === row.tabId);
+    if (item) {
+      looseItems.push(item);
+    }
   }
+
+  looseItems.push(...items.filter(
+      item => item.type === 'group' && spaces.owns(item.id)));
 
   return {essentialRows, pinnedRows, looseItems};
 }
