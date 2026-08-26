@@ -10,6 +10,8 @@
 
 #include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/time/time.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -24,6 +26,9 @@
 #include "ui/color/color_id.h"
 #include "ui/compositor/compositor.h"
 #include "ui/display/screen.h"
+#include "ui/gfx/animation/animation_delegate.h"
+#include "ui/gfx/animation/linear_animation.h"
+#include "ui/gfx/animation/tween.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point.h"
@@ -66,6 +71,9 @@ constexpr int kShadowMargin = 16;
 constexpr int kShadowBlur = 16;
 constexpr int kShadowOffsetY = 3;
 constexpr SkAlpha kShadowAlpha = 0x33;
+constexpr int kSlideDistance = 10;
+constexpr int kSlideAnchorSlack = 4;
+constexpr base::TimeDelta kSlideDuration = base::Milliseconds(140);
 
 struct AccentPolicy {
   DWORD state;
@@ -245,6 +253,57 @@ END_METADATA
 
 }
 
+class RailMenu::Slide : public gfx::AnimationDelegate {
+ public:
+  Slide(views::Widget* menu, views::Widget* shadow, int start_offset)
+      : menu_(menu),
+        shadow_(shadow),
+        start_offset_(start_offset),
+        menu_origin_(menu->GetWindowBoundsInScreen().origin()),
+        shadow_origin_(shadow ? shadow->GetWindowBoundsInScreen().origin()
+                              : gfx::Point()),
+        animation_(kSlideDuration,
+                   gfx::LinearAnimation::kDefaultFrameRate,
+                   this) {
+    MoveBy(start_offset_);
+    animation_.Start();
+  }
+
+  Slide(const Slide&) = delete;
+  Slide& operator=(const Slide&) = delete;
+  ~Slide() override = default;
+
+  void AnimationProgressed(const gfx::Animation* animation) override {
+    const double eased = gfx::Tween::CalculateValue(
+        gfx::Tween::EASE_OUT, animation->GetCurrentValue());
+    MoveBy(base::ClampRound(start_offset_ * (1.0 - eased)));
+  }
+
+  void AnimationEnded(const gfx::Animation* animation) override { MoveBy(0); }
+
+ private:
+  static void Place(views::Widget* widget, const gfx::Point& origin, int dy) {
+    if (!widget) {
+      return;
+    }
+    gfx::Rect bounds = widget->GetWindowBoundsInScreen();
+    bounds.set_origin(origin + gfx::Vector2d(0, dy));
+    widget->SetBounds(bounds);
+  }
+
+  void MoveBy(int dy) {
+    Place(menu_, menu_origin_, dy);
+    Place(shadow_, shadow_origin_, dy);
+  }
+
+  raw_ptr<views::Widget> menu_;
+  raw_ptr<views::Widget> shadow_;
+  const int start_offset_;
+  const gfx::Point menu_origin_;
+  const gfx::Point shadow_origin_;
+  gfx::LinearAnimation animation_;
+};
+
 class RailMenu::Delegate : public ui::SimpleMenuModel::Delegate {
  public:
   explicit Delegate(
@@ -340,8 +399,8 @@ void RailMenu::ShowAtCursor(
   runner_ = std::make_unique<views::MenuRunner>(
       std::move(root), views::MenuRunner::CONTEXT_MENU);
 
-  const gfx::Point cursor = display::Screen::Get()->GetCursorScreenPoint();
-  runner_->RunMenuAt(parent, nullptr, gfx::Rect(cursor, gfx::Size()),
+  cursor_ = display::Screen::Get()->GetCursorScreenPoint();
+  runner_->RunMenuAt(parent, nullptr, gfx::Rect(cursor_, gfx::Size()),
                      views::MenuAnchorPosition::kTopLeft,
                      ui::mojom::MenuSourceType::kMouse);
 
@@ -364,7 +423,14 @@ void RailMenu::AddShadow(views::MenuItemView* item,
   if (!menu_widget || !parent_ || shadows_.count(item)) {
     return;
   }
-  gfx::Rect bounds = menu_widget->GetWindowBoundsInScreen();
+  const gfx::Rect menu_bounds = menu_widget->GetWindowBoundsInScreen();
+  const int anchor_bottom = item == root_
+                                ? cursor_.y()
+                                : item->GetBoundsInScreen().bottom();
+  const bool opens_upward =
+      menu_bounds.bottom() <= anchor_bottom + kSlideAnchorSlack;
+
+  gfx::Rect bounds = menu_bounds;
   bounds.Inset(-kShadowMargin);
 
   views::Widget::InitParams params(
@@ -390,10 +456,14 @@ void RailMenu::AddShadow(views::MenuItemView* item,
     ::SetWindowPos(shadow_hwnd, menu_hwnd, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
   }
+  slides_[item] = std::make_unique<Slide>(
+      menu_widget, shadow.get(),
+      opens_upward ? kSlideDistance : -kSlideDistance);
   shadows_[item] = std::move(shadow);
 }
 
 void RailMenu::HideShadow(views::MenuItemView* item) {
+  slides_.erase(item);
   const auto entry = shadows_.find(item);
   if (entry == shadows_.end()) {
     return;
@@ -403,6 +473,7 @@ void RailMenu::HideShadow(views::MenuItemView* item) {
 }
 
 void RailMenu::CloseShadows() {
+  slides_.clear();
   for (const auto& [item, shadow] : shadows_) {
     shadow->Close();
   }

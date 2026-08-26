@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui_browser/browser.mojom.h"
+#include "ui/gfx/geometry/point.h"
 
 namespace ui {
 class SimpleMenuModel;
@@ -39,6 +40,7 @@ class RailMenu {
  private:
   class Delegate;
   class Adapter;
+  class Slide;
 
   struct SwatchRow {
     int id;
@@ -68,7 +70,9 @@ class RailMenu {
   base::RepeatingClosure on_closed_;
   raw_ptr<views::MenuItemView> root_ = nullptr;
   raw_ptr<views::Widget> parent_ = nullptr;
+  gfx::Point cursor_;
   std::map<views::MenuItemView*, std::unique_ptr<views::Widget>> shadows_;
+  std::map<views::MenuItemView*, std::unique_ptr<Slide>> slides_;
   base::WeakPtrFactory<RailMenu> weak_factory_{this};
 };
 
