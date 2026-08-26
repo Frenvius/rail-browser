@@ -71,56 +71,7 @@ ${this.variant === 'title' ? html`
         No icon matches
       </div>
     </div>
-  ` : html`
-    <div class="palette">
-      ${this.colors.map(color => html`
-        <button class="swatch" data-color="${color}" title="${color}"
-          style="background: ${color}"
-          ?selected="${color === this.targetSpace_()?.color}"
-          @click="${this.onColorClick_}"></button>
-      `)}
-    </div>
-    <button class="dropdown-item" @click="${this.onChangeIconClick_}">
-      Change Icon
-    </button>
-    <button class="dropdown-item" ?hidden="${this.variant !== 'title'}"
-      @click="${this.onRenameClick_}">
-      Rename Space
-    </button>
-    <button class="dropdown-item submenu" @click="${this.onSetProfileClick_}">
-      Set Profile
-      <cr-icon icon="cr:arrow-forward"></cr-icon>
-    </button>
-    <hr ?hidden="${!this.canMove_(-1) && !this.canMove_(1)}">
-    <button class="dropdown-item" ?hidden="${!this.canMove_(-1)}"
-      @click="${this.onMoveLeftClick_}">
-      Move Left
-    </button>
-    <button class="dropdown-item" ?hidden="${!this.canMove_(1)}"
-      @click="${this.onMoveRightClick_}">
-      Move Right
-    </button>
-    <hr ?hidden="${!this.canRemove_()}">
-    <button class="dropdown-item danger" ?hidden="${!this.canRemove_()}"
-      @click="${this.onRemoveClick_}">
-      Delete Space
-    </button>
-  `}
-</cr-action-menu>
-<cr-action-menu id="profileMenu">
-  ${this.profileRows_().map(profile => html`
-    <button class="dropdown-item profile" data-profile="${profile.id}"
-      @click="${this.onProfileClick_}">
-      <cr-icon class="${this.checkClass_(profile.id)}" icon="cr:check">
-      </cr-icon>
-      ${profile.name}
-    </button>
-  `)}
-  <hr>
-  <button class="dropdown-item profile" @click="${this.onNewProfileClick_}">
-    <cr-icon class="check" icon="cr:add"></cr-icon>
-    New Profile
-  </button>
+  ` : ''}
 </cr-action-menu>
 <cr-dialog id="profileDialog">
   <div slot="title">

@@ -11,8 +11,10 @@ import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 import {announceMenuOpen} from './menu_overlay.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
+import type {SpaceMenuDetail} from './space_menu.js';
+import {openSpaceMenu} from './space_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
-import {DEFAULT_PROFILE_NAME, SPACE_COLORS, SPACE_ICONS} from './spaces.js';
+import {SPACE_ICONS} from './spaces.js';
 
 export type SpaceCommand = 'create'|'move'|'newprofile'|'remove'|'rename'|
     'restyle'|'select'|'setprofile';
@@ -30,7 +32,6 @@ export interface SpaceCommandDetail {
 export interface SpaceBarElement {
   $: {
     menu: CrActionMenuElement,
-    profileMenu: CrActionMenuElement,
     profileDialog: CrDialogElement,
   };
 }
@@ -58,7 +59,6 @@ export class SpaceBarElement extends CrLitElement {
       editing_: {type: Boolean, state: true},
       confirming_: {type: Boolean, state: true},
       picking_: {type: Boolean, state: true},
-      choosing_: {type: Boolean, state: true},
       iconQuery_: {type: String, state: true},
       profileName_: {type: String, state: true},
       menuTarget_: {type: String, state: true},
@@ -73,11 +73,11 @@ export class SpaceBarElement extends CrLitElement {
   protected accessor editing_ = false;
   protected accessor confirming_ = false;
   protected accessor picking_ = false;
-  protected accessor choosing_ = false;
   protected accessor iconQuery_ = '';
   protected accessor profileName_ = '';
   protected accessor menuTarget_ = '';
-  protected readonly colors = SPACE_COLORS;
+  private menuX_ = 0;
+  private menuY_ = 0;
 
   protected activeSpace_(): Space|undefined {
     return this.spaces.find(space => space.id === this.activeId);
@@ -112,9 +112,74 @@ export class SpaceBarElement extends CrLitElement {
   }
 
   openMenuAt(x: number, y: number) {
-    this.menuTarget_ = this.activeId;
-    this.$.menu.showAtPosition({top: y, left: x});
+    this.openMenuFor_(this.activeId, x, y);
+  }
+
+  private openMenuFor_(id: string, x: number, y: number) {
+    this.menuTarget_ = id;
+    this.menuX_ = x;
+    this.menuY_ = y;
+    const space = this.targetSpace_();
+    if (!space) {
+      return;
+    }
+    openSpaceMenu(
+        {
+          space,
+          profiles: this.profiles,
+          canRename: this.variant === 'title',
+          canMoveLeft: this.canMove_(-1),
+          canMoveRight: this.canMove_(1),
+          canRemove: this.canRemove_(),
+        },
+        detail => this.runMenuCommand_(detail));
+  }
+
+  private runMenuCommand_(detail: SpaceMenuDetail) {
+    switch (detail.command) {
+      case 'recolor':
+        this.fire_('restyle', this.menuTarget_, {color: detail.color});
+        return;
+      case 'change-icon':
+        void this.openIconPicker_();
+        return;
+      case 'rename':
+        void this.startEditing_();
+        return;
+      case 'set-profile':
+        this.fire_('setprofile', this.menuTarget_, {profile: detail.profile});
+        return;
+      case 'new-profile':
+        void this.openProfileDialog_();
+        return;
+      case 'move':
+        this.fire_('move', this.menuTarget_, {delta: detail.delta});
+        return;
+      case 'remove':
+        if (this.removeCount_()) {
+          void this.openRemoveConfirm_();
+          return;
+        }
+        this.fire_('remove', this.menuTarget_);
+        return;
+    }
+  }
+
+  private async openPanel_() {
+    await this.updateComplete;
+    this.$.menu.showAtPosition({top: this.menuY_, left: this.menuX_});
     announceMenuOpen(this.$.menu);
+  }
+
+  private async openIconPicker_() {
+    this.picking_ = true;
+    await this.openPanel_();
+    this.shadowRoot.querySelector<HTMLInputElement>('#iconSearch')?.focus();
+  }
+
+  private async openRemoveConfirm_() {
+    this.confirming_ = true;
+    await this.openPanel_();
   }
 
   protected filteredIcons_(): ReadonlyArray<readonly[string, string]> {
@@ -126,54 +191,15 @@ export class SpaceBarElement extends CrLitElement {
         ([icon, terms]) => terms.includes(query) || icon === query);
   }
 
-  protected async onChangeIconClick_() {
-    this.picking_ = true;
-    await this.updateComplete;
-    this.shadowRoot.querySelector<HTMLInputElement>('#iconSearch')?.focus();
-  }
-
   protected onPickerBackClick_() {
-    this.picking_ = false;
-    this.iconQuery_ = '';
+    this.$.menu.close();
   }
 
   protected onIconSearchInput_(e: Event) {
     this.iconQuery_ = (e.target as HTMLInputElement).value;
   }
 
-  protected profileRows_(): SpaceProfile[] {
-    return [{id: '', name: DEFAULT_PROFILE_NAME}, ...this.profiles];
-  }
-
-  protected checkClass_(profileId: string): string {
-    return profileId === this.currentProfile_() ? 'check' : 'check blank';
-  }
-
-  protected currentProfile_(): string {
-    return this.targetSpace_()?.profile ?? '';
-  }
-
-  protected onSetProfileClick_(e: Event) {
-    const item = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    this.choosing_ = true;
-    this.$.profileMenu.showAtPosition({top: item.top - 6, left: item.right});
-    announceMenuOpen(this.$.profileMenu);
-  }
-
-  protected onProfileClick_(e: Event) {
-    const profile = (e.currentTarget as HTMLElement).dataset['profile'] ?? '';
-    this.closeMenus_();
-    this.fire_('setprofile', this.menuTarget_, {profile});
-  }
-
-  private closeMenus_() {
-    this.choosing_ = false;
-    this.$.profileMenu.close();
-    this.$.menu.close();
-  }
-
-  protected async onNewProfileClick_() {
-    this.closeMenus_();
+  private async openProfileDialog_() {
     this.profileName_ = '';
     this.$.profileDialog.showModal();
     await this.updateComplete;
@@ -207,7 +233,7 @@ export class SpaceBarElement extends CrLitElement {
 
   protected onIconSearchKeydown_(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      this.onPickerBackClick_();
+      this.$.menu.close();
     }
     e.stopPropagation();
   }
@@ -224,9 +250,7 @@ export class SpaceBarElement extends CrLitElement {
 
   protected onDotContextmenu_(e: MouseEvent) {
     e.preventDefault();
-    this.menuTarget_ = this.idOf_(e);
-    this.$.menu.showAtPosition({top: e.clientY, left: e.clientX});
-    announceMenuOpen(this.$.menu);
+    this.openMenuFor_(this.idOf_(e), e.clientX, e.clientY);
   }
 
   protected onAddClick_() {
@@ -246,58 +270,25 @@ export class SpaceBarElement extends CrLitElement {
     this.openMenuAt(e.clientX, e.clientY);
   }
 
-  protected onRenameClick_() {
-    this.$.menu.close();
-    this.startEditing_();
-  }
-
-  protected onRemoveClick_() {
-    if (this.removeCount_()) {
-      this.confirming_ = true;
-      return;
-    }
-    this.$.menu.close();
-    this.fire_('remove', this.menuTarget_);
-  }
-
   protected onConfirmRemoveClick_() {
     this.$.menu.close();
     this.fire_('remove', this.menuTarget_);
   }
 
   protected onCancelRemoveClick_() {
-    this.confirming_ = false;
+    this.$.menu.close();
   }
 
   protected onMenuClose_() {
     this.confirming_ = false;
     this.picking_ = false;
     this.iconQuery_ = '';
-    if (this.choosing_) {
-      this.choosing_ = false;
-      this.$.profileMenu.close();
-    }
-  }
-
-  protected onColorClick_(e: Event) {
-    const color = (e.currentTarget as HTMLElement).dataset['color'] ?? '';
-    this.fire_('restyle', this.menuTarget_, {color});
   }
 
   protected onIconClick_(e: Event) {
     const icon = (e.currentTarget as HTMLElement).dataset['icon'] ?? '';
     this.$.menu.close();
     this.fire_('restyle', this.menuTarget_, {icon});
-  }
-
-  protected onMoveLeftClick_() {
-    this.$.menu.close();
-    this.fire_('move', this.menuTarget_, {delta: -1});
-  }
-
-  protected onMoveRightClick_() {
-    this.$.menu.close();
-    this.fire_('move', this.menuTarget_, {delta: 1});
   }
 
   protected onInputKeydown_(e: KeyboardEvent) {

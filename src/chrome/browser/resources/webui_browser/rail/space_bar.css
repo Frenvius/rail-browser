@@ -175,13 +175,6 @@ cr-action-menu {
   background: color-mix(in srgb, var(--space-color, #fff) 38%, transparent);
 }
 
-.palette {
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-  padding: 8px 16px 6px;
-}
-
 hr {
   background: var(--rail-border, #33334d);
   border: none;
@@ -198,30 +191,6 @@ hr {
   display: flex;
   gap: 6px;
   padding: 8px 10px 6px;
-}
-
-.dropdown-item.submenu {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-  --iron-icon-width: 14px;
-  --iron-icon-height: 14px;
-  --iron-icon-fill-color: var(--rail-text-label, #808098);
-}
-
-.dropdown-item.profile {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-width: 176px;
-  --iron-icon-width: 14px;
-  --iron-icon-height: 14px;
-  --iron-icon-fill-color: currentcolor;
-}
-
-.dropdown-item.profile .check.blank {
-  visibility: hidden;
 }
 
 .panelback {
@@ -288,30 +257,19 @@ hr {
   padding: 0 16px 10px;
 }
 
-.swatch,
 .glyph {
   align-items: center;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  padding: 0;
-}
-
-.swatch {
-  border-radius: 50%;
-  height: 16px;
-  outline-offset: 2px;
-  width: 16px;
-}
-
-.glyph {
   background: transparent;
+  border: none;
   border-radius: 5px;
   color: var(--rail-text-muted, #c0c0d8);
+  cursor: pointer;
+  display: flex;
   font-size: 13px;
   height: 22px;
+  justify-content: center;
   line-height: 1;
+  padding: 0;
   width: 22px;
   --iron-icon-width: 14px;
   --iron-icon-height: 14px;
@@ -326,10 +284,6 @@ hr {
   font-size: 15px;
   height: 25px;
   width: 100%;
-}
-
-.swatch[selected] {
-  outline: 2px solid var(--rail-text, #f0f0ff);
 }
 
 .glyph[selected] {
