@@ -16,7 +16,7 @@ import subprocess
 import sys
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 UTILS = ROOT / "ungoogled-chromium" / "utils"
 UPSTREAM_CLONE = UTILS / "clone.py"
 
