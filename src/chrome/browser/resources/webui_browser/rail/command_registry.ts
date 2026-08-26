@@ -61,6 +61,22 @@ export const COMMANDS: Command[] = [
     run: onActiveTab('duplicate'),
   },
   {
+    id: 'new-tab-below',
+    label: 'New Tab Below',
+    hint: '',
+    keywords: 'insert adjacent after',
+    enabled: hasTab,
+    run: onActiveTab('new-tab-below'),
+  },
+  {
+    id: 'new-window',
+    label: 'Move Tab to New Window',
+    hint: '',
+    keywords: 'detach split out',
+    enabled: host => host.activeTab()?.hasOthers === true,
+    run: onActiveTab('new-window'),
+  },
+  {
     id: 'pin-tab',
     label: 'Pin Tab',
     hint: '',

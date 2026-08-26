@@ -1,5 +1,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_transfer.h"
 
+#include <algorithm>
+#include <optional>
 #include <vector>
 
 #include "chrome/browser/profiles/profile.h"
@@ -7,6 +9,7 @@
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/tabs/public/tab_interface.h"
 #include "ui/base/base_window.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
@@ -63,6 +66,30 @@ void DropActiveTabAtScreenPoint(Browser* source,
     created->GetWindow()->SetBounds(
         gfx::Rect(screen_point, from.size()));
   }
+}
+
+bool MoveTabsToNewWindow(Browser* source,
+                         const std::vector<tabs_api::NodeId>& ids) {
+  if (!source) {
+    return false;
+  }
+  TabStripModel* model = source->tab_strip_model();
+  std::vector<int> indices;
+  for (const tabs_api::NodeId& id : ids) {
+    std::optional<tabs::TabHandle> handle = id.ToTabHandle();
+    tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
+    const int index = tab ? model->GetIndexOfTab(tab) : TabStripModel::kNoTab;
+    if (index != TabStripModel::kNoTab) {
+      indices.push_back(index);
+    }
+  }
+  if (indices.empty() ||
+      indices.size() >= static_cast<size_t>(model->count())) {
+    return false;
+  }
+  std::sort(indices.begin(), indices.end());
+  chrome::MoveTabsToNewWindow(source, indices);
+  return true;
 }
 
 }

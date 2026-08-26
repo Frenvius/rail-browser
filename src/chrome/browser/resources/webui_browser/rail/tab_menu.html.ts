@@ -6,11 +6,17 @@ export function getHtml(this: TabMenuElement) {
   // clang-format off
   return html`<!--_html_template_start_-->
 <cr-action-menu id="menu">
-  <button class="dropdown-item" ?hidden="${!!this.target?.dormant}"
+  <button class="dropdown-item" ?hidden="${!this.single_()}"
+    @click="${this.onNewTabBelowClick_}">
+    New Tab Below
+  </button>
+  <button class="dropdown-item"
+    ?hidden="${!!this.target?.dormant || !this.single_()}"
     @click="${this.onReloadClick_}">
     Reload
   </button>
-  <button class="dropdown-item" @click="${this.onCopyLinkClick_}">
+  <button class="dropdown-item" ?hidden="${!this.single_()}"
+    @click="${this.onCopyLinkClick_}">
     Copy Link
   </button>
   <button class="dropdown-item" @click="${this.onDuplicateClick_}">
@@ -18,7 +24,7 @@ export function getHtml(this: TabMenuElement) {
   </button>
   <button class="dropdown-item" ?hidden="${!!this.target?.dormant}"
     @click="${this.onSleepClick_}">
-    Sleep Tab
+    ${this.sleepLabel_()}
   </button>
   <button class="dropdown-item" ?hidden="${!!this.target?.dormant}"
     @click="${this.onMuteClick_}">
@@ -30,6 +36,11 @@ export function getHtml(this: TabMenuElement) {
   </button>
   <button class="dropdown-item" @click="${this.onEssentialClick_}">
     ${this.essentialLabel_()}
+  </button>
+  <button class="dropdown-item"
+    ?hidden="${!this.target?.tabId || !this.target?.hasOthers}"
+    @click="${this.onNewWindowClick_}">
+    ${this.windowLabel_()}
   </button>
   ${this.otherSpaces_().length ? html`
     <div class="dropdown-divider"></div>
@@ -44,11 +55,13 @@ export function getHtml(this: TabMenuElement) {
   <button class="dropdown-item" @click="${this.onCloseClick_}">
     ${this.closeLabel_()}
   </button>
-  <button class="dropdown-item" ?hidden="${!this.target?.hasOthers}"
+  <button class="dropdown-item"
+    ?hidden="${!this.target?.hasOthers || !this.single_()}"
     @click="${this.onCloseOthersClick_}">
     Close Other Tabs
   </button>
-  <button class="dropdown-item" ?hidden="${!this.target?.hasRight}"
+  <button class="dropdown-item"
+    ?hidden="${!this.target?.hasRight || !this.single_()}"
     @click="${this.onCloseRightClick_}">
     Close Tabs to the Right
   </button>

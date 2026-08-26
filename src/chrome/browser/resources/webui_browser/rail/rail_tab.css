@@ -33,6 +33,16 @@
     color: var(--rail-text, #f0f0ff);
 }
 
+:host([selected]:not([active])) .tab {
+    background-color: var(--rail-elevated, #282840);
+    box-shadow: inset 0 0 0 1px var(--rail-accent, #7c5cfc);
+    color: var(--rail-text, #f0f0ff);
+}
+
+:host([selected][active]) .tab {
+    box-shadow: inset 0 0 0 1px var(--rail-accent, #7c5cfc);
+}
+
 #faviconContainer {
     align-items: center;
     background: var(--rail-hover, #303048);
@@ -99,6 +109,58 @@
     fill: currentcolor;
     height: 14px;
     width: 14px;
+}
+
+#alert {
+    align-items: center;
+    color: var(--rail-text-dim, #b0b0c8);
+    display: flex;
+    flex: 0 0 auto;
+    height: 20px;
+    justify-content: center;
+    width: 20px;
+}
+
+#alert[hidden],
+#alert svg[hidden] {
+    display: none;
+}
+
+#alert[kind='record'] {
+    color: var(--rail-danger, #e57);
+}
+
+#alert svg {
+    fill: currentcolor;
+    height: 14px;
+    width: 14px;
+}
+
+:host([loading]) #faviconContainer {
+    position: relative;
+}
+
+:host([loading]) #faviconContainer::after {
+    animation: rail-tab-spin 900ms linear infinite;
+    border: 1.5px solid transparent;
+    border-radius: 50%;
+    border-top-color: var(--rail-accent, #7c5cfc);
+    content: '';
+    height: 17px;
+    left: 50%;
+    position: absolute;
+    top: 50%;
+    width: 17px;
+}
+
+@keyframes rail-tab-spin {
+    from {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
 }
 
 .close {

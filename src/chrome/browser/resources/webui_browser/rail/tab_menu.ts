@@ -20,11 +20,12 @@ export interface TabMenuTarget {
   muted: boolean;
   hasOthers: boolean;
   hasRight: boolean;
+  count: number;
 }
 
 export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
-    'duplicate'|'essential'|'move-to-space'|'mute'|'pin'|'reload'|'sleep'|
-    'unpin';
+    'duplicate'|'essential'|'move-to-space'|'mute'|'new-tab-below'|
+    'new-window'|'pin'|'reload'|'sleep'|'unpin';
 
 export interface TabCommandDetail {
   command: TabCommand;
@@ -73,14 +74,46 @@ export class TabMenuElement extends CrLitElement {
     announceMenuOpen(this.$.menu);
   }
 
+  private many_(): number {
+    return this.target && this.target.count > 1 ? this.target.count : 0;
+  }
+
+  private noun_(): string {
+    const many = this.many_();
+    return many ? `${many} Tabs` : 'Tab';
+  }
+
+  protected single_(): boolean {
+    return this.many_() === 0;
+  }
+
   protected pinLabel_(): string {
-    return this.target?.pinned ? 'Unpin' : 'Pin';
+    return `${this.target?.pinned ? 'Unpin' : 'Pin'} ${this.noun_()}`;
+  }
+
+  protected windowLabel_(): string {
+    return `Move ${this.noun_()} to New Window`;
+  }
+
+  protected sleepLabel_(): string {
+    return `Sleep ${this.noun_()}`;
   }
 
   protected closeLabel_(): string {
     // A dormant row has no tab left to close, so the command drops the row
     // itself. Every other row, pinned or not, closes a live tab.
-    return this.target?.dormant ? 'Remove' : 'Close Tab';
+    if (this.target?.dormant) {
+      return 'Remove';
+    }
+    return `Close ${this.noun_()}`;
+  }
+
+  protected onNewTabBelowClick_() {
+    this.fire_('new-tab-below');
+  }
+
+  protected onNewWindowClick_() {
+    this.fire_('new-window');
   }
 
   protected onReloadClick_() {
@@ -100,7 +133,7 @@ export class TabMenuElement extends CrLitElement {
   }
 
   protected muteLabel_(): string {
-    return this.target?.muted ? 'Unmute Tab' : 'Mute Tab';
+    return `${this.target?.muted ? 'Unmute' : 'Mute'} ${this.noun_()}`;
   }
 
   protected onMuteClick_() {
