@@ -116,6 +116,7 @@ export class Spaces {
   private activeId_ = '';
   private rows_: TabRow[] = [];
   private claims_ = new Map<string, string>();
+  private creating_ = 0;
   private profiles_: SpaceProfile[] = [];
   private nextKey_ = 0;
 
@@ -282,6 +283,18 @@ export class Spaces {
       return;
     }
     this.claims_.set(tabId, spaceId);
+  }
+
+  expectTab() {
+    this.creating_++;
+  }
+
+  settleTab() {
+    this.creating_ = Math.max(0, this.creating_ - 1);
+  }
+
+  requested(tabId: string): boolean {
+    return this.creating_ > 0 || this.claims_.has(tabId);
   }
 
   adopt(tabId: string, url: string) {
@@ -572,6 +585,28 @@ export class Spaces {
     this.place_(tabId, beforeTabId, 0);
   }
 
+  placeAfterOpener(tabId: string) {
+    const row = this.byTab(tabId);
+    const opener = row ? this.rows_.find(other => other.key === row.opener) :
+                         undefined;
+    if (!row || !opener) {
+      return;
+    }
+    const rows = this.rowsIn(row.space);
+    let at = rows.indexOf(opener);
+    if (at < 0) {
+      return;
+    }
+    for (let next = at + 1; next < rows.length; next++) {
+      const candidate = rows[next]!;
+      if (candidate === row || candidate.opener !== opener.key) {
+        break;
+      }
+      at = next;
+    }
+    this.placeRow_(row, rows[at]!, 1);
+  }
+
   sleep(tabId: string): boolean {
     const row = this.byTab(tabId);
     if (!row || row.asleep) {
@@ -637,7 +672,14 @@ export class Spaces {
   private place_(tabId: string, anchorTabId: string, offset: number) {
     const row = this.byTab(tabId);
     const anchor = this.byTab(anchorTabId);
-    if (!row || !anchor || row === anchor || row.space !== anchor.space) {
+    if (!row || !anchor) {
+      return;
+    }
+    this.placeRow_(row, anchor, offset);
+  }
+
+  private placeRow_(row: TabRow, anchor: TabRow, offset: number) {
+    if (row === anchor || row.space !== anchor.space) {
       return;
     }
     const rest = this.rows_.filter(other => other !== row);
