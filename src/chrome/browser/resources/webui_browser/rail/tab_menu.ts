@@ -24,13 +24,19 @@ export interface TabMenuTarget {
 }
 
 export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
-    'duplicate'|'essential'|'move-to-space'|'mute'|'new-tab-below'|
-    'new-window'|'pin'|'reload'|'sleep'|'unpin';
+    'duplicate'|'essential'|'move-to-space'|'move-to-window'|'mute'|
+    'new-tab-below'|'new-window'|'pin'|'reload'|'sleep'|'unpin';
+
+export interface WindowRow {
+  id: number;
+  title: string;
+}
 
 export interface TabCommandDetail {
   command: TabCommand;
   target: TabMenuTarget;
   spaceId: string;
+  windowId: number;
 }
 
 export interface TabMenuElement {
@@ -57,12 +63,14 @@ export class TabMenuElement extends CrLitElement {
       target: {type: Object},
       spaces: {type: Array},
       activeSpace: {type: String},
+      windows: {type: Array},
     };
   }
 
   accessor target: TabMenuTarget|null = null;
   accessor spaces: Space[] = [];
   accessor activeSpace: string = '';
+  accessor windows: WindowRow[] = [];
 
   protected otherSpaces_(): Space[] {
     return this.spaces.filter(space => space.id !== this.activeSpace);
@@ -170,13 +178,23 @@ export class TabMenuElement extends CrLitElement {
     this.fire_('move-to-space', spaceId);
   }
 
-  private fire_(command: TabCommand, spaceId: string = '') {
+  protected onMoveToWindowClick_(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset['id'] ?? '';
+    this.fire_('move-to-window', '', Number(id));
+  }
+
+  protected windowTitle_(row: WindowRow): string {
+    return row.title || 'Untitled Window';
+  }
+
+  private fire_(command: TabCommand, spaceId = '', windowId = 0) {
     const target = this.target;
     if (!target) {
       return;
     }
     this.$.menu.close();
-    this.fire<TabCommandDetail>('rail-tab-command', {command, target, spaceId});
+    this.fire<TabCommandDetail>(
+        'rail-tab-command', {command, target, spaceId, windowId});
   }
 }
 

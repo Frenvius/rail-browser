@@ -18,6 +18,8 @@ bool HandleRailAccelerator(const ui::Accelerator& accelerator,
 
 bool IsCommandDisabledInShell(int command_id);
 
+const char* RailCommandForBrowserCommand(int command_id);
+
 }
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_ACCELERATORS_H_

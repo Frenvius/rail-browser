@@ -172,6 +172,7 @@ export function dormantTabData(entry: DormantRow): Tab {
     id: entry.key,
     isActive: false,
     isBlocked: false,
+    isCrashed: false,
     isSelected: false,
     networkState: TabNetworkState.kNone,
     title: entry.title || entry.url,

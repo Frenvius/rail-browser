@@ -2,11 +2,18 @@ import type {TabStripItem} from '../tab_strip/items.js';
 import type {TabElement} from '../tab_strip/tab.js';
 import type {TabDragHost} from '../tab_strip/tab_drag_host.js';
 
+export interface DragHandOff {
+  tabId: string;
+  row: DOMRect;
+  grabX: number;
+  grabY: number;
+  detachable: boolean;
+}
+
 export interface RailDragHost extends TabDragHost {
   moveTabToSpace(tabId: string, spaceId: string): void;
   setTabPinned(tabId: string, pinned: boolean): void;
-  handOffDrag(row: DOMRect, grabX: number, grabY: number, detachable: boolean):
-      void;
+  handOffDrag(drag: DragHandOff): void;
 }
 
 const DRAG_THRESHOLD = 4;
@@ -121,9 +128,13 @@ export class TabDrag {
     }
     window.removeEventListener('mousemove', this.onMove_);
     window.removeEventListener('mouseup', this.onUp_);
-    this.host_.handOffDrag(
-        element.getBoundingClientRect(), this.offsetX_, this.offsetY_,
-        !this.dormant_);
+    this.host_.handOffDrag({
+      tabId: this.tabId_,
+      row: element.getBoundingClientRect(),
+      grabX: this.offsetX_,
+      grabY: this.offsetY_,
+      detachable: !this.dormant_,
+    });
     element.classList.add('dragsource');
   }
 

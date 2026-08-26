@@ -219,6 +219,23 @@
     color: var(--rail-text-label, #808098);
 }
 
+:host([blocked]) .tab {
+    opacity: 0.5;
+}
+
+:host([crashed]) #faviconContainer {
+    box-shadow: inset 0 0 0 1px var(--rail-danger, #e57);
+}
+
+:host([crashed]) #favicon {
+    filter: grayscale(1);
+    opacity: 0.5;
+}
+
+:host([crashed]) #title {
+    color: var(--rail-text-label, #808098);
+}
+
 :host([pinned]:not([dormant])) .close {
     --iron-icon-fill-color: transparent;
     --iron-icon-stroke-color: var(--rail-text-dim, #b0b0c8);

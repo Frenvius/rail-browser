@@ -42,6 +42,12 @@ export function getHtml(this: TabMenuElement) {
     @click="${this.onNewWindowClick_}">
     ${this.windowLabel_()}
   </button>
+  ${this.target?.tabId ? this.windows.map(row => html`
+    <button class="dropdown-item" data-id="${row.id}"
+      @click="${this.onMoveToWindowClick_}">
+      Move to ${this.windowTitle_(row)}
+    </button>
+  `) : ''}
   ${this.otherSpaces_().length ? html`
     <div class="dropdown-divider"></div>
     ${this.otherSpaces_().map(space => html`

@@ -8,7 +8,9 @@ export interface CommandBarHost {
   openUrl(url: string): void;
   reload(): void;
   runTabCommand(command: TabCommand, target: TabMenuTarget): void;
+  selectTabAt(index: number): void;
   stepSpace(delta: number): void;
+  stepTab(delta: number): void;
 }
 
 export interface Command {
@@ -152,6 +154,20 @@ export const COMMANDS: Command[] = [
     run: host => host.goForward(),
   },
   {
+    id: 'next-tab',
+    label: 'Next Tab',
+    hint: 'Ctrl+Tab',
+    keywords: 'switch cycle',
+    run: host => host.stepTab(1),
+  },
+  {
+    id: 'previous-tab',
+    label: 'Previous Tab',
+    hint: 'Ctrl+Shift+Tab',
+    keywords: 'switch cycle',
+    run: host => host.stepTab(-1),
+  },
+  {
     id: 'new-space',
     label: 'New Space',
     hint: 'Ctrl+Alt+N',
@@ -199,6 +215,13 @@ export function matchCommands(
            }));
 }
 
+const SELECT_TAB = 'select-tab:';
+
 export function runCommand(id: string, host: CommandBarHost) {
+  if (id.startsWith(SELECT_TAB)) {
+    const which = id.slice(SELECT_TAB.length);
+    host.selectTabAt(which === 'last' ? -1 : Number(which));
+    return;
+  }
   COMMANDS.find(command => command.id === id)?.run(host);
 }

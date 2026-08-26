@@ -5,6 +5,7 @@ const MULTI: ReadonlySet<TabCommand> = new Set<TabCommand>([
   'duplicate',
   'essential',
   'move-to-space',
+  'move-to-window',
   'mute',
   'new-window',
   'pin',

@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
@@ -118,7 +119,7 @@ void Poll(PollState* state) {
 void RunGhostLoop(base::WeakPtr<Browser> source,
                   base::WeakPtr<content::WebContents> shell,
                   DragGhostObserver observer,
-                  bool detachable,
+                  std::vector<tabs_api::NodeId> ids,
                   const gfx::Size& size,
                   const gfx::Vector2d& drag_offset,
                   const content::CopyFromSurfaceResult& result) {
@@ -142,7 +143,7 @@ void RunGhostLoop(base::WeakPtr<Browser> source,
     return;
   }
 
-  PollState poll_state{source, shell, observer.moved, detachable, nullptr};
+  PollState poll_state{source, shell, observer.moved, !ids.empty(), nullptr};
   base::RepeatingTimer poll;
   poll.Start(FROM_HERE, kCursorPoll,
              base::BindRepeating(&Poll, base::Unretained(&poll_state)));
@@ -163,8 +164,8 @@ void RunGhostLoop(base::WeakPtr<Browser> source,
   if (observer.ended) {
     observer.ended.Run(view ? ClientPoint(view, drop) : gfx::Point(), inside);
   }
-  if (!inside && detachable && source) {
-    DropActiveTabAtScreenPoint(source.get(), drop);
+  if (!inside && source) {
+    DropTabsAtScreenPoint(source.get(), drop, ids);
   }
 }
 
@@ -178,7 +179,7 @@ void StartDragGhost(Browser* source,
                     content::WebContents* shell,
                     const gfx::Rect& row,
                     const gfx::Point& grab_offset,
-                    bool detachable,
+                    const std::vector<tabs_api::NodeId>& ids,
                     DragGhostObserver observer) {
   if (!source || !shell) {
     return;
@@ -191,7 +192,7 @@ void StartDragGhost(Browser* source,
   view->CopyFromSurface(
       row, row.size(), kSnapshotTimeout,
       base::BindOnce(&RunGhostLoop, source->AsWeakPtr(), shell->GetWeakPtr(),
-                     std::move(observer), detachable, row.size(),
+                     std::move(observer), ids, row.size(),
                      grab_offset.OffsetFromOrigin()));
 }
 
