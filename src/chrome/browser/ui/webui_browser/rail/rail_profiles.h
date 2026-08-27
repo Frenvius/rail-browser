@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "base/functional/callback.h"
+#include "components/browser_apis/tab_strip/types/node_id.h"
 
 class Browser;
 class BrowserWindowInterface;
@@ -42,6 +43,13 @@ void CreateTabInProfile(Browser* browser,
                         const std::string& profile_id,
                         const GURL& url,
                         TabCreatedCallback callback);
+
+void MoveTabToProfile(Browser* browser,
+                      const tabs_api::NodeId& tab_id,
+                      const std::string& profile_id,
+                      TabCreatedCallback callback);
+
+std::string ProfileIdOfTab(Browser* browser, const tabs_api::NodeId& tab_id);
 
 void SetActiveProfile(BrowserWindowInterface* browser, Profile* profile);
 

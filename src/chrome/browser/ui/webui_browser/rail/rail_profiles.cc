@@ -21,14 +21,17 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/pref_names.h"
+#include "components/tabs/public/tab_interface.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
+#include "url/url_constants.h"
 
 namespace rail {
 
@@ -69,19 +72,17 @@ std::optional<ProfileEntry> EntryForProfile(Profile* profile) {
   };
 }
 
-void InsertTab(Browser* browser,
-               Profile* profile,
-               const GURL& url,
-               TabCreatedCallback callback) {
+content::WebContents* InsertTab(Browser* browser,
+                                Profile* profile,
+                                const GURL& url,
+                                int index) {
   if (!browser || !profile) {
-    std::move(callback).Run(nullptr);
-    return;
+    return nullptr;
   }
 
   if (profile == browser->profile()) {
-    std::move(callback).Run(
-        chrome::AddAndReturnTabAt(browser, url, -1, true, std::nullopt, false));
-    return;
+    return chrome::AddAndReturnTabAt(browser, url, index, true, std::nullopt,
+                                     false);
   }
 
   std::unique_ptr<content::WebContents> contents =
@@ -92,16 +93,41 @@ void InsertTab(Browser* browser,
   NavigateParams params(browser, std::move(contents));
   params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
   params.transition = ui::PAGE_TRANSITION_TYPED;
-  params.tabstrip_index = -1;
+  params.tabstrip_index = index;
   Navigate(&params);
-  std::move(callback).Run(params.navigated_or_inserted_contents);
+  return params.navigated_or_inserted_contents;
 }
 
 void OnProfileResolved(base::WeakPtr<Browser> browser,
                        GURL url,
                        TabCreatedCallback callback,
                        Profile* profile) {
-  InsertTab(browser.get(), profile, url, std::move(callback));
+  std::move(callback).Run(InsertTab(browser.get(), profile, url, -1));
+}
+
+void OnMoveProfileResolved(base::WeakPtr<Browser> browser,
+                           tabs::TabHandle handle,
+                           GURL url,
+                           TabCreatedCallback callback,
+                           Profile* profile) {
+  tabs::TabInterface* tab = handle.Get();
+  if (!browser || !tab) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+  TabStripModel* model = browser->tab_strip_model();
+  const int index = model->GetIndexOfTab(tab);
+  if (index == TabStripModel::kNoTab) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+  content::WebContents* created =
+      InsertTab(browser.get(), profile, url, index + 1);
+  const int old_index = model->GetIndexOfTab(tab);
+  if (old_index != TabStripModel::kNoTab) {
+    model->CloseWebContentsAt(old_index, TabCloseTypes::CLOSE_NONE);
+  }
+  std::move(callback).Run(created);
 }
 
 void OnFallbackToShell(base::WeakPtr<Browser> browser,
@@ -181,6 +207,20 @@ void ResolveProfile(Browser* browser,
                            std::move(callback)));
 }
 
+std::string ProfileIdOfTab(Browser* browser, const tabs_api::NodeId& tab_id) {
+  if (!browser) {
+    return std::string();
+  }
+  std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
+  tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
+  content::WebContents* contents = tab ? tab->GetContents() : nullptr;
+  if (!contents || contents->GetBrowserContext() == browser->profile()) {
+    return std::string();
+  }
+  return IdForPath(
+      Profile::FromBrowserContext(contents->GetBrowserContext())->GetPath());
+}
+
 void SetActiveProfile(BrowserWindowInterface* browser, Profile* profile) {
   if (!browser) {
     return;
@@ -245,6 +285,29 @@ void CreateTabInProfile(Browser* browser,
   ResolveProfile(browser, profile_id,
                  base::BindOnce(&OnProfileResolved, browser->AsWeakPtr(), url,
                                 std::move(callback)));
+}
+
+void MoveTabToProfile(Browser* browser,
+                      const tabs_api::NodeId& tab_id,
+                      const std::string& profile_id,
+                      TabCreatedCallback callback) {
+  std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
+  tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
+  content::WebContents* contents = tab ? tab->GetContents() : nullptr;
+  if (!browser || !contents) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+  GURL url = contents->GetLastCommittedURL();
+  if (url.is_empty()) {
+    url = contents->GetVisibleURL();
+  }
+  if (url.is_empty()) {
+    url = GURL(url::kAboutBlankURL);
+  }
+  ResolveProfile(browser, profile_id,
+                 base::BindOnce(&OnMoveProfileResolved, browser->AsWeakPtr(),
+                                *handle, url, std::move(callback)));
 }
 
 }  // namespace rail

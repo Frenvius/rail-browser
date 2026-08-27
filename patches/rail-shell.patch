@@ -3800,6 +3800,36 @@ index 7ed817af4c..a982765715 100644
  };
  
  #endif  // CHROME_BROWSER_DEVTOOLS_DEVTOOLS_UI_CONTROLLER_H_
+diff --git a/chrome/browser/extensions/chrome_extension_function_details.cc b/chrome/browser/extensions/chrome_extension_function_details.cc
+index 9cfacb4358..8bf5c7b1a2 100644
+--- a/chrome/browser/extensions/chrome_extension_function_details.cc
++++ b/chrome/browser/extensions/chrome_extension_function_details.cc
+@@ -75,7 +75,7 @@ WindowController* ChromeExtensionFunctionDetails::GetCurrentWindowController()
+   // all of this profile's browser windows may have been closed.
+   // A similar situation may arise during shutdown.
+   // TODO(rafaelw): Delay creation of background_page until the browser
+-  // is available. http://code.google.com/p/chromium/issues/detail?id=13284
++  // is available. http://code.9oo91e.qjz9zk/p/chromium/issues/detail?id=13284
+   return window_controller;
+ }
+ 
+@@ -89,6 +89,16 @@ gfx::NativeWindow ChromeExtensionFunctionDetails::GetNativeWindowForUI() {
+     return controller->window()->GetNativeWindow();
+   }
+ 
++  for (WindowController* window : *WindowControllerList::GetInstance()) {
++    for (int i = 0; i < window->GetTabCount(); ++i) {
++      content::WebContents* contents = window->GetWebContentsAt(i);
++      if (contents &&
++          contents->GetBrowserContext() == function_->browser_context()) {
++        return window->window()->GetNativeWindow();
++      }
++    }
++  }
++
+   // Next, check the sender web contents for if it supports modal dialogs.
+   // TODO(devlin): This seems weird. Why wouldn't we check this first?
+   content::WebContents* sender_web_contents = function_->GetSenderWebContents();
 diff --git a/chrome/browser/extensions/extension_context_menu_model.cc b/chrome/browser/extensions/extension_context_menu_model.cc
 index 1d161edee9..7502e4ab41 100644
 --- a/chrome/browser/extensions/extension_context_menu_model.cc
@@ -4877,15 +4907,16 @@ index 8ad3ede567..5e6cafd65b 100644
      this.requestUpdate();
    }
 diff --git a/chrome/browser/resources/webui_browser/extensions_bar.css b/chrome/browser/resources/webui_browser/extensions_bar.css
-index 8ee44235b6..a9454491b5 100644
+index 8ee44235b6..fc2b5e5e49 100644
 --- a/chrome/browser/resources/webui_browser/extensions_bar.css
 +++ b/chrome/browser/resources/webui_browser/extensions_bar.css
-@@ -15,6 +15,10 @@
+@@ -15,6 +15,11 @@
    display: flex;
  }
  
 +:host([foreign-profile]) #extensionsMenuButton {
-+  display: none;
++  pointer-events: none;
++  visibility: hidden;
 +}
 +
  cr-icon-button {
@@ -5353,7 +5384,7 @@ index 65d7e76ce5..83eb6a494b 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..efc1b153d1 100644
+index aa4e0fe69e..2c930e50ce 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -5509,13 +5540,18 @@ index aa4e0fe69e..efc1b153d1 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +217,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +217,32 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
 +
 +    this.openStartupTab_(restoredRow);
 +    this.syncSleepingTabs_();
++    for (const item of this.items_) {
++      if (item.type === 'tab') {
++        this.ensureProfile_(item.id);
++      }
++    }
 +  }
 +
 +  private async restoreSidebar_(tabs: Tab[]) {
@@ -5537,7 +5573,7 @@ index aa4e0fe69e..efc1b153d1 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +259,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +264,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -5566,7 +5602,7 @@ index aa4e0fe69e..efc1b153d1 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +295,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +300,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -5581,7 +5617,7 @@ index aa4e0fe69e..efc1b153d1 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -240,15 +355,24 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -240,15 +360,24 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // End TabStripObserver impl:
  
@@ -5615,12 +5651,25 @@ index aa4e0fe69e..efc1b153d1 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,19 +382,640 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,19 +387,659 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
 +
 +    this.resolveOpener_(tab.id, tab.isActive, anchored || requested);
++    this.ensureProfile_(tab.id);
++  }
++
++  private async ensureProfile_(tabId: NodeId) {
++    const spaceId = this.spaces_.spaceOf(tabId);
++    const {profileId} =
++        await browserProxyFactory.getInstance().handler.getTabProfile(tabId);
++    if (profileId === this.spaces_.profileOf(spaceId) ||
++        this.spaces_.spaceOf(tabId) !== spaceId ||
++        !this.findItem_<TabItem>(tabId, 'tab')) {
++      return;
++    }
++    this.reprofile_(tabId, spaceId, this.entryFor_(tabId)?.key ?? '');
 +  }
 +
 +  private placeInModelOrder_(
@@ -5966,7 +6015,7 @@ index aa4e0fe69e..efc1b153d1 100644
 +          this.spaces_.profileOf(spaceId);
 +      this.spaces_.assign(tabId, spaceId, target.url);
 +      if (rehome) {
-+        this.reprofile_(tabId, spaceId, target.url, entry?.key ?? '');
++        this.reprofile_(tabId, spaceId, entry?.key ?? '');
 +      } else if (wasActive) {
 +        this.focusSpace_();
 +      }
@@ -5974,11 +6023,19 @@ index aa4e0fe69e..efc1b153d1 100644
 +    this.refreshSections_();
 +  }
 +
-+  private async reprofile_(
-+      tabId: string, spaceId: string, url: string, key: string) {
++  private async reprofile_(tabId: string, spaceId: string, key: string) {
 +    const rowKey = this.spaces_.detach(tabId);
-+    this.closeTabs_([tabId]);
-+    const created = await this.createTab_(url, spaceId);
++    this.spaces_.expectTab();
++    let created = '';
++    try {
++      const {id} =
++          await browserProxyFactory.getInstance().handler.moveTabToProfile(
++              tabId, this.spaces_.profileOf(spaceId));
++      created = id ?? '';
++      this.spaces_.claim(created, spaceId);
++    } finally {
++      this.spaces_.settleTab();
++    }
 +    this.spaces_.bind(rowKey, created);
 +    if (key) {
 +      this.pinnedTabs_.attach(key, created);
@@ -6034,9 +6091,7 @@ index aa4e0fe69e..efc1b153d1 100644
 +      return;
 +    }
 +    for (const tabId of this.spaces_.tabsIn(spaceId)) {
-+      this.reprofile_(
-+          tabId, spaceId, this.spaces_.urlOf(tabId),
-+          this.entryFor_(tabId)?.key ?? '');
++      this.reprofile_(tabId, spaceId, this.entryFor_(tabId)?.key ?? '');
 +    }
 +    this.refreshSections_();
 +  }
@@ -6257,7 +6312,7 @@ index aa4e0fe69e..efc1b153d1 100644
      this.tabStripService_.activateTab(tabId);
      this.fire<TabActivated>('tab-activated', item.tabData);
    }
-@@ -288,6 +1033,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -288,6 +1057,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
@@ -6270,7 +6325,7 @@ index aa4e0fe69e..efc1b153d1 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -303,6 +1054,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -303,6 +1078,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private removeItem(id: NodeId) {
@@ -6279,7 +6334,7 @@ index aa4e0fe69e..efc1b153d1 100644
      const itemToRemove = this.findItem_<TabStripItem>(id);
      this.setItems_(this.items_.filter(item => item.id !== id));
  
-@@ -311,8 +1064,105 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,8 +1088,105 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6386,7 +6441,7 @@ index aa4e0fe69e..efc1b153d1 100644
    }
  
    // Utility helpers:
-@@ -334,11 +1184,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -334,11 +1208,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private setActiveTab_(id: string) {
@@ -6403,7 +6458,7 @@ index aa4e0fe69e..efc1b153d1 100644
    }
  
    private updateItemAt_(index: number, item: TabStripItem) {
-@@ -367,8 +1222,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -367,8 +1246,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // TabDragHost impl:
  
@@ -6415,7 +6470,7 @@ index aa4e0fe69e..efc1b153d1 100644
    }
  
    getTabElementForDrag(id: string) {
-@@ -376,7 +1233,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -376,7 +1257,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    setItemsForDrag(items: TabStripItem[]) {
@@ -6427,7 +6482,7 @@ index aa4e0fe69e..efc1b153d1 100644
    }
  
    activateTabForDrag(id: string) {
-@@ -391,16 +1251,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -391,16 +1275,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      this.$.tabstrip.classList.toggle('nodrag', noDrag);
    }
  
@@ -6463,16 +6518,12 @@ index aa4e0fe69e..efc1b153d1 100644
 +
 +  onTabDragEnded(inside: boolean) {
 +    this.dragDelegate_.onDragEnded(inside);
-   }
- 
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
++  }
++
 +  onTabDropTarget(visible: boolean) {
 +    this.dropTarget_ = visible;
-   }
- 
--  closeDragElement() {
--    this.dragDelegate_.onMouseUp();
++  }
++
 +  setTabPinned(tabId: string, pinned: boolean) {
 +    for (const id of this.dragRowIds_(tabId)) {
 +      if (pinned) {
@@ -6481,8 +6532,10 @@ index aa4e0fe69e..efc1b153d1 100644
 +        this.unpinTab_(id);
 +      }
 +    }
-+  }
-+
+   }
+ 
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  moveTabToSpace(tabId: string, spaceId: string) {
 +    for (const id of this.dragRowIds_(tabId)) {
 +      const target = this.targetFor(id);
@@ -6490,8 +6543,10 @@ index aa4e0fe69e..efc1b153d1 100644
 +        this.moveToSpace_(target, spaceId);
 +      }
 +    }
-+  }
-+
+   }
+ 
+-  closeDragElement() {
+-    this.dragDelegate_.onMouseUp();
 +  protected onTabMousedown_(e: MouseEvent) {
 +    this.dragDelegate_.onMouseDown(e);
    }
@@ -7112,7 +7167,7 @@ index e17b41f80f..e7fddbb661 100644
    // attempt to add tabs to the browser before it closes.
    is_attempting_to_close_browser_ = true;
 diff --git a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
-index 42725ab442..3eee327e13 100644
+index 42725ab442..0aff170cdc 100644
 --- a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 +++ b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 @@ -11,6 +11,7 @@
@@ -7123,7 +7178,7 @@ index 42725ab442..3eee327e13 100644
  #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window.h"
-@@ -174,11 +175,38 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
+@@ -174,14 +175,44 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
      : browser_(browser),
        widget_(widget),
        web_contents_(web_contents),
@@ -7164,7 +7219,25 @@ index 42725ab442..3eee327e13 100644
  }
  
  WebUIToolbarExtensionsContainer::~WebUIToolbarExtensionsContainer() {
-@@ -437,7 +465,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
++  HideActivePopup();
++  CloseExtensionsMenuIfOpen();
++  context_menu_.reset();
+   for (const auto& [_, action] : actions_) {
+     action->model()->UnregisterCommand();
+   }
+@@ -293,7 +324,10 @@ views::BubbleAnchor WebUIToolbarExtensionsContainer::GetReferenceButtonForPopup(
+     const extensions::ExtensionId& action_id) {
+   auto it = actions_.find(action_id);
+   CHECK(it != actions_.end());
+-  return views::BubbleAnchor(it->second->GetAnchor());
++  if (ui::TrackedElement* anchor = it->second->GetAnchor()) {
++    return views::BubbleAnchor(anchor);
++  }
++  return views::BubbleAnchor(widget_->GetRootView());
+ }
+ 
+ void WebUIToolbarExtensionsContainer::CollapseConfirmation() {
+@@ -437,7 +471,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
        ExtensionActionViewModel::Create(
            action_id, &browser_.get(),
            std::make_unique<ExtensionActionDelegateDesktop>(&browser_.get(),
@@ -7303,7 +7376,7 @@ index 3d4fe27f4f..74d1056246 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..f6fa91f5e6 100644
+index 15a65f7152..e32d98c9b1 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -7,6 +7,7 @@ module webui_browser.mojom;
@@ -7390,7 +7463,7 @@ index 15a65f7152..f6fa91f5e6 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +137,44 @@ interface PageHandler {
+@@ -90,6 +137,49 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -7410,6 +7483,11 @@ index 15a65f7152..f6fa91f5e6 100644
 +
 +  CreateTabInProfile(string profile_id, url.mojom.Url? url)
 +      => (tabs_api.mojom.NodeId? id);
++
++  MoveTabToProfile(tabs_api.mojom.NodeId id, string profile_id)
++      => (tabs_api.mojom.NodeId? id);
++
++  GetTabProfile(tabs_api.mojom.NodeId id) => (string profile_id);
 +
 +  GetTabOpener(tabs_api.mojom.NodeId id)
 +      => (tabs_api.mojom.NodeId? opener);
@@ -7566,7 +7644,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..f1a3aa4240 100644
+index 3ba14e7289..694623b004 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -7655,7 +7733,7 @@ index 3ba14e7289..f1a3aa4240 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +367,175 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +367,188 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -7757,6 +7835,19 @@ index 3ba14e7289..f1a3aa4240 100644
 +                           base::BindOnce(&ReplyWithTab, std::move(callback)));
 +}
 +
++void WebUIBrowserPageHandler::MoveTabToProfile(
++    const tabs_api::NodeId& id,
++    const std::string& profile_id,
++    MoveTabToProfileCallback callback) {
++  rail::MoveTabToProfile(GetBrowser(), id, profile_id,
++                         base::BindOnce(&ReplyWithTab, std::move(callback)));
++}
++
++void WebUIBrowserPageHandler::GetTabProfile(const tabs_api::NodeId& id,
++                                            GetTabProfileCallback callback) {
++  std::move(callback).Run(rail::ProfileIdOfTab(GetBrowser(), id));
++}
++
 +void WebUIBrowserPageHandler::GetTabOpener(const tabs_api::NodeId& id,
 +                                           GetTabOpenerCallback callback) {
 +  std::move(callback).Run(rail::OpenerOfTab(GetBrowser(), id));
@@ -7832,7 +7923,7 @@ index 3ba14e7289..f1a3aa4240 100644
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..3b0784348a 100644
+index 859da4ef00..e7789d75d2 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -25,6 +25,10 @@ class MenuModelAdapter;
@@ -7846,7 +7937,7 @@ index 859da4ef00..3b0784348a 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +60,44 @@ class WebUIBrowserPageHandler
+@@ -56,8 +60,49 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -7863,6 +7954,11 @@ index 859da4ef00..3b0784348a 100644
 +  void CreateTabInProfile(const std::string& profile_id,
 +                          const std::optional<GURL>& url,
 +                          CreateTabInProfileCallback callback) override;
++  void MoveTabToProfile(const tabs_api::NodeId& id,
++                        const std::string& profile_id,
++                        MoveTabToProfileCallback callback) override;
++  void GetTabProfile(const tabs_api::NodeId& id,
++                     GetTabProfileCallback callback) override;
 +  void GetTabOpener(const tabs_api::NodeId& id,
 +                    GetTabOpenerCallback callback) override;
 +  void GetOpeners(GetOpenersCallback callback) override;
@@ -7891,7 +7987,7 @@ index 859da4ef00..3b0784348a 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +109,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +114,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -7900,7 +7996,7 @@ index 859da4ef00..3b0784348a 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -82,6 +124,8 @@ class WebUIBrowserPageHandler
+@@ -82,6 +129,8 @@ class WebUIBrowserPageHandler
    // services, causing a raw_ptr of BrowserUI dangling here, so use a weak ptr
    // instead.
    base::WeakPtr<WebUIBrowserUI> controller_;
