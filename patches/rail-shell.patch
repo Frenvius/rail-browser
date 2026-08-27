@@ -3722,6 +3722,84 @@ index f8363d5b29..101252dc70 100644
  COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
  MAC_BUNDLE_ID=org.chromium.Chromium
  MAC_CREATOR_CODE=Cr24
+diff --git a/chrome/browser/devtools/devtools_ui_controller.cc b/chrome/browser/devtools/devtools_ui_controller.cc
+index a6dc6e1e65..8cbdbd1ef2 100644
+--- a/chrome/browser/devtools/devtools_ui_controller.cc
++++ b/chrome/browser/devtools/devtools_ui_controller.cc
+@@ -27,6 +27,14 @@ DevtoolsUIController::DevtoolsUIController(
+   }
+ }
+ 
++DevtoolsUIController::DevtoolsUIController(
++    BrowserWindowInterface* browser,
++    DevtoolsUpdatedCallback devtools_updated)
++    : can_dock_devtools_(browser->GetType() ==
++                         BrowserWindowInterface::Type::TYPE_NORMAL),
++      scoped_data_holder_(browser->GetUnownedUserDataHost(), *this),
++      devtools_updated_(std::move(devtools_updated)) {}
++
+ DevtoolsUIController::~DevtoolsUIController() = default;
+ 
+ DevtoolsUIController* DevtoolsUIController::From(
+@@ -41,6 +49,14 @@ void DevtoolsUIController::TearDown() {
+ bool DevtoolsUIController::UpdateDevtools(
+     content::WebContents* web_contents,
+     bool update_devtools_web_contents) {
++  if (devtools_updated_) {
++    DevToolsContentsResizingStrategy strategy;
++    content::WebContents* devtools =
++        DevToolsWindow::GetInTabWebContents(web_contents, &strategy);
++    devtools_updated_.Run(devtools, strategy);
++    return devtools != nullptr;
++  }
++
+   auto it = std::ranges::find_if(
+       devtools_web_view_controllers_, [&web_contents](const auto& entry) {
+         return entry.first->contents_view()->web_contents() == web_contents;
+diff --git a/chrome/browser/devtools/devtools_ui_controller.h b/chrome/browser/devtools/devtools_ui_controller.h
+index 7ed817af4c..a982765715 100644
+--- a/chrome/browser/devtools/devtools_ui_controller.h
++++ b/chrome/browser/devtools/devtools_ui_controller.h
+@@ -8,12 +8,14 @@
+ #include <memory>
+ 
+ #include "base/callback_list.h"
++#include "base/functional/callback.h"
+ #include "base/memory/raw_ptr.h"
+ #include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
+ #include "ui/views/focus/external_focus_tracker.h"
+ 
+ class BrowserWindowInterface;
+ class ContentsContainerView;
++class DevToolsContentsResizingStrategy;
+ 
+ namespace content {
+ class WebContents;
+@@ -28,9 +30,15 @@ class DevtoolsUIController {
+  public:
+   DECLARE_USER_DATA(DevtoolsUIController);
+ 
++  using DevtoolsUpdatedCallback =
++      base::RepeatingCallback<void(content::WebContents*,
++                                   const DevToolsContentsResizingStrategy&)>;
++
+   DevtoolsUIController(
+       BrowserWindowInterface* browser,
+       std::vector<ContentsContainerView*> contents_container_views);
++  DevtoolsUIController(BrowserWindowInterface* browser,
++                       DevtoolsUpdatedCallback devtools_updated);
+   ~DevtoolsUIController();
+ 
+   DevtoolsUIController(const DevtoolsUIController&) = delete;
+@@ -94,6 +102,8 @@ class DevtoolsUIController {
+   const bool can_dock_devtools_;
+ 
+   ui::ScopedUnownedUserData<DevtoolsUIController> scoped_data_holder_;
++
++  DevtoolsUpdatedCallback devtools_updated_;
+ };
+ 
+ #endif  // CHROME_BROWSER_DEVTOOLS_DEVTOOLS_UI_CONTROLLER_H_
 diff --git a/chrome/browser/extensions/extension_context_menu_model.cc b/chrome/browser/extensions/extension_context_menu_model.cc
 index 1d161edee9..7502e4ab41 100644
 --- a/chrome/browser/extensions/extension_context_menu_model.cc
@@ -6557,11 +6635,59 @@ index a94af80a25..19d95edcd0 100644
            this.guestId = guestId;
            this.tryToAttach();
          });
+diff --git a/chrome/browser/taskbar/taskbar_decorator_win.cc b/chrome/browser/taskbar/taskbar_decorator_win.cc
+index 90969f7bb0..e445d7736a 100644
+--- a/chrome/browser/taskbar/taskbar_decorator_win.cc
++++ b/chrome/browser/taskbar/taskbar_decorator_win.cc
+@@ -193,37 +193,7 @@ void DrawTaskbarDecoration(gfx::NativeWindow window, const gfx::Image* image) {
+ }
+ 
+ void UpdateTaskbarDecoration(Profile* profile, gfx::NativeWindow window) {
+-  if (profile->IsGuestSession() ||
+-      // Browser process and profile manager may be null in tests.
+-      (g_browser_process && g_browser_process->profile_manager() &&
+-       g_browser_process->profile_manager()
+-               ->GetProfileAttributesStorage()
+-               .GetNumberOfProfiles() <= 1)) {
+-    taskbar::DrawTaskbarDecoration(window, nullptr);
+-    return;
+-  }
+-
+-  // We need to draw the taskbar decoration. Even though we have an icon on the
+-  // window's relaunch details, we draw over it because the user may have
+-  // pinned the badge-less Chrome shortcut which will cause Windows to ignore
+-  // the relaunch details.
+-  // TODO(calamity): ideally this should not be necessary but due to issues
+-  // with the default shortcut being pinned, we add the runtime badge for
+-  // safety. See crbug.com/41070028.
+-  gfx::Image decoration;
+-  AvatarMenu::ImageLoadStatus status = AvatarMenu::GetImageForMenuButton(
+-      profile->GetPath(), &decoration, kOverlayIconSize);
+-
+-  // If the user is using a Gaia picture and the picture is still being loaded,
+-  // wait until the load finishes. This taskbar decoration will be triggered
+-  // again upon the finish of the picture load.
+-  if (status == AvatarMenu::ImageLoadStatus::LOADING ||
+-      status == AvatarMenu::ImageLoadStatus::PROFILE_DELETED ||
+-      status == AvatarMenu::ImageLoadStatus::BROWSER_SHUTTING_DOWN) {
+-    return;
+-  }
+-
+-  taskbar::DrawTaskbarDecoration(window, &decoration);
++  taskbar::DrawTaskbarDecoration(window, nullptr);
+ }
+ 
+ }  // namespace taskbar
 diff --git a/chrome/browser/ui/browser.cc b/chrome/browser/ui/browser.cc
-index b6bcac3e84..06e0dba3b5 100644
+index b6bcac3e84..df62c9ca0c 100644
 --- a/chrome/browser/ui/browser.cc
 +++ b/chrome/browser/ui/browser.cc
-@@ -154,6 +154,7 @@
+@@ -150,10 +150,12 @@
+ #include "chrome/browser/ui/unload_controller.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/frame/contents_web_view.h"
++#include "chrome/browser/ui/views/message_box_dialog.h"
+ #include "chrome/browser/ui/views/status_bubble_views.h"
  #include "chrome/browser/ui/web_applications/app_browser_controller.h"
  #include "chrome/browser/ui/web_modal/browser_window_modal_dialog_delegate.h"
  #include "chrome/browser/ui/webui/signin/login_ui_service.h"
@@ -6569,7 +6695,40 @@ index b6bcac3e84..06e0dba3b5 100644
  #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
  #include "chrome/browser/ui/window_feature_controller/window_feature_controller.h"
  #include "chrome/browser/ui/window_sizer/window_sizer.h"
-@@ -1463,6 +1464,9 @@ void Browser::OnTabStripModelChanged(TabStripModel* tab_strip_model,
+@@ -533,6 +535,7 @@ Browser::Browser(const CreateParams& params)
+       should_trigger_session_restore_(params.should_trigger_session_restore),
+       cancel_download_confirmation_state_(
+           CancelDownloadConfirmationState::kNotPrompted),
++      close_multitab_confirmation_state_(CancelDownloadConfirmationState::kNotPrompted),
+       override_bounds_(params.initial_bounds),
+       initial_show_state_(params.initial_show_state),
+       initial_workspace_(params.initial_workspace),
+@@ -897,10 +900,12 @@ Browser::WarnBeforeClosingResult Browser::MaybeWarnBeforeClosing(
+     return WarnBeforeClosingResult::kOkToClose;
+   }
+ 
+-  // `CanCloseWithInProgressDownloads()` may trigger a modal dialog.
+-  bool can_close_with_downloads = CanCloseWithInProgressDownloads();
+-  if (can_close_with_downloads) {
+-    return WarnBeforeClosingResult::kOkToClose;
++  if (CanCloseWithMultipleTabs()) {
++    // `CanCloseWithInProgressDownloads()` may trigger a modal dialog.
++    bool can_close_with_downloads = CanCloseWithInProgressDownloads();
++    if (can_close_with_downloads) {
++      return WarnBeforeClosingResult::kOkToClose;
++    }
+   }
+ 
+   DCHECK(!warn_before_closing_callback_)
+@@ -954,6 +959,7 @@ bool Browser::TryToCloseWindow(
+ void Browser::ResetTryToCloseWindow() {
+   cancel_download_confirmation_state_ =
+       CancelDownloadConfirmationState::kNotPrompted;
++  close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kNotPrompted;
+   UnloadController::From(this)->ResetTryToCloseWindow();
+ }
+ 
+@@ -1463,6 +1469,9 @@ void Browser::OnTabStripModelChanged(TabStripModel* tab_strip_model,
  
  
  void Browser::TabStripEmpty() {
@@ -6579,6 +6738,89 @@ index b6bcac3e84..06e0dba3b5 100644
    // Note: even though the tab strip is empty, the call to Close() may not
    // result in closing this Browser. This can happen in the case of closing
    // the last Browser with ongoing downloads.
+@@ -3128,6 +3137,59 @@ bool Browser::CanCloseWithInProgressDownloads() {
+   return false;
+ }
+ 
++bool Browser::CanCloseWithMultipleTabs() {
++  if (!base::CommandLine::ForCurrentProcess()->HasSwitch("close-confirmation"))
++    return true;
++
++  // If we've prompted, we need to hear from the user before we
++  // can close.
++  if (close_multitab_confirmation_state_ != CancelDownloadConfirmationState::kNotPrompted)
++    return close_multitab_confirmation_state_ != CancelDownloadConfirmationState::kWaitingForResponse;
++
++  // If we're not running a full browser process with a profile manager
++  // (testing), it's ok to close the browser.
++  if (!g_browser_process->profile_manager())
++    return true;
++
++  // Figure out how many windows are open total
++  int total_window_count = 0;
++  GlobalBrowserCollection::GetInstance()->ForEach([&total_window_count, this](BrowserWindowInterface* browser) {
++    // Don't count this browser window or any other in the process of closing.
++    // Window closing may be delayed, and windows that are in the process of
++    // closing don't count against our totals.
++    if (browser != this && !browser->capabilities()->IsAttemptingToCloseBrowser()) {
++      total_window_count++;
++    }
++    return true;
++  });
++
++  const auto flag_value = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII("close-confirmation");
++  bool show_confirmation_last_window = flag_value == "last";
++
++  if (show_confirmation_last_window) {
++    if (total_window_count >= 1 || this->tab_strip_model()->count() <= 1)
++      return true;
++  } else {
++    if (total_window_count == 0)
++      return true;
++    if (this->tab_strip_model()->count() == 0)
++      tab_strip_model_delegate_->AddTabAt(GURL(), -1, true);
++  }
++
++  close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kWaitingForResponse;
++
++  auto callback = base::BindOnce(&Browser::MultitabResponse,
++                                 weak_factory_.GetWeakPtr());
++  MessageBoxDialog::Show(window_->GetNativeWindow(),
++                         u"Do you want to close this window?", std::u16string(),
++                         chrome::MESSAGE_BOX_TYPE_QUESTION, u"Close", u"Cancel",
++                         std::u16string(), std::move(callback));
++
++  // Return false so the browser does not close.  We'll close if the user
++  // confirms in the dialog.
++  return false;
++}
++
+ void Browser::InProgressDownloadResponse(bool cancel_downloads) {
+   if (cancel_downloads) {
+     cancel_download_confirmation_state_ =
+@@ -3151,6 +3213,22 @@ void Browser::InProgressDownloadResponse(bool cancel_downloads) {
+       .Run(WarnBeforeClosingResult::kDoNotClose);
+ }
+ 
++void Browser::MultitabResponse(chrome::MessageBoxResult result) {
++  if (result == chrome::MESSAGE_BOX_RESULT_YES) {
++    close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kResponseReceived;
++    std::move(warn_before_closing_callback_)
++        .Run(WarnBeforeClosingResult::kOkToClose);
++    return;
++  }
++
++  // Sets the confirmation state to kNotPrompted so that if the user tries to
++  // close again we'll show the warning again.
++  close_multitab_confirmation_state_ = CancelDownloadConfirmationState::kNotPrompted;
++
++  std::move(warn_before_closing_callback_)
++      .Run(WarnBeforeClosingResult::kDoNotClose);
++}
++
+ void Browser::FinishWarnBeforeClosing(WarnBeforeClosingResult result) {
+   switch (result) {
+     case WarnBeforeClosingResult::kOkToClose:
 diff --git a/chrome/browser/ui/browser_window/internal/browser_window_features.cc b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
 index 77f5a0e8f4..3764ce07e1 100644
 --- a/chrome/browser/ui/browser_window/internal/browser_window_features.cc
