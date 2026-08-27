@@ -6499,7 +6499,7 @@ index cee7a49569..21f19f527e 100644
      this.$.input.focus();
    }
 diff --git a/chrome/browser/resources/webui_browser/webview.ts b/chrome/browser/resources/webui_browser/webview.ts
-index a94af80a25..697b0dbf6a 100644
+index a94af80a25..19d95edcd0 100644
 --- a/chrome/browser/resources/webui_browser/webview.ts
 +++ b/chrome/browser/resources/webui_browser/webview.ts
 @@ -37,6 +37,16 @@ export class WebviewElement extends CrLitElement {
@@ -6551,7 +6551,7 @@ index a94af80a25..697b0dbf6a 100644
          .getGuestIdForTabId(
              this.tabId, this.guestHandler.$.bindNewPipeAndPassReceiver())
          .then(({guestId}) => {
-+          if (this.aborted) {
++          if (this.aborted || !guestId) {
 +            return;
 +          }
            this.guestId = guestId;
@@ -6717,6 +6717,28 @@ index 011fcf743f..50bb64b01d 100644
      // If the container is not available, show a modal dialog.
      ShowModalDialog(parent, std::move(dialog_model));
    }
+diff --git a/chrome/browser/ui/extensions/extension_install_ui_desktop.cc b/chrome/browser/ui/extensions/extension_install_ui_desktop.cc
+index 26fd80c026..7349a463a1 100644
+--- a/chrome/browser/ui/extensions/extension_install_ui_desktop.cc
++++ b/chrome/browser/ui/extensions/extension_install_ui_desktop.cc
+@@ -26,6 +26,7 @@
+ #include "chrome/browser/ui/simple_message_box.h"
+ #include "chrome/browser/ui/singleton_tabs.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
+ #include "components/infobars/content/content_infobar_manager.h"
+ #include "content/public/browser/browser_thread.h"
+ #include "content/public/browser/web_contents.h"
+@@ -49,6 +50,9 @@ using extensions::Extension;
+ namespace {
+ 
+ BrowserWindowInterface* FindOrCreateVisibleBrowser(Profile* profile) {
++  if (BrowserWindowInterface* hosting = rail::WindowHostingProfile(profile)) {
++    return hosting;
++  }
+   chrome::ScopedTabbedBrowserDisplayer displayer(profile);
+   Browser* browser = displayer.browser();
+   if (browser->tab_strip_model()->count() == 0) {
 diff --git a/chrome/browser/ui/navigator/BUILD.gn b/chrome/browser/ui/navigator/BUILD.gn
 index dd6a523d45..bbb4c2257f 100644
 --- a/chrome/browser/ui/navigator/BUILD.gn
@@ -7027,7 +7049,7 @@ index 3d4fe27f4f..74d1056246 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..9b29c2f3ad 100644
+index 15a65f7152..f6fa91f5e6 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -7,6 +7,7 @@ module webui_browser.mojom;
@@ -7105,6 +7127,15 @@ index 15a65f7152..9b29c2f3ad 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
+@@ -55,7 +102,7 @@ interface PageHandler {
+   GetGuestIdForTabId(
+       tabs_api.mojom.NodeId tab_id,
+       pending_receiver<GuestHandler> handler)
+-      => (mojo_base.mojom.UnguessableToken guest_id);
++      => (mojo_base.mojom.UnguessableToken? guest_id);
+ 
+   // Load TabSearch in a guest contents and returns the guest id.
+   LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
 @@ -90,6 +137,44 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
@@ -7281,7 +7312,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..693e88e9c7 100644
+index 3ba14e7289..f1a3aa4240 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -7313,6 +7344,21 @@ index 3ba14e7289..693e88e9c7 100644
  #include "components/omnibox/browser/location_bar_model.h"
  #include "components/omnibox/browser/vector_icons.h"
  #include "components/vector_icons/vector_icons.h"
+@@ -198,12 +209,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+   }
+ 
+   if (!tab) {
+-    mojo::ReportBadMessage("Invalid tab id");
++    std::move(callback).Run(std::nullopt);
+     return;
+   }
+   content::WebContents* tab_contents = tab->GetContents();
+   if (tab_contents == nullptr) {
+-    mojo::ReportBadMessage("Tab has no contents");
++    std::move(callback).Run(std::nullopt);
+     return;
+   }
+ 
 @@ -244,8 +255,8 @@ void WebUIBrowserPageHandler::OpenAppMenu() {
        BrowserElements::From(GetBrowser())
            ->GetElement(kToolbarAppMenuButtonElementId);
@@ -8890,6 +8936,40 @@ index 4864368f4a..aacb838400 100644
        </message>
      </messages>
    </release>
+diff --git a/components/guest_contents/browser/guest_contents_host_impl.cc b/components/guest_contents/browser/guest_contents_host_impl.cc
+index aa7791d044..01962b2b4f 100644
+--- a/components/guest_contents/browser/guest_contents_host_impl.cc
++++ b/components/guest_contents/browser/guest_contents_host_impl.cc
+@@ -44,7 +44,7 @@ void GuestContentsHostImpl::Attach(
+   GuestContentsHandle* guest_handle =
+       GuestContentsHandle::FromID(guest_contents_id);
+   if (!guest_handle) {
+-    mojo::ReportBadMessage("GuestContentsHandle not found");
++    std::move(callback).Run(/*success=*/false);
+     return;
+   }
+ 
+@@ -61,6 +61,7 @@ void GuestContentsHostImpl::Attach(
+ 
+   if (!frame_to_swap) {
+     mojo::ReportBadMessage("Outer delegate frame not found");
++    std::move(callback).Run(/*success=*/false);
+     return;
+   }
+ 
+diff --git a/components/guest_contents/renderer/swap_render_frame.cc b/components/guest_contents/renderer/swap_render_frame.cc
+index 6d18379414..0a901cd75d 100644
+--- a/components/guest_contents/renderer/swap_render_frame.cc
++++ b/components/guest_contents/renderer/swap_render_frame.cc
+@@ -63,7 +63,7 @@ void SwapRenderFrame(content::RenderFrame* render_frame,
+       ->remote()
+       ->Attach(render_frame->GetWebFrame()->GetLocalFrameToken(),
+                guest_contents_id,
+-               base::BindOnce([](bool success) { CHECK(success); }));
++               base::BindOnce([](bool success) {}));
+ }
+ 
+ }  // namespace guest_contents::renderer
 diff --git a/components/management_strings.grdp b/components/management_strings.grdp
 index 3c4ddf0d6e..6bbaf9e894 100644
 --- a/components/management_strings.grdp
@@ -9588,6 +9668,22 @@ index fe05eb81d5..48557ee3e2 100644
                  "more details."));
        }
      }
+diff --git a/content/browser/web_contents/web_contents_view_child_frame.cc b/content/browser/web_contents/web_contents_view_child_frame.cc
+index 6273995837..63153c966d 100644
+--- a/content/browser/web_contents/web_contents_view_child_frame.cc
++++ b/content/browser/web_contents/web_contents_view_child_frame.cc
+@@ -228,7 +228,10 @@ void WebContentsViewChildFrame::FocusThroughTabTraversal(bool reverse) {
+ }
+ 
+ DropData* WebContentsViewChildFrame::GetDropData() const {
+-  NOTREACHED();
++  if (auto* outer_view = GetOuterView()) {
++    return outer_view->GetDropData();
++  }
++  return nullptr;
+ }
+ 
+ void WebContentsViewChildFrame::UpdateDragOperation(
 diff --git a/content/public/common/content_features.cc b/content/public/common/content_features.cc
 index 060453a715..f526732e92 100644
 --- a/content/public/common/content_features.cc

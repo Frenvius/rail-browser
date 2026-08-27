@@ -50,6 +50,8 @@ void ForgetActiveProfile(BrowserWindowInterface* browser);
 Profile* ProfileForNewTab(BrowserWindowInterface* browser,
                           content::WebContents* source);
 
+BrowserWindowInterface* WindowHostingProfile(Profile* profile);
+
 }  // namespace rail
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_PROFILES_H_

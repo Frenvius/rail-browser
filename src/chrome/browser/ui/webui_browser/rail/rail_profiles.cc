@@ -18,8 +18,10 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/navigation_controller.h"
@@ -205,6 +207,30 @@ Profile* ProfileForNewTab(BrowserWindowInterface* browser,
   auto it = ActiveProfiles().find(browser);
   return it == ActiveProfiles().end() ? browser->GetProfile()
                                       : it->second.get();
+}
+
+BrowserWindowInterface* WindowHostingProfile(Profile* profile) {
+  if (!profile) {
+    return nullptr;
+  }
+
+  for (const auto& [window, active] : ActiveProfiles()) {
+    if (active.get() == profile) {
+      return window;
+    }
+  }
+
+  for (BrowserWindowInterface* window : GetAllBrowserWindowInterfaces()) {
+    TabStripModel* model = window->GetTabStripModel();
+    for (int index = 0; index < model->count(); ++index) {
+      content::WebContents* contents = model->GetWebContentsAt(index);
+      if (contents && contents->GetBrowserContext() == profile) {
+        return window;
+      }
+    }
+  }
+
+  return nullptr;
 }
 
 void CreateTabInProfile(Browser* browser,
