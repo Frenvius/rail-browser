@@ -18,7 +18,7 @@ export interface Command {
   label: string;
   hint: string;
   keywords: string;
-  enabled?: (host: CommandBarHost) => boolean;
+  enabled?: (tab: TabMenuTarget|null) => boolean;
   run: (host: CommandBarHost) => void;
 }
 
@@ -30,7 +30,7 @@ export interface CommandBarRow {
   favicon: string;
 }
 
-const hasTab = (host: CommandBarHost) => host.activeTab() !== null;
+const hasTab = (tab: TabMenuTarget|null) => tab !== null;
 
 function onActiveTab(command: TabCommand) {
   return (host: CommandBarHost) => {
@@ -75,7 +75,7 @@ export const COMMANDS: Command[] = [
     label: 'Move Tab to New Window',
     hint: '',
     keywords: 'detach split out',
-    enabled: host => host.activeTab()?.hasOthers === true,
+    enabled: tab => tab?.hasOthers === true,
     run: onActiveTab('new-window'),
   },
   {
@@ -83,10 +83,7 @@ export const COMMANDS: Command[] = [
     label: 'Pin Tab',
     hint: '',
     keywords: 'keep stick',
-    enabled: host => {
-      const target = host.activeTab();
-      return target !== null && !target.pinned;
-    },
+    enabled: tab => tab !== null && !tab.pinned,
     run: onActiveTab('pin'),
   },
   {
@@ -94,7 +91,7 @@ export const COMMANDS: Command[] = [
     label: 'Unpin Tab',
     hint: '',
     keywords: 'release',
-    enabled: host => host.activeTab()?.pinned === true,
+    enabled: tab => tab?.pinned === true,
     run: onActiveTab('unpin'),
   },
   {
@@ -110,7 +107,7 @@ export const COMMANDS: Command[] = [
     label: 'Close Other Tabs',
     hint: '',
     keywords: 'rest remaining',
-    enabled: host => host.activeTab()?.hasOthers === true,
+    enabled: tab => tab?.hasOthers === true,
     run: onActiveTab('close-others'),
   },
   {
@@ -118,7 +115,7 @@ export const COMMANDS: Command[] = [
     label: 'Close Tabs to the Right',
     hint: '',
     keywords: 'after below',
-    enabled: host => host.activeTab()?.hasRight === true,
+    enabled: tab => tab?.hasRight === true,
     run: onActiveTab('close-right'),
   },
   {
@@ -195,7 +192,7 @@ export const COMMANDS: Command[] = [
 ];
 
 export function matchCommands(
-    query: string, host: CommandBarHost): CommandBarRow[] {
+    query: string, tab: TabMenuTarget|null): CommandBarRow[] {
   // A single letter matches nearly every label, which buries the tab rows
   // under commands the user was not reaching for.
   if (query.length < 2) {
@@ -203,7 +200,7 @@ export function matchCommands(
   }
   return COMMANDS
       .filter(
-          command => (!command.enabled || command.enabled(host)) &&
+          command => (!command.enabled || command.enabled(tab)) &&
               (command.label.toLowerCase().includes(query) ||
                command.keywords.includes(query)))
       .map(command => ({

@@ -22,8 +22,8 @@ void RailAppMenuModel::Build() {
 }
 
 void RailAppMenuModel::ExecuteCommand(int command_id, int event_flags) {
-  if (command_id == IDC_NEW_TAB && window_ &&
-      window_->OpenCommandBarForNewTab()) {
+  if (command_id == IDC_NEW_TAB && window_) {
+    window_->OpenRailCommandBar(/*new_tab_mode=*/true, /*select_all=*/false);
     return;
   }
   AppMenuModel::ExecuteCommand(command_id, event_flags);

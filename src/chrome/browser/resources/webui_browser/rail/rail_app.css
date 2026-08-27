@@ -123,51 +123,6 @@ webui-browser-tab-strip {
   min-height: 0;
 }
 
-webui-browser-searchbox {
-  --color-searchbox-background: var(--rail-elevated);
-  --color-searchbox-dropdown-divider: var(--rail-border);
-  --color-searchbox-foreground: var(--rail-text);
-  --color-searchbox-placeholder: var(--rail-placeholder);
-  --color-searchbox-results-background: var(--rail-surface);
-  --color-searchbox-results-background-hovered: var(--rail-hover);
-  --color-searchbox-results-background-selected: var(--rail-hover-strong);
-  --color-searchbox-results-dim-selected: var(--rail-text-dim);
-  --color-searchbox-results-focus-indicator: var(--rail-accent);
-  --color-searchbox-results-foreground: var(--rail-text);
-  --color-searchbox-results-foreground-dimmed: var(--rail-text-dim);
-  --color-searchbox-results-foreground-selected: var(--rail-text);
-  --color-searchbox-results-icon: var(--rail-text-dim);
-  --color-searchbox-results-icon-selected: var(--rail-text);
-  --color-searchbox-results-typed-prefix: var(--rail-text);
-  --color-searchbox-results-url: var(--rail-accent);
-  --color-searchbox-results-url-selected: var(--rail-accent);
-  --color-searchbox-selection-background: var(--rail-accent);
-  --color-searchbox-selection-foreground: var(--rail-text);
-  --cr-searchbox-background: var(--rail-elevated);
-  --cr-searchbox-border-radius: 8px;
-  --cr-searchbox-font-size: 13px;
-  --cr-searchbox-foreground: var(--rail-text);
-  --cr-searchbox-height: 30px;
-  --cr-searchbox-input-height: 30px;
-  --cr-searchbox-icon-left-position: 12px;
-  --cr-searchbox-icon-size-in-searchbox: 18px;
-  --cr-searchbox-icon-top-position: 0;
-  --cr-searchbox-match-padding: 4px 0;
-  --cr-searchbox-placeholder: var(--rail-placeholder);
-  --cr-searchbox-shadow: none;
-
-  flex: 1;
-}
-
-webui-browser-searchbox[dropdown-is-visible] {
-  --cr-searchbox-shadow: 0 8px 20px rgb(10 10 24 / 50%);
-}
-
-webui-browser-searchbox:focus-within {
-  --cr-searchbox-shadow: inset 0 0 0 1px var(--rail-accent),
-      0 0 0 3px var(--rail-accent-soft);
-}
-
 .activeFrame {
   background-color: transparent;
 }
@@ -196,20 +151,35 @@ webui-browser-searchbox:focus-within {
 
 #addressBox {
   align-items: center;
+  background: var(--rail-elevated);
   border-radius: 8px;
+  cursor: text;
   display: flex;
   flex: 1;
+  gap: 6px;
+  height: 30px;
   margin: 0 8px;
+  padding: 0 10px;
   position: relative;
 }
 
+#addressBox:hover {
+  background: var(--rail-hover);
+}
+
+#addressText {
+  color: var(--rail-text);
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #locationIconButton {
-  position: absolute;
-  z-index: 101;
-  top: 2px;
-  left: 4px;
-  height: 26px;
-  min-width: 30px;
+  height: 20px;
+  min-width: 20px;
+  flex: 0 0 auto;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -353,17 +323,6 @@ content-region[hidden],
   }
 }
 
-#commandBarScrim {
-  background: rgb(10 10 24 / 45%);
-  inset: 0;
-  position: fixed;
-  z-index: 150;
-}
-
-#commandBarScrim[hidden] {
-  display: none;
-}
-
 #dragBlocker {
   app-region: no-drag;
   -webkit-app-region: no-drag;
@@ -373,99 +332,7 @@ content-region[hidden],
   position: fixed;
 }
 
-:host([command-bar]) #dragBlocker,
 :host([menu-open]) #dragBlocker,
 :host([sidebar-resizing]) #dragBlocker {
   display: block;
-}
-
-:host([command-bar]) #address {
-  left: 50%;
-  position: fixed;
-  top: 12vh;
-  transform: translateX(-50%);
-  width: min(760px, 72vw);
-  z-index: 200;
-
-  --cr-searchbox-border-radius: 12px;
-  --cr-searchbox-font-size: 15px;
-  --cr-searchbox-height: 48px;
-  --cr-searchbox-icon-left-position: 16px;
-  --cr-searchbox-icon-size-in-searchbox: 20px;
-  --cr-searchbox-input-height: 48px;
-  --cr-searchbox-match-padding: 8px 0;
-  --cr-searchbox-shadow: 0 24px 60px rgb(4 4 12 / 70%);
-
-  --color-searchbox-background: var(--rail-surface);
-  --cr-searchbox-background: var(--rail-surface);
-}
-
-:host([command-bar]) #address:focus-within {
-  --cr-searchbox-shadow: 0 24px 60px rgb(4 4 12 / 70%);
-}
-
-:host([command-bar]) #locationIconButton {
-  display: none;
-}
-
-#commandBarTabs {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 40vh;
-  overflow-y: auto;
-  padding: 6px;
-}
-
-#commandBarTabs[hidden] {
-  display: none;
-}
-
-.commandBarTab {
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  color: var(--rail-text);
-  cursor: pointer;
-  display: flex;
-  font: inherit;
-  font-size: 13px;
-  gap: 10px;
-  padding: 8px 10px;
-  text-align: start;
-  width: 100%;
-}
-
-.commandBarTab:hover,
-.commandBarTab[selected] {
-  background: var(--rail-hover);
-  outline: none;
-}
-
-.commandBarFavicon {
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  border-radius: 4px;
-  flex: 0 0 16px;
-  height: 16px;
-}
-
-.commandBarTabTitle {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.commandBarSwitch {
-  color: var(--rail-text-dim);
-  flex: 0 0 auto;
-  font-size: 12px;
-}
-
-.commandBarTab:hover .commandBarSwitch,
-.commandBarTab[selected] .commandBarSwitch {
-  color: var(--rail-text-muted);
 }
