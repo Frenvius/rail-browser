@@ -301,6 +301,10 @@ export class Spaces {
     const claimed = this.claims_.get(tabId);
     this.claims_.delete(tabId);
     const spaceId = claimed ?? this.activeId_;
+    if (this.byTab(tabId)) {
+      this.assign(tabId, spaceId, url);
+      return;
+    }
     const waiting = this.rows_.find(
         row => row.space === spaceId && row.pending && !row.tabId);
     if (waiting) {
@@ -488,10 +492,10 @@ export class Spaces {
 
   reorder(spaceId: string, ids: string[]) {
     const rows = this.rowsIn(spaceId);
-    const ordered =
+    const ordered = [...new Set(
         ids.map(id => rows.find(
                     row => row.key === id || (!!row.tabId && row.tabId === id)))
-            .filter(row => row !== undefined);
+            .filter(row => row !== undefined))];
     if (!ordered.length) {
       return;
     }
@@ -512,12 +516,14 @@ export class Spaces {
     return true;
   }
 
-  successorOf(tabId: string): TabRow|undefined {
+  successorOf(tabId: string, closing: ReadonlySet<string> = new Set()):
+      TabRow|undefined {
     const row = this.byTab(tabId);
     if (!row) {
       return undefined;
     }
-    const rows = this.rowsIn(row.space);
+    const rows = this.rowsIn(row.space).filter(
+        other => other === row || !other.tabId || !closing.has(other.tabId));
     const index = rows.indexOf(row);
     const after = rows.slice(index + 1);
 
@@ -577,12 +583,12 @@ export class Spaces {
     }
   }
 
-  placeAfter(tabId: string, afterTabId: string) {
-    this.place_(tabId, afterTabId, 1);
+  placeAfter(tabId: string, afterTabId: string): boolean {
+    return this.place_(tabId, afterTabId, 1);
   }
 
-  placeBefore(tabId: string, beforeTabId: string) {
-    this.place_(tabId, beforeTabId, 0);
+  placeBefore(tabId: string, beforeTabId: string): boolean {
+    return this.place_(tabId, beforeTabId, 0);
   }
 
   placeAfterOpener(tabId: string) {
@@ -669,23 +675,24 @@ export class Spaces {
     this.rows_ = [...this.rows_.filter(other => other !== row), row];
   }
 
-  private place_(tabId: string, anchorTabId: string, offset: number) {
+  private place_(tabId: string, anchorTabId: string, offset: number): boolean {
     const row = this.byTab(tabId);
     const anchor = this.byTab(anchorTabId);
     if (!row || !anchor) {
-      return;
+      return false;
     }
-    this.placeRow_(row, anchor, offset);
+    return this.placeRow_(row, anchor, offset);
   }
 
-  private placeRow_(row: TabRow, anchor: TabRow, offset: number) {
+  private placeRow_(row: TabRow, anchor: TabRow, offset: number): boolean {
     if (row === anchor || row.space !== anchor.space) {
-      return;
+      return false;
     }
     const rest = this.rows_.filter(other => other !== row);
     rest.splice(rest.indexOf(anchor) + offset, 0, row);
     this.rows_ = rest;
     this.onChange_();
+    return true;
   }
 
   private push_(fields: RowFields): TabRow {

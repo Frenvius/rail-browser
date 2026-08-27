@@ -18,10 +18,14 @@ export interface RailDragHost extends TabDragHost {
 
 const DRAG_THRESHOLD = 4;
 const DOT_REACH = 14;
+const SCROLL_EDGE = 28;
+const SCROLL_STEP = 10;
+const SCROLL_INTERVAL_MS = 16;
 
 export class TabDrag {
   private host_: RailDragHost;
   private tabId_ = '';
+  private startX_ = 0;
   private startY_ = 0;
   private offsetX_ = 0;
   private offsetY_ = 0;
@@ -32,6 +36,7 @@ export class TabDrag {
   private dragging_ = false;
   private hoveredDot_: HTMLElement|null = null;
   private crossesDivider_ = false;
+  private scrollTimer_ = 0;
 
   private onMove_ = (e: MouseEvent) => this.move_(e);
   private onUp_ = () => this.cancel_();
@@ -55,6 +60,7 @@ export class TabDrag {
     this.tabId_ = element.tabData.id;
     this.pinned_ = element.pinned;
     this.dormant_ = element.dormant;
+    this.startX_ = e.clientX;
     this.startY_ = e.clientY;
     this.lastY_ = e.clientY;
     this.offsetX_ = e.clientX - rect.left;
@@ -110,11 +116,14 @@ export class TabDrag {
 
   private move_(e: MouseEvent) {
     if (this.dragging_ ||
-        Math.abs(e.clientY - this.startY_) < DRAG_THRESHOLD) {
+        Math.hypot(e.clientX - this.startX_, e.clientY - this.startY_) <
+            DRAG_THRESHOLD) {
       return;
     }
     e.preventDefault();
     this.dragging_ = true;
+    this.scrollTimer_ =
+        setInterval(() => this.edgeScroll_(), SCROLL_INTERVAL_MS);
     this.host_.setDragInProgressForDrag(true);
     this.host_.setTabStripNoDrag(true);
     if (!this.dormant_) {
@@ -148,6 +157,8 @@ export class TabDrag {
   }
 
   private clearDragUi_() {
+    clearInterval(this.scrollTimer_);
+    this.scrollTimer_ = 0;
     this.hoveredDot_?.classList.remove('droptarget');
     this.hoveredDot_ = null;
     this.host_.shadowRoot?.querySelector('#pinnedDivider')?.classList.remove(
@@ -167,6 +178,25 @@ export class TabDrag {
     const above = y < rect.top + rect.height / 2;
     this.crossesDivider_ = above !== this.pinned_;
     divider.classList.toggle('droptarget', this.crossesDivider_);
+  }
+
+  private edgeScroll_() {
+    const list =
+        this.host_.shadowRoot?.querySelector<HTMLElement>('#tabList');
+    if (!list || this.pinned_) {
+      return;
+    }
+    const rect = list.getBoundingClientRect();
+    const up = this.lastY_ < rect.top + SCROLL_EDGE;
+    const down = this.lastY_ > rect.bottom - SCROLL_EDGE;
+    if (!up && !down) {
+      return;
+    }
+    const before = list.scrollTop;
+    list.scrollTop += up ? -SCROLL_STEP : SCROLL_STEP;
+    if (list.scrollTop !== before) {
+      this.reorder_();
+    }
   }
 
   private reorder_() {

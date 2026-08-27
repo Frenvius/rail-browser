@@ -51,6 +51,7 @@ export function splitSections(
         (candidate): candidate is TabItem =>
             candidate.type === 'tab' && candidate.id === row.tabId);
     if (item) {
+      claimed.add(item.id);
       looseItems.push(item);
     }
   }
