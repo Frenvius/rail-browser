@@ -4000,6 +4000,20 @@ index e2f470d579..a99306eed7 100644
    safety_check::prefs::RegisterProfilePrefs(registry);
    SearchPrefetchService::RegisterProfilePrefs(registry);
    blocked_content::SafeBrowsingTriggeredPopupBlocker::RegisterProfilePrefs(
+diff --git a/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc b/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc
+index f4c33684da..2fc51e082b 100644
+--- a/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc
++++ b/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc
+@@ -251,7 +251,8 @@ void TabLifecycleUnitSource::TabLifecycleUnit::FinishDiscard(
+     LifecycleUnitDiscardReason discard_reason,
+     uint64_t tab_memory_footprint_estimate) {
+   content::WebContents* const old_contents = web_contents();
+-  content::WebContents::CreateParams create_params(tab_strip_model_->profile());
++  content::WebContents::CreateParams create_params(
++      old_contents->GetBrowserContext());
+   // TODO(fdoray): Consider setting |initially_hidden| to true when the tab is
+   // OCCLUDED. Will require checking that the tab reload correctly when it
+   // becomes VISIBLE.
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
 index a75d80b00c..1ee8059080 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
