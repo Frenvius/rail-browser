@@ -3756,6 +3756,34 @@ index 951ffdabcb..cb5e96f38f 100644
  
    ExtensionContextMenuModel(const ExtensionContextMenuModel&) = delete;
    ExtensionContextMenuModel& operator=(const ExtensionContextMenuModel&) =
+diff --git a/chrome/browser/extensions/extension_tab_util.cc b/chrome/browser/extensions/extension_tab_util.cc
+index 6238051f9a..2e2d0d8ceb 100644
+--- a/chrome/browser/extensions/extension_tab_util.cc
++++ b/chrome/browser/extensions/extension_tab_util.cc
+@@ -642,15 +642,18 @@ bool ExtensionTabUtil::GetTabById(int tab_id,
+   for (WindowController* window : *WindowControllerList::GetInstance()) {
+     bool is_alive = window->GetBrowserWindowInterface() &&
+                     !window->GetBrowserWindowInterface()->IsDeleteScheduled();
+-    bool profile_matches =
+-        window->profile() == profile || window->profile() == incognito_profile;
+-    if (!is_alive || !profile_matches) {
++    if (!is_alive) {
+       continue;
+     }
+     for (int i = 0; i < window->GetTabCount(); ++i) {
+       WebContents* target_contents = window->GetWebContentsAt(i);
+-      if (sessions::SessionTabHelper::IdForTab(target_contents).id() ==
+-          tab_id) {
++      Profile* tab_profile =
++          Profile::FromBrowserContext(target_contents->GetBrowserContext());
++      bool profile_matches =
++          tab_profile == profile || tab_profile == incognito_profile;
++      if (profile_matches &&
++          sessions::SessionTabHelper::IdForTab(target_contents).id() ==
++              tab_id) {
+         if (out_window) {
+           *out_window = window;
+         }
 diff --git a/chrome/browser/extensions/extension_view_host_factory.cc b/chrome/browser/extensions/extension_view_host_factory.cc
 index ee1ea534a5..f998eeb9f1 100644
 --- a/chrome/browser/extensions/extension_view_host_factory.cc
