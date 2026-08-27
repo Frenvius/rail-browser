@@ -12,6 +12,7 @@ import sys
 import time
 import argparse
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -291,6 +292,53 @@ def _ensure_chromium_clang_format(source_tree):
     download_file.replace(output_file)
 
 
+_UBLOCK_VERSION = '1.74.0'
+_UBLOCK_SHA256 = 'b6be71ed3e3e85eaad8f02710b9071d06428e141d942c43d5f65d4526e82dc3e'
+_UBLOCK_URL = 'https://github.com/gorhill/uBlock/releases/download/{}/{}'
+_UBLOCK_SOURCE_URL = 'https://github.com/gorhill/uBlock/archive/refs/tags/{}.tar.gz'
+_UBLOCK_EXTENSION_ID = 'fkgkibajhfbepljeaefdnfnegdcjomkh'
+
+
+def _install_ublock_origin(source_tree, downloads_cache, output_dir):
+    filename = 'uBlock0_{}.chromium.crx'.format(_UBLOCK_VERSION)
+    cached_file = downloads_cache / filename
+    if not cached_file.exists() or hashlib.sha256(
+            cached_file.read_bytes()).hexdigest() != _UBLOCK_SHA256:
+        get_logger().info('Downloading uBlock Origin %s...', _UBLOCK_VERSION)
+        downloads_cache.mkdir(parents=True, exist_ok=True)
+        download_file = cached_file.with_suffix('.crx.download')
+        with urllib.request.urlopen(_UBLOCK_URL.format(_UBLOCK_VERSION, filename),
+                                    timeout=300) as response:
+            with download_file.open('wb') as destination:
+                shutil.copyfileobj(response, destination)
+        if hashlib.sha256(download_file.read_bytes()).hexdigest() != _UBLOCK_SHA256:
+            download_file.unlink(missing_ok=True)
+            raise RuntimeError('Downloaded uBlock Origin failed its SHA-256 check')
+        download_file.replace(cached_file)
+
+    source_archive = downloads_cache / 'uBlock-{}.tar.gz'.format(_UBLOCK_VERSION)
+    if not source_archive.exists():
+        get_logger().info('Downloading uBlock Origin %s sources...', _UBLOCK_VERSION)
+        download_file = source_archive.parent / (source_archive.name + '.download')
+        with urllib.request.urlopen(_UBLOCK_SOURCE_URL.format(_UBLOCK_VERSION),
+                                    timeout=300) as response:
+            with download_file.open('wb') as destination:
+                shutil.copyfileobj(response, destination)
+        download_file.replace(source_archive)
+
+    target_dir = source_tree / output_dir / 'default_apps'
+    target_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(cached_file, target_dir / filename)
+    (target_dir / 'external_extensions.json').write_text(
+        json.dumps({
+            _UBLOCK_EXTENSION_ID: {
+                'external_crx': filename,
+                'external_version': _UBLOCK_VERSION,
+            }
+        }, indent=2) + '\n',
+        encoding=ENCODING)
+
+
 def main():
     """CLI Entrypoint"""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -560,6 +608,8 @@ def main():
     if targets is None:
         targets = ['chrome'] if args.dev else ['chrome', 'chromedriver', 'mini_installer']
     ninja_commandline.extend(targets)
+
+    _install_ublock_origin(source_tree, downloads_cache, output_dir)
 
     # Run ninja
     if args.ci:

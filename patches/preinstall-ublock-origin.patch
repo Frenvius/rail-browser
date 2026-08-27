@@ -1,0 +1,13 @@
+--- a/chrome/tools/build/win/FILES.cfg
++++ b/chrome/tools/build/win/FILES.cfg
+@@ -83,6 +83,10 @@
+     'buildtype': ['official'],
+     'filegroup': ['default'],
+   },
++  {
++    'filename': 'default_apps/*',
++    'buildtype': ['official'],
++  },
+   {
+     'filename': 'chrome_100_percent.pak',
+     'buildtype': ['official'],
