@@ -4,6 +4,9 @@
 #include <string_view>
 #include <utility>
 
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
@@ -12,6 +15,7 @@
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/navigation_controller.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -32,6 +36,7 @@ constexpr int kBubbleMinWidth = 320;
 constexpr int kBubbleSideMargin = 24;
 constexpr int kBubbleMinHeight = 56;
 constexpr float kTopFraction = 0.12f;
+constexpr base::TimeDelta kFirstFrameTimeout = base::Milliseconds(250);
 
 }
 
@@ -129,6 +134,52 @@ void RailCommandBubble::Show(const std::string& text,
 
   EnsureContents();
   CreateWidget();
+  if (!widget_) {
+    return;
+  }
+  PositionWidget(content_size_);
+  DeliverOpen();
+  if (showing_) {
+    widget_->Activate();
+    return;
+  }
+  waiting_ready_ = true;
+  contents_->web_contents()->WasShown();
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&RailCommandBubble::OnPageReady,
+                     weak_factory_.GetWeakPtr(), 0),
+      kFirstFrameTimeout);
+}
+
+void RailCommandBubble::OnPageReady(int height) {
+  if (!waiting_ready_ || !widget_) {
+    return;
+  }
+  waiting_ready_ = false;
+  if (height > 0) {
+    content_size_.set_height(height);
+  }
+  PositionWidget(content_size_);
+  if (waiting_first_frame_) {
+    return;
+  }
+  waiting_first_frame_ = true;
+  contents_->web_contents()->GetPrimaryMainFrame()->InsertVisualStateCallback(
+      base::BindOnce(&RailCommandBubble::OnFirstFrame,
+                     weak_factory_.GetWeakPtr()));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&RailCommandBubble::OnFirstFrame,
+                     weak_factory_.GetWeakPtr(), false),
+      kFirstFrameTimeout);
+}
+
+void RailCommandBubble::OnFirstFrame(bool) {
+  if (!waiting_first_frame_) {
+    return;
+  }
+  waiting_first_frame_ = false;
   ShowUI();
 }
 
@@ -164,6 +215,8 @@ void RailCommandBubble::CreateWidget() {
     view->SetBackgroundColor(SK_ColorTRANSPARENT);
   }
 
+  widget_->SetVisibilityChangedAnimationsEnabled(false);
+  ApplyAcrylicBackdrop(widget_.get());
   observation_.Observe(widget_.get());
 }
 
@@ -190,6 +243,9 @@ void RailCommandBubble::PositionWidget(const gfx::Size& contents_size) {
   gfx::Rect bounds(area.x() + (area.width() - width) / 2,
                    area.y() + static_cast<int>(area.height() * kTopFraction),
                    width, height);
+  if (slide_) {
+    bounds.set_origin(widget_->GetWindowBoundsInScreen().origin());
+  }
   widget_->SetBounds(bounds);
 
   if (shadow_) {
@@ -201,6 +257,8 @@ void RailCommandBubble::PositionWidget(const gfx::Size& contents_size) {
 
 void RailCommandBubble::DeliverOpen() {
   if (RailCommandUI* ui = controller()) {
+    ui->set_ready_callback(base::BindRepeating(&RailCommandBubble::OnPageReady,
+                                               weak_factory_.GetWeakPtr()));
     ui->Open(pending_text_, pending_select_all_, pending_new_tab_mode_,
              DesiredWidth(),
              context_ ? context_->Clone()
@@ -213,25 +271,19 @@ void RailCommandBubble::ShowUI() {
     return;
   }
   if (showing_) {
-    PositionWidget(content_size_);
-    DeliverOpen();
     widget_->Activate();
     return;
   }
 
   showing_ = true;
   PositionWidget(content_size_);
-  DeliverOpen();
-
-  widget_->Show();
-  ApplyAcrylicBackdrop(widget_.get());
   if (!shadow_) {
     shadow_ = CreateAcrylicShadow(window_->widget(), widget_.get());
-  } else {
-    shadow_->ShowInactive();
   }
   slide_ = std::make_unique<AcrylicSlide>(widget_.get(), shadow_.get(),
                                           -kAcrylicSlideDistance);
+  widget_->Show();
+  shadow_->ShowInactive();
   widget_->Activate();
   if (web_view_) {
     web_view_->RequestFocus();
@@ -251,6 +303,8 @@ void RailCommandBubble::Dismiss() {
 }
 
 void RailCommandBubble::Hide() {
+  waiting_ready_ = false;
+  waiting_first_frame_ = false;
   if (!showing_) {
     return;
   }
@@ -267,9 +321,7 @@ void RailCommandBubble::Hide() {
 void RailCommandBubble::ResizeDueToAutoResize(content::WebContents* source,
                                               const gfx::Size& new_size) {
   content_size_ = new_size;
-  if (showing_) {
-    PositionWidget(new_size);
-  }
+  PositionWidget(new_size);
 }
 
 content::WebContents* RailCommandBubble::OpenURLFromTab(

@@ -6540,17 +6540,17 @@ index 2a17afc37b..db2ba1e21d 100644
    </style>
    <link rel="stylesheet" href="chrome://theme/colors.css?sets=ui,chrome">
 diff --git a/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts b/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts
-index 45603d71ea..c8fb24664f 100644
+index 45603d71ea..bf167924d3 100644
 --- a/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts
 +++ b/chrome/browser/resources/webui_browser/webui_browser_searchbox.html.ts
-@@ -42,6 +42,7 @@ export function getHtml(this: WebuiBrowserSearchboxElement) {
-           </div>
-         ` : ''}
-       </cr-searchbox-input>
+@@ -53,6 +53,7 @@ export function getHtml(this: WebuiBrowserSearchboxElement) {
+             ?hidden="${!this.dropdownIsVisible}">
+         </cr-searchbox-dropdown>
+       </div>
 +      <slot name="tabMatches"></slot>
-       <div class="dropdownContainer">
-         <cr-searchbox-dropdown id="matches" part="searchbox-dropdown"
-             exportparts="dropdown-content"
+     </div>
+   `;
+ }
 diff --git a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts b/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
 index cee7a49569..21f19f527e 100644
 --- a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
@@ -10264,10 +10264,10 @@ index a2dae078cc..bd494b1433 100644
  
  }  // namespace views
 diff --git a/ui/views/controls/menu/menu_host.cc b/ui/views/controls/menu/menu_host.cc
-index 81281fb257..3bb769839a 100644
+index 81281fb257..e2495928d5 100644
 --- a/ui/views/controls/menu/menu_host.cc
 +++ b/ui/views/controls/menu/menu_host.cc
-@@ -168,7 +168,7 @@ void MenuHost::InitMenuHost(const InitParams& init_params) {
+@@ -168,9 +168,10 @@ void MenuHost::InitMenuHost(const InitParams& init_params) {
    // On Windows use the software compositor to ensure that we don't block
    // the UI thread blocking issue during command buffer creation. We can
    // revert this change once http://crbug.com/125248 is fixed.
@@ -10275,7 +10275,10 @@ index 81281fb257..3bb769839a 100644
 +  params.force_software_compositing = false;
  #endif
    Init(std::move(params));
++  SetVisibilityChangedAnimationsEnabled(false);
    std::optional<std::string> show_menu_host_duration_histogram =
+       menu_controller->TakeShowMenuHostDurationHistogram();
+   CHECK(!menu_controller->TakeShowMenuHostDurationHistogram().has_value());
 diff --git a/ui/views/controls/menu/menu_item_view.h b/ui/views/controls/menu/menu_item_view.h
 index 365de1cfbe..e62d87951e 100644
 --- a/ui/views/controls/menu/menu_item_view.h

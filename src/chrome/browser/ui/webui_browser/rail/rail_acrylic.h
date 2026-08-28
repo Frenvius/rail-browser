@@ -18,7 +18,7 @@ namespace rail {
 inline constexpr SkColor kAcrylicTint = SkColorSetARGB(0xB0, 0x14, 0x14, 0x1C);
 inline constexpr int kAcrylicCornerRadius = 8;
 inline constexpr int kAcrylicShadowMargin = 16;
-inline constexpr int kAcrylicSlideDistance = 10;
+inline constexpr int kAcrylicSlideDistance = 28;
 
 void ApplyAcrylicBackdrop(views::Widget* widget);
 

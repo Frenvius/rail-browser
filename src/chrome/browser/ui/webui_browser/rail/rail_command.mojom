@@ -15,6 +15,8 @@ interface PageHandlerFactory {
 };
 
 interface PageHandler {
+  Ready(int32 height);
+
   RunCommand(string id);
 
   Close();

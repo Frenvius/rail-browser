@@ -136,6 +136,12 @@ void RailCommandUI::Open(const std::string& text,
   page_->Open(text, select_all, new_tab_mode, width, std::move(context));
 }
 
+void RailCommandUI::Ready(int32_t height) {
+  if (ready_callback_) {
+    ready_callback_.Run(height);
+  }
+}
+
 void RailCommandUI::RunCommand(const std::string& id) {
   WebUIBrowserWindow* window = WindowFor(web_ui());
   if (window) {

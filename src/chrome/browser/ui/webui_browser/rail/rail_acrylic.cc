@@ -36,7 +36,7 @@ constexpr int kWindowCompositionAttributeAccentPolicy = 19;
 constexpr int kShadowBlur = 16;
 constexpr int kShadowOffsetY = 3;
 constexpr SkAlpha kShadowAlpha = 0x33;
-constexpr base::TimeDelta kSlideDuration = base::Milliseconds(140);
+constexpr base::TimeDelta kSlideDuration = base::Milliseconds(220);
 
 struct AccentPolicy {
   DWORD state;
@@ -54,7 +54,7 @@ struct WindowCompositionAttributeData {
 using SetWindowCompositionAttributeFn =
     BOOL(WINAPI*)(HWND, WindowCompositionAttributeData*);
 
-void ApplyAcrylicAccent(HWND hwnd) {
+void SetAccentState(HWND hwnd, DWORD state) {
   static const auto set_attribute =
       reinterpret_cast<SetWindowCompositionAttributeFn>(::GetProcAddress(
           ::GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute"));
@@ -62,7 +62,7 @@ void ApplyAcrylicAccent(HWND hwnd) {
     return;
   }
   AccentPolicy policy = {};
-  policy.state = kAccentEnableBlurBehind;
+  policy.state = state;
   WindowCompositionAttributeData data = {
       kWindowCompositionAttributeAccentPolicy, &policy, sizeof(policy)};
   set_attribute(hwnd, &data);
@@ -70,7 +70,7 @@ void ApplyAcrylicAccent(HWND hwnd) {
 
 void ApplyAccentAfterPresent(HWND hwnd, const viz::FrameTimingDetails&) {
   if (::IsWindow(hwnd)) {
-    ApplyAcrylicAccent(hwnd);
+    SetAccentState(hwnd, kAccentEnableBlurBehind);
   }
 }
 
@@ -130,7 +130,7 @@ void ApplyAcrylicBackdrop(views::Widget* widget) {
 
   ui::Compositor* compositor = widget->GetCompositor();
   if (!compositor) {
-    ApplyAcrylicAccent(hwnd);
+    SetAccentState(hwnd, kAccentEnableBlurBehind);
     return;
   }
   compositor->RequestSuccessfulPresentationTimeForNextFrame(

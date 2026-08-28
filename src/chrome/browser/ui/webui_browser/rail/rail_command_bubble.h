@@ -61,6 +61,8 @@ class RailCommandBubble : public WebUIContentsWrapper::Host,
   class Contents;
 
   gfx::Rect WindowArea() const;
+  void OnPageReady(int height);
+  void OnFirstFrame(bool success);
   int DesiredWidth() const;
   void EnsureContents();
   void CreateWidget();
@@ -79,6 +81,8 @@ class RailCommandBubble : public WebUIContentsWrapper::Host,
   bool pending_select_all_ = false;
   bool pending_new_tab_mode_ = false;
   bool showing_ = false;
+  bool waiting_ready_ = false;
+  bool waiting_first_frame_ = false;
   gfx::Size content_size_;
   base::ScopedObservation<views::Widget, views::WidgetObserver> observation_{
       this};

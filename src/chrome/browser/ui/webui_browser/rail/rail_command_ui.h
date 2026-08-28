@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include "base/functional/callback.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_webui_config.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_command.mojom.h"
@@ -68,6 +69,10 @@ class RailCommandUI : public TopChromeWebUIController,
 
   bool page_bound() const { return page_.is_bound(); }
 
+  void set_ready_callback(base::RepeatingCallback<void(int)> callback) {
+    ready_callback_ = std::move(callback);
+  }
+
  private:
   void CreatePageHandler(
       mojo::PendingRemote<rail_command::mojom::Page> page,
@@ -77,6 +82,7 @@ class RailCommandUI : public TopChromeWebUIController,
       mojo::PendingRemote<searchbox::mojom::Page> page,
       mojo::PendingReceiver<searchbox::mojom::PageHandler> handler) override;
 
+  void Ready(int32_t height) override;
   void RunCommand(const std::string& id) override;
   void Close() override;
 
@@ -92,6 +98,7 @@ class RailCommandUI : public TopChromeWebUIController,
   };
 
   std::optional<PendingOpen> pending_open_;
+  base::RepeatingCallback<void(int)> ready_callback_;
 
   mojo::Receiver<rail_command::mojom::PageHandlerFactory>
       page_factory_receiver_{this};

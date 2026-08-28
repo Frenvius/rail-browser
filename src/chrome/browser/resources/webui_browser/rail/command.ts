@@ -59,6 +59,7 @@ export class RailCommandElement extends CrLitElement {
     super.connectedCallback();
     browserProxyFactory.getInstance().callbackRouter.open.addListener(
         this.onOpen_.bind(this));
+    this.addEventListener('keydown', e => this.onKeydown_(e), true);
   }
 
   private async onOpen_(
@@ -88,9 +89,13 @@ export class RailCommandElement extends CrLitElement {
     if (selectAll) {
       this.$.address.selectAll();
     }
+    this.$.address.queryAutocomplete(text);
 
     await this.loadTabs_();
     this.refreshRows_();
+    await this.updateComplete;
+    browserProxyFactory.getInstance().handler.ready(
+        Math.ceil(document.body.getBoundingClientRect().height));
   }
 
   private async loadTabs_() {
@@ -122,7 +127,7 @@ export class RailCommandElement extends CrLitElement {
     const commands =
         matchCommands(query, this.target_).slice(0, COMMAND_LIMIT);
     this.rows_ = [...tabs, ...commands];
-    this.selected_ = !query && this.rows_.length ? 0 : -1;
+    this.selected_ = -1;
   }
 
   protected onInput_() {
@@ -134,27 +139,57 @@ export class RailCommandElement extends CrLitElement {
     this.refreshRows_();
   }
 
-  protected onKeydown_(e: KeyboardEvent) {
+  private onKeydown_(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       browserProxyFactory.getInstance().handler.close();
       return;
     }
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') {
+    if (!this.rows_.length) {
       return;
     }
+    if (e.key === 'Enter') {
+      if (this.selected_ >= 0) {
+        this.consume_(e);
+        this.run_(this.rows_[this.selected_]!);
+      }
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') {
+      return;
+    }
+
+    const down = e.key === 'ArrowDown';
     if (this.selected_ < 0) {
+      if (down && this.atLastMatch_()) {
+        this.consume_(e);
+        this.enterRows_(0);
+      }
       return;
     }
-    const count = this.rows_.length;
-    if (e.key === 'ArrowDown') {
-      this.selected_ = (this.selected_ + 1) % count;
-    } else if (e.key === 'ArrowUp') {
-      this.selected_ = (this.selected_ - 1 + count) % count;
-    } else {
-      this.run_(this.rows_[this.selected_]!);
+
+    const next = this.selected_ + (down ? 1 : -1);
+    this.consume_(e);
+    if (next < 0) {
+      this.selected_ = -1;
+      this.$.address.getDropdownElement().selectLast();
+    } else if (next < this.rows_.length) {
+      this.selected_ = next;
     }
+  }
+
+  private consume_(e: KeyboardEvent) {
     e.preventDefault();
     e.stopPropagation();
+  }
+
+  private enterRows_(index: number) {
+    this.selected_ = index;
+    this.$.address.getDropdownElement().unselect();
+  }
+
+  private atLastMatch_(): boolean {
+    const matches = this.$.address.result?.matches?.length ?? 0;
+    return matches === 0 || this.$.address.selectedMatchIndex >= matches - 1;
   }
 
   protected onRowClick_(e: Event) {

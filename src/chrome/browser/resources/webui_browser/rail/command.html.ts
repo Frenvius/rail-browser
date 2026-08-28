@@ -5,7 +5,6 @@ import type {RailCommandElement} from './command.js';
 export function getHtml(this: RailCommandElement) {
   return html`
 <webui-browser-searchbox id="address"
-    @keydown="${this.onKeydown_}"
     @input="${this.onInput_}"
     @searchbox-match-opened="${this.onSearchboxMatchOpened_}">
   <div slot="tabMatches" id="rows" ?hidden="${!this.rows_.length}">
