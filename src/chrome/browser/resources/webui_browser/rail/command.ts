@@ -68,7 +68,7 @@ export class RailCommandElement extends CrLitElement {
     document.body.style.width = `${width}px`;
     document.documentElement.style.setProperty(
         '--rail-space-color', context.spaceColor || '#ffffff');
-    this.text_ = text.trim().toLowerCase();
+    this.text_ = selectAll ? '' : text.trim().toLowerCase();
     this.target_ = context.hasTab ? {
       id: '',
       tabId: null,
@@ -109,12 +109,15 @@ export class RailCommandElement extends CrLitElement {
 
   private refreshRows_() {
     const query = this.query_();
-    const open = this.tabs_.filter(tab => !tab.isActive);
-    const matched = query ?
-        open.filter(
-            tab => tab.title.toLowerCase().includes(query) ||
-                tab.url.toLowerCase().includes(query)) :
-        open;
+    if (!query) {
+      this.rows_ = [];
+      this.selected_ = -1;
+      return;
+    }
+    const matched = this.tabs_.filter(
+        tab => !tab.isActive &&
+            (tab.title.toLowerCase().includes(query) ||
+             tab.url.toLowerCase().includes(query)));
     const tabs: CommandBarRow[] =
         matched.slice(0, TAB_LIMIT).map(tab => ({
                                           id: tab.id,
@@ -190,6 +193,15 @@ export class RailCommandElement extends CrLitElement {
   private atLastMatch_(): boolean {
     const matches = this.$.address.result?.matches?.length ?? 0;
     return matches === 0 || this.$.address.selectedMatchIndex >= matches - 1;
+  }
+
+  protected onRowPointerenter_(e: Event) {
+    const index = (e.currentTarget as HTMLElement).dataset['index'];
+    this.enterRows_(Number(index));
+  }
+
+  protected onRowsPointerleave_() {
+    this.selected_ = -1;
   }
 
   protected onRowClick_(e: Event) {

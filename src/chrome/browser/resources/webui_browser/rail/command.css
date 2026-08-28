@@ -103,11 +103,6 @@ webui-browser-searchbox::part(searchbox-dropdown) {
   width: 100%;
 }
 
-.row:hover {
-  background: var(--command-hover);
-  outline: none;
-}
-
 .row[selected] {
   background: var(--command-selected);
   outline: none;
@@ -135,7 +130,6 @@ webui-browser-searchbox::part(searchbox-dropdown) {
   font-size: 12px;
 }
 
-.row:hover .hint,
 .row[selected] .hint {
   color: var(--rail-text-muted);
 }
