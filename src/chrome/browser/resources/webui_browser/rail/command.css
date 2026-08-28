@@ -6,6 +6,11 @@
  * #css_wrapper_metadata_end */
 
 :host {
+  --command-hover: color-mix(in srgb, var(--rail-space-color, #fff) 14%,
+      rgb(255 255 255 / 5%));
+  --command-selected: color-mix(in srgb, var(--rail-space-color, #fff) 22%,
+      rgb(255 255 255 / 7%));
+
   background: rgb(20 20 28 / 69%);
   border: 1px solid var(--rail-border);
   border-radius: 8px;
@@ -23,8 +28,8 @@ webui-browser-searchbox {
   --color-searchbox-foreground: var(--rail-text);
   --color-searchbox-placeholder: var(--rail-placeholder);
   --color-searchbox-results-background: transparent;
-  --color-searchbox-results-background-hovered: var(--rail-hover);
-  --color-searchbox-results-background-selected: var(--rail-hover-strong);
+  --color-searchbox-results-background-hovered: var(--command-hover);
+  --color-searchbox-results-background-selected: var(--command-selected);
   --color-searchbox-results-dim-selected: var(--rail-text-dim);
   --color-searchbox-results-focus-indicator: transparent;
   --color-searchbox-results-foreground: var(--rail-text);
@@ -33,9 +38,9 @@ webui-browser-searchbox {
   --color-searchbox-results-icon: var(--rail-text-dim);
   --color-searchbox-results-icon-selected: var(--rail-text);
   --color-searchbox-results-typed-prefix: var(--rail-text);
-  --color-searchbox-results-url: var(--rail-accent);
-  --color-searchbox-results-url-selected: var(--rail-accent);
-  --color-searchbox-selection-background: var(--rail-accent);
+  --color-searchbox-results-url: var(--rail-text-dim);
+  --color-searchbox-results-url-selected: var(--rail-text-muted);
+  --color-searchbox-selection-background: var(--command-selected);
   --color-searchbox-selection-foreground: var(--rail-text);
   --cr-searchbox-background: transparent;
   --cr-searchbox-border-radius: 0;
@@ -90,9 +95,13 @@ webui-browser-searchbox {
   width: 100%;
 }
 
-.row:hover,
+.row:hover {
+  background: var(--command-hover);
+  outline: none;
+}
+
 .row[selected] {
-  background: var(--rail-hover);
+  background: var(--command-selected);
   outline: none;
 }
 

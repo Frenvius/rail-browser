@@ -4430,7 +4430,7 @@ index 8ebad94626..5f39f84978 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..55d6129f63 100644
+index caed98ffda..d9a773864d 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4558,7 +4558,7 @@ index caed98ffda..55d6129f63 100644
    protected onMinimizeClick_(_: Event) {
      browserProxyFactory.getInstance().handler.minimize();
    }
-@@ -232,15 +248,86 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,15 +248,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -4615,6 +4615,7 @@ index caed98ffda..55d6129f63 100644
 +
 +  protected onSpaceContentChanged_() {
 +    this.updateEmptyState_();
++    this.pushCommandContext_();
 +  }
 +
 +  protected onSpaceProfileChanged_(e: CustomEvent<{profile: string}>) {
@@ -4645,7 +4646,7 @@ index caed98ffda..55d6129f63 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -252,6 +339,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -252,6 +340,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -4653,7 +4654,7 @@ index caed98ffda..55d6129f63 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -287,7 +375,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +376,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -4663,7 +4664,7 @@ index caed98ffda..55d6129f63 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +394,74 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +395,76 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4740,6 +4741,8 @@ index caed98ffda..55d6129f63 100644
 +      essential: tab?.essential === true,
 +      hasOthers: tab?.hasOthers === true,
 +      hasRight: tab?.hasRight === true,
++      spaceColor: document.documentElement.style.getPropertyValue(
++          '--rail-space-color'),
 +    });
    }
  
@@ -4765,7 +4768,7 @@ index caed98ffda..55d6129f63 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +480,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +483,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -4782,7 +4785,7 @@ index caed98ffda..55d6129f63 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +519,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +522,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  

@@ -6,6 +6,7 @@ struct CommandContext {
   bool essential;
   bool has_others;
   bool has_right;
+  string space_color;
 };
 
 interface PageHandlerFactory {

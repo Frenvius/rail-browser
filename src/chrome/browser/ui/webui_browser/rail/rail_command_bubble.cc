@@ -167,8 +167,14 @@ void RailCommandBubble::CreateWidget() {
   observation_.Observe(widget_.get());
 }
 
+gfx::Rect RailCommandBubble::WindowArea() const {
+  views::Widget* const parent = window_->widget();
+  return parent ? parent->GetWindowBoundsInScreen()
+                : window_->GetContentsBoundsInScreen();
+}
+
 int RailCommandBubble::DesiredWidth() const {
-  const gfx::Rect area = window_->GetContentsBoundsInScreen();
+  const gfx::Rect area = WindowArea();
   return std::clamp(area.width() - 2 * kBubbleSideMargin, kBubbleMinWidth,
                     kBubbleMaxWidth);
 }
@@ -177,7 +183,7 @@ void RailCommandBubble::PositionWidget(const gfx::Size& contents_size) {
   if (!widget_) {
     return;
   }
-  const gfx::Rect area = window_->GetContentsBoundsInScreen();
+  const gfx::Rect area = WindowArea();
   const int height = contents_size.height() > 0 ? contents_size.height()
                                                 : kBubbleMinHeight;
   const int width = DesiredWidth();

@@ -65,6 +65,8 @@ export class RailCommandElement extends CrLitElement {
       text: string, selectAll: boolean, newTabMode: boolean, width: number,
       context: CommandContext) {
     document.body.style.width = `${width}px`;
+    document.documentElement.style.setProperty(
+        '--rail-space-color', context.spaceColor || '#ffffff');
     this.text_ = text.trim().toLowerCase();
     this.target_ = context.hasTab ? {
       id: '',

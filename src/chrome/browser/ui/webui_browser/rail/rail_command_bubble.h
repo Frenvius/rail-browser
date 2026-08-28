@@ -10,6 +10,7 @@
 #include "chrome/browser/ui/webui/top_chrome/webui_contents_wrapper.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_acrylic.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_command.mojom.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
 
@@ -59,6 +60,7 @@ class RailCommandBubble : public WebUIContentsWrapper::Host,
  private:
   class Contents;
 
+  gfx::Rect WindowArea() const;
   int DesiredWidth() const;
   void EnsureContents();
   void CreateWidget();
