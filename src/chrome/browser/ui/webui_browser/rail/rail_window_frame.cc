@@ -2,16 +2,14 @@
 
 #if BUILDFLAG(IS_WIN)
 
+#include <shobjidl.h>
 #include <windows.h>
 
 #include <commctrl.h>
 #include <dwmapi.h>
-#include <shobjidl.h>
 #include <wrl/client.h>
 
 #include <optional>
-
-#include "chrome/browser/win/mica_titlebar.h"
 
 #include "base/supports_user_data.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -82,8 +80,7 @@ void EnsureBackdropStyles(HWND hwnd) {
     return;
   }
   const LONG style = ::GetWindowLong(hwnd, GWL_STYLE);
-  const LONG wanted =
-      (style | WS_THICKFRAME | WS_MAXIMIZEBOX) & ~static_cast<LONG>(WS_CAPTION);
+  const LONG wanted = style | WS_CAPTION | WS_THICKFRAME | WS_MAXIMIZEBOX;
   if (wanted == style) {
     return;
   }
@@ -145,8 +142,8 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
                                           DWORD_PTR ref_data) {
   if (message == WM_SETCURSOR) {
     const LPARAM cursor_position = static_cast<LPARAM>(::GetMessagePos());
-    const int component = static_cast<int>(
-        ::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position));
+    const int component =
+        static_cast<int>(::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position));
     if (wchar_t* cursor = ResizeCursorForComponent(component)) {
       ::SetCursor(::LoadCursor(nullptr, cursor));
       return TRUE;
@@ -155,11 +152,10 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
 
   POINT cursor;
   if (message == WM_RBUTTONUP && ::GetCursorPos(&cursor)) {
-    const LPARAM cursor_position = MAKELPARAM(static_cast<WORD>(cursor.x),
-                                              static_cast<WORD>(cursor.y));
-    if (static_cast<int>(
-            ::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position)) ==
-        HTCAPTION) {
+    const LPARAM cursor_position =
+        MAKELPARAM(static_cast<WORD>(cursor.x), static_cast<WORD>(cursor.y));
+    if (static_cast<int>(::SendMessage(hwnd, WM_NCHITTEST, 0,
+                                       cursor_position)) == HTCAPTION) {
       ::ReleaseCapture();
       return 0;
     }
@@ -170,16 +166,14 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
   }
 
   if (message == WM_NCACTIVATE && g_backdrop_enabled) {
-    const LRESULT result =
-        ::DefSubclassProc(hwnd, message, w_param, l_param);
+    const LRESULT result = ::DefSubclassProc(hwnd, message, w_param, l_param);
     ::DefWindowProc(hwnd, WM_NCACTIVATE, w_param, static_cast<LPARAM>(-1));
     return result;
   }
 
   if (message == WM_WINDOWPOSCHANGED || message == WM_SIZE ||
       message == WM_DWMCOMPOSITIONCHANGED || message == WM_THEMECHANGED) {
-    const LRESULT result =
-        ::DefSubclassProc(hwnd, message, w_param, l_param);
+    const LRESULT result = ::DefSubclassProc(hwnd, message, w_param, l_param);
     EnsureBackdropStyles(hwnd);
     return result;
   }
@@ -187,22 +181,12 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
   return ::DefSubclassProc(hwnd, message, w_param, l_param);
 }
 
-}
+}  // namespace
 
-void ApplyMicaBackdrop(views::Widget* widget) {
-  if (!SystemTitlebarCanUseMicaMaterial()) {
-    return;
-  }
+void PrepareSystemBackdropWindow(views::Widget* widget) {
   HWND hwnd = views::HWNDForWidget(widget);
-  const BOOL use_dark_mode =
-      widget->GetColorMode() == ui::ColorProviderKey::ColorMode::kDark;
-  ::DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark_mode,
-                          sizeof(use_dark_mode));
   g_backdrop_enabled = true;
   EnsureBackdropStyles(hwnd);
-  const DWM_SYSTEMBACKDROP_TYPE backdrop = DWMSBT_TABBEDWINDOW;
-  ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop,
-                          sizeof(backdrop));
   const COLORREF caption_color = DWMWA_COLOR_NONE;
   ::DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption_color,
                           sizeof(caption_color));
@@ -252,8 +236,8 @@ bool IsWidgetOnCurrentWorkspace(const views::Widget* widget) {
                                     IID_PPV_ARGS(&virtual_desktop_manager)))) {
     return true;
   }
-  return gfx::IsWindowOnCurrentVirtualDesktop(
-             hwnd, virtual_desktop_manager) != false;
+  return gfx::IsWindowOnCurrentVirtualDesktop(hwnd, virtual_desktop_manager) !=
+         false;
 }
 
 void InstallResizeCursorSubclass(views::Widget* widget) {
@@ -319,8 +303,8 @@ bool HandleFramelessContextMenu(views::Widget* widget,
   if (!::GetCursorPos(&physical)) {
     return false;
   }
-  const LPARAM cursor_position = MAKELPARAM(static_cast<WORD>(physical.x),
-                                            static_cast<WORD>(physical.y));
+  const LPARAM cursor_position =
+      MAKELPARAM(static_cast<WORD>(physical.x), static_cast<WORD>(physical.y));
   if (static_cast<int>(::SendMessage(hwnd, WM_NCHITTEST, 0, cursor_position)) !=
       HTCAPTION) {
     return false;
@@ -368,7 +352,7 @@ bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event) {
   if (component == HTCAPTION) {
     if (event->GetClickCount() == 2) {
       ::PostMessage(hwnd, WM_SYSCOMMAND,
-                    widget->IsMaximized() ? SC_RESTORE : SC_MAXIMIZE, 0);
+                    ::IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE, 0);
       return true;
     }
     ::PostMessage(hwnd, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, cursor_position);
@@ -381,6 +365,6 @@ bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event) {
   return true;
 }
 
-}
+}  // namespace rail
 
 #endif  // BUILDFLAG(IS_WIN)

@@ -14,7 +14,7 @@ class WebContents;
 namespace gfx {
 class Point;
 class Size;
-}
+}  // namespace gfx
 
 namespace ui {
 class MouseEvent;
@@ -26,9 +26,7 @@ class Widget;
 
 namespace rail {
 
-// Asks DWM for the Mica backdrop and matches the titlebar to the color mode.
-// Does nothing on Windows versions without Mica.
-void ApplyMicaBackdrop(views::Widget* widget);
+void PrepareSystemBackdropWindow(views::Widget* widget);
 
 void MakeShellContentsTransparent(content::WebContents* contents);
 
@@ -54,7 +52,7 @@ bool HandleFramelessContextMenu(views::Widget* widget,
                                 ui::MouseEvent* event,
                                 webui_browser::mojom::Page* page);
 
-}
+}  // namespace rail
 
 #endif  // BUILDFLAG(IS_WIN)
 
