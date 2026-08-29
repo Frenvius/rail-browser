@@ -7,7 +7,10 @@
 
 #if BUILDFLAG(IS_WIN)
 
+#include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/geometry/insets.h"
 
 namespace views {
 class Widget;
@@ -28,6 +31,9 @@ struct SystemBackdropConfig {
   SkColor fallback_color = SkColorSetRGB(27, 33, 45);
   float tint_opacity = 0.2f;
   float luminosity_opacity = 0.9f;
+  bool popup = false;
+  float corner_radius = 0.0f;
+  gfx::Insets popup_insets;
 };
 
 class SystemBackdropController {
@@ -43,6 +49,8 @@ class SystemBackdropController {
   void SetConfig(const SystemBackdropConfig& config);
   void SetActive(bool active);
   void SetDarkMode(bool dark_mode);
+  void PlayReveal(float offset_y, base::TimeDelta duration);
+  base::WeakPtr<SystemBackdropController> GetWeakPtr();
 
  private:
   class Impl;
@@ -50,6 +58,7 @@ class SystemBackdropController {
   explicit SystemBackdropController(std::unique_ptr<Impl> impl);
 
   std::unique_ptr<Impl> impl_;
+  base::WeakPtrFactory<SystemBackdropController> weak_factory_{this};
 };
 
 }  // namespace rail

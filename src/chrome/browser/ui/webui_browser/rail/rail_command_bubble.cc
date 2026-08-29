@@ -91,12 +91,12 @@ RailCommandBubble::RailCommandBubble(WebUIBrowserWindow* window)
 
 RailCommandBubble::~RailCommandBubble() {
   observation_.Reset();
-  slide_.reset();
   if (web_view_) {
     web_view_->SetWebContents(nullptr);
     web_view_ = nullptr;
   }
   shadow_.reset();
+  backdrop_.reset();
   widget_.reset();
 }
 
@@ -216,7 +216,7 @@ void RailCommandBubble::CreateWidget() {
   }
 
   widget_->SetVisibilityChangedAnimationsEnabled(false);
-  ApplyAcrylicBackdrop(widget_.get());
+  backdrop_ = ApplyAcrylicBackdrop(widget_.get());
   observation_.Observe(widget_.get());
 }
 
@@ -243,9 +243,6 @@ void RailCommandBubble::PositionWidget(const gfx::Size& contents_size) {
   gfx::Rect bounds(area.x() + (area.width() - width) / 2,
                    area.y() + static_cast<int>(area.height() * kTopFraction),
                    width, height);
-  if (slide_) {
-    bounds.set_origin(widget_->GetWindowBoundsInScreen().origin());
-  }
   widget_->SetBounds(bounds);
 
   if (shadow_) {
@@ -280,10 +277,10 @@ void RailCommandBubble::ShowUI() {
   if (!shadow_) {
     shadow_ = CreateAcrylicShadow(window_->widget(), widget_.get());
   }
-  slide_ = std::make_unique<AcrylicSlide>(widget_.get(), shadow_.get(),
-                                          -kAcrylicSlideDistance);
   widget_->Show();
   shadow_->ShowInactive();
+  RevealAcrylic(widget_.get(), shadow_.get(), backdrop_.get(),
+                -kAcrylicSlideDistance);
   widget_->Activate();
   if (web_view_) {
     web_view_->RequestFocus();
@@ -309,7 +306,6 @@ void RailCommandBubble::Hide() {
     return;
   }
   showing_ = false;
-  slide_.reset();
   if (shadow_) {
     shadow_->Hide();
   }

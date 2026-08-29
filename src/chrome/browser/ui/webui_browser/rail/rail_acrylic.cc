@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/functional/bind.h"
-#include "base/numerics/safe_conversions.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "cc/paint/paint_canvas.h"
 #include "cc/paint/paint_flags.h"
@@ -16,12 +16,16 @@
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/compositor.h"
+#include "ui/compositor/layer.h"
+#include "ui/compositor/layer_animator.h"
+#include "ui/compositor/scoped_layer_animation_settings.h"
+#include "ui/gfx/animation/tween.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/skia_conversions.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/shadow_value.h"
-#include "ui/gfx/animation/tween.h"
 #include "ui/gfx/skia_paint_util.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
@@ -31,47 +35,34 @@ namespace rail {
 
 namespace {
 
-constexpr int kAccentEnableBlurBehind = 3;
-constexpr int kWindowCompositionAttributeAccentPolicy = 19;
 constexpr int kShadowBlur = 16;
 constexpr int kShadowOffsetY = 3;
 constexpr SkAlpha kShadowAlpha = 0x33;
-constexpr base::TimeDelta kSlideDuration = base::Milliseconds(220);
+constexpr base::TimeDelta kSlideDuration = base::Milliseconds(200);
+constexpr float kHiddenOpacity = 0.01f;
 
-struct AccentPolicy {
-  DWORD state;
-  DWORD flags;
-  DWORD gradient_color;
-  DWORD animation_id;
-};
-
-struct WindowCompositionAttributeData {
-  DWORD attribute;
-  void* data;
-  SIZE_T size;
-};
-
-using SetWindowCompositionAttributeFn =
-    BOOL(WINAPI*)(HWND, WindowCompositionAttributeData*);
-
-void SetAccentState(HWND hwnd, DWORD state) {
-  static const auto set_attribute =
-      reinterpret_cast<SetWindowCompositionAttributeFn>(::GetProcAddress(
-          ::GetModuleHandleW(L"user32.dll"), "SetWindowCompositionAttribute"));
-  if (!set_attribute) {
+void NeutralizeDwmFrame(HWND hwnd) {
+  if (!hwnd) {
     return;
   }
-  AccentPolicy policy = {};
-  policy.state = state;
-  WindowCompositionAttributeData data = {
-      kWindowCompositionAttributeAccentPolicy, &policy, sizeof(policy)};
-  set_attribute(hwnd, &data);
+  const COLORREF none = DWMWA_COLOR_NONE;
+  ::DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &none, sizeof(none));
+  ::DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &none, sizeof(none));
+  const DWM_SYSTEMBACKDROP_TYPE no_backdrop = DWMSBT_NONE;
+  ::DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &no_backdrop,
+                          sizeof(no_backdrop));
 }
 
-void ApplyAccentAfterPresent(HWND hwnd, const viz::FrameTimingDetails&) {
-  if (::IsWindow(hwnd)) {
-    SetAccentState(hwnd, kAccentEnableBlurBehind);
-  }
+SystemBackdropConfig PopupBackdropConfig() {
+  SystemBackdropConfig config;
+  config.material = SystemBackdropMaterial::kAcrylic;
+  config.tint_color = SkColorSetRGB(0x14, 0x14, 0x14);
+  config.fallback_color = SkColorSetRGB(0x1c, 0x1c, 0x1c);
+  config.tint_opacity = 0.85f;
+  config.luminosity_opacity = 1.0f;
+  config.popup = true;
+  config.corner_radius = kAcrylicCornerRadius;
+  return config;
 }
 
 class ShadowView : public views::View {
@@ -112,29 +103,25 @@ END_METADATA
 
 }
 
-void ApplyAcrylicBackdrop(views::Widget* widget) {
+std::unique_ptr<SystemBackdropController> ApplyAcrylicBackdrop(
+    views::Widget* widget,
+    const gfx::Insets& insets) {
   if (!widget) {
-    return;
+    return nullptr;
   }
   HWND hwnd = views::HWNDForWidget(widget);
   if (!hwnd) {
-    return;
+    return nullptr;
   }
-  const COLORREF border_color = DWMWA_COLOR_NONE;
-  ::DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border_color,
-                          sizeof(border_color));
+  NeutralizeDwmFrame(hwnd);
 
-  const DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_ROUND;
+  const DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_DONOTROUND;
   ::DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner,
                           sizeof(corner));
 
-  ui::Compositor* compositor = widget->GetCompositor();
-  if (!compositor) {
-    SetAccentState(hwnd, kAccentEnableBlurBehind);
-    return;
-  }
-  compositor->RequestSuccessfulPresentationTimeForNextFrame(
-      base::BindOnce(&ApplyAccentAfterPresent, hwnd));
+  SystemBackdropConfig config = PopupBackdropConfig();
+  config.popup_insets = insets;
+  return SystemBackdropController::Create(widget, config);
 }
 
 std::unique_ptr<views::Widget> CreateAcrylicShadow(views::Widget* parent,
@@ -158,6 +145,9 @@ std::unique_ptr<views::Widget> CreateAcrylicShadow(views::Widget* parent,
   auto shadow = std::make_unique<views::Widget>();
   shadow->Init(std::move(params));
   shadow->SetContentsView(std::make_unique<ShadowView>());
+  shadow->SetVisibilityChangedAnimationsEnabled(false);
+  shadow->GetLayer()->SetOpacity(kHiddenOpacity);
+  NeutralizeDwmFrame(views::HWNDForWidget(shadow.get()));
   shadow->ShowInactive();
 
   HWND shadow_hwnd = views::HWNDForWidget(shadow.get());
@@ -171,45 +161,68 @@ std::unique_ptr<views::Widget> CreateAcrylicShadow(views::Widget* parent,
   return shadow;
 }
 
-AcrylicSlide::AcrylicSlide(views::Widget* target,
-                           views::Widget* shadow,
-                           int start_offset)
-    : target_(target),
-      shadow_(shadow),
-      start_offset_(start_offset),
-      target_origin_(target->GetWindowBoundsInScreen().origin()),
-      shadow_origin_(shadow ? shadow->GetWindowBoundsInScreen().origin()
-                            : gfx::Point()),
-      animation_(kSlideDuration,
-                 gfx::LinearAnimation::kDefaultFrameRate,
-                 this) {
-  MoveBy(start_offset_);
-  animation_.Start();
+namespace {
+
+void HideLayer(views::Widget* widget, int start_offset) {
+  ui::Layer* layer = widget ? widget->GetLayer() : nullptr;
+  if (!layer) {
+    return;
+  }
+  gfx::Transform start;
+  start.Translate(0, start_offset);
+  layer->SetTransform(start);
+  layer->SetOpacity(kHiddenOpacity);
 }
 
-AcrylicSlide::~AcrylicSlide() = default;
-
-void AcrylicSlide::AnimationProgressed(const gfx::Animation* animation) {
-  const double eased = gfx::Tween::CalculateValue(
-      gfx::Tween::EASE_OUT, animation->GetCurrentValue());
-  MoveBy(base::ClampRound(start_offset_ * (1.0 - eased)));
+void AnimateLayer(views::Widget* widget) {
+  ui::Layer* layer = widget ? widget->GetLayer() : nullptr;
+  if (!layer) {
+    return;
+  }
+  ui::ScopedLayerAnimationSettings settings(layer->GetAnimator());
+  settings.SetTransitionDuration(kSlideDuration);
+  settings.SetTweenType(gfx::Tween::EASE_OUT_3);
+  settings.SetPreemptionStrategy(
+      ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
+  layer->SetTransform(gfx::Transform());
+  layer->SetOpacity(1.0f);
 }
 
-void AcrylicSlide::AnimationEnded(const gfx::Animation* animation) {
-  MoveBy(0);
+void StartReveal(base::WeakPtr<views::Widget> target,
+                 base::WeakPtr<views::Widget> shadow,
+                 base::WeakPtr<SystemBackdropController> backdrop,
+                 int start_offset,
+                 const viz::FrameTimingDetails&) {
+  if (backdrop) {
+    backdrop->PlayReveal(static_cast<float>(start_offset), kSlideDuration);
+  }
+  AnimateLayer(target.get());
+  AnimateLayer(shadow.get());
 }
 
-void AcrylicSlide::MoveBy(int dy) {
-  const auto place = [dy](views::Widget* widget, const gfx::Point& origin) {
-    if (!widget) {
-      return;
-    }
-    gfx::Rect bounds = widget->GetWindowBoundsInScreen();
-    bounds.set_origin(origin + gfx::Vector2d(0, dy));
-    widget->SetBounds(bounds);
-  };
-  place(target_, target_origin_);
-  place(shadow_, shadow_origin_);
+}  // namespace
+
+void RevealAcrylic(views::Widget* target,
+                   views::Widget* shadow,
+                   SystemBackdropController* backdrop,
+                   int start_offset) {
+  if (!target) {
+    return;
+  }
+  HideLayer(target, start_offset);
+  HideLayer(shadow, start_offset);
+  ui::Compositor* compositor = target->GetCompositor();
+  if (!compositor) {
+    AnimateLayer(target);
+    AnimateLayer(shadow);
+    return;
+  }
+  compositor->RequestSuccessfulPresentationTimeForNextFrame(base::BindOnce(
+      &StartReveal, target->GetWeakPtr(),
+      shadow ? shadow->GetWeakPtr() : base::WeakPtr<views::Widget>(),
+      backdrop ? backdrop->GetWeakPtr()
+               : base::WeakPtr<SystemBackdropController>(),
+      start_offset));
 }
 
-}
+}  // namespace rail

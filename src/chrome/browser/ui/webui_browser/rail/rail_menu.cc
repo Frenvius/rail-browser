@@ -201,9 +201,7 @@ RailMenu::RailMenu(base::RepeatingCallback<void(const std::string&)> on_command,
       on_command_(std::move(on_command)),
       on_closed_(std::move(on_closed)) {}
 
-RailMenu::~RailMenu() {
-  CloseShadows();
-}
+RailMenu::~RailMenu() = default;
 
 void RailMenu::ShowAtCursor(
     views::Widget* parent,
@@ -218,7 +216,8 @@ void RailMenu::ShowAtCursor(
       model_.get(),
       base::BindRepeating(&RailMenu::OnClosed, weak_factory_.GetWeakPtr()),
       base::BindRepeating(&RailMenu::StyleSubmenu, weak_factory_.GetWeakPtr()),
-      base::BindRepeating(&RailMenu::HideShadow, weak_factory_.GetWeakPtr()));
+      base::BindRepeating(&RailMenu::ReleaseBackdrop,
+                          weak_factory_.GetWeakPtr()));
   std::unique_ptr<views::MenuItemView> root = adapter_->CreateMenu();
   root_ = root.get();
   Decorate();
@@ -227,7 +226,7 @@ void RailMenu::ShowAtCursor(
 
   cursor_ = display::Screen::Get()->GetCursorScreenPoint();
   runner_->RunMenuAt(parent, nullptr, gfx::Rect(cursor_, gfx::Size()),
-                     views::MenuAnchorPosition::kTopLeft,
+                     views::MenuAnchorPosition::kBubbleTopLeft,
                      ui::mojom::MenuSourceType::kMouse);
 
   StyleSubmenu(root_);
@@ -238,52 +237,31 @@ void RailMenu::StyleSubmenu(views::MenuItemView* item) {
   if (!submenu || !submenu->IsShowing()) {
     return;
   }
-  submenu->GetScrollViewContainer()->SetBackground(
-      views::CreateSolidBackground(kAcrylicTint));
-  ApplyAcrylicBackdrop(submenu->GetWidget());
-  AddShadow(item, submenu->GetWidget());
-}
-
-void RailMenu::AddShadow(views::MenuItemView* item,
-                         views::Widget* menu_widget) {
-  if (!menu_widget || !parent_ || shadows_.count(item)) {
+  if (backdrops_.count(item)) {
     return;
   }
+  views::MenuScrollViewContainer* container = submenu->GetScrollViewContainer();
+  container->SetBackground(views::CreateSolidBackground(SK_ColorTRANSPARENT));
+  views::Widget* menu_widget = submenu->GetWidget();
+  backdrops_[item] =
+      ApplyAcrylicBackdrop(menu_widget, container->outside_border_insets());
+
   const gfx::Rect menu_bounds = menu_widget->GetWindowBoundsInScreen();
   const int anchor_bottom = item == root_
                                 ? cursor_.y()
                                 : item->GetBoundsInScreen().bottom();
   const bool opens_upward =
       menu_bounds.bottom() <= anchor_bottom + kSlideAnchorSlack;
-
-  std::unique_ptr<views::Widget> shadow =
-      CreateAcrylicShadow(parent_, menu_widget);
-  slides_[item] = std::make_unique<AcrylicSlide>(
-      menu_widget, shadow.get(),
-      opens_upward ? kAcrylicSlideDistance : -kAcrylicSlideDistance);
-  shadows_[item] = std::move(shadow);
+  RevealAcrylic(menu_widget, nullptr, backdrops_[item].get(),
+                opens_upward ? kAcrylicSlideDistance : -kAcrylicSlideDistance);
 }
 
-void RailMenu::HideShadow(views::MenuItemView* item) {
-  slides_.erase(item);
-  const auto entry = shadows_.find(item);
-  if (entry == shadows_.end()) {
-    return;
-  }
-  entry->second->Close();
-  shadows_.erase(entry);
-}
-
-void RailMenu::CloseShadows() {
-  slides_.clear();
-  for (const auto& [item, shadow] : shadows_) {
-    shadow->Close();
-  }
-  shadows_.clear();
+void RailMenu::ReleaseBackdrop(views::MenuItemView* item) {
+  backdrops_.erase(item);
 }
 
 void RailMenu::OnClosed() {
-  CloseShadows();
+  backdrops_.clear();
   on_closed_.Run();
 }
 

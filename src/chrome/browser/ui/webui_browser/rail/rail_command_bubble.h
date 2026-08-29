@@ -73,8 +73,8 @@ class RailCommandBubble : public WebUIContentsWrapper::Host,
   const raw_ptr<WebUIBrowserWindow> window_;
   std::unique_ptr<Contents> contents_;
   std::unique_ptr<views::Widget> widget_;
+  std::unique_ptr<SystemBackdropController> backdrop_;
   std::unique_ptr<views::Widget> shadow_;
-  std::unique_ptr<AcrylicSlide> slide_;
   raw_ptr<views::WebView> web_view_ = nullptr;
   rail_command::mojom::CommandContextPtr context_;
   std::string pending_text_;

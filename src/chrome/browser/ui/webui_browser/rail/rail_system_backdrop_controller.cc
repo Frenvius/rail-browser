@@ -25,6 +25,7 @@
 
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
 #include "chrome/browser/win/mica_titlebar.h"
 #include "ui/color/color_provider_key.h"
@@ -201,15 +202,33 @@ class SystemBackdropController::Impl {
   Impl(views::Widget* widget, const SystemBackdropConfig& config)
       : widget_(widget), hwnd_(views::HWNDForWidget(widget)), config_(config) {}
 
+  ~Impl() {
+    if (!desktop_target_) {
+      return;
+    }
+    ComPtr<wuc::ICompositionTarget> target;
+    if (SUCCEEDED(desktop_target_.As(&target))) {
+      target->put_Root(nullptr);
+    }
+    ComPtr<ABI::Windows::Foundation::IClosable> closable;
+    if (SUCCEEDED(desktop_target_.As(&closable))) {
+      closable->Close();
+    }
+  }
+
   bool Initialize() {
     if (!widget_ || !hwnd_ || !SystemTitlebarCanUseMicaMaterial()) {
       return false;
     }
-    dark_mode_ =
-        widget_->GetColorMode() == ui::ColorProviderKey::ColorMode::kDark;
-    active_ = widget_->ShouldPaintAsActive();
-    ApplyDwmDarkMode();
-    PrepareSystemBackdropWindow(widget_);
+    if (config_.popup) {
+      active_ = true;
+    } else {
+      dark_mode_ =
+          widget_->GetColorMode() == ui::ColorProviderKey::ColorMode::kDark;
+      active_ = widget_->ShouldPaintAsActive();
+      ApplyDwmDarkMode();
+      PrepareSystemBackdropWindow(widget_);
+    }
 
     composition_ = InitializeComposition();
     if (!composition_) {
@@ -250,18 +269,56 @@ class SystemBackdropController::Impl {
     ApplyDwmDarkMode();
   }
 
+  void PlayReveal(float offset_y, base::TimeDelta duration) {
+    if (!sprite_) {
+      return;
+    }
+    ComPtr<wuc::ICubicBezierEasingFunction> bezier;
+    ComPtr<wuc::ICompositionEasingFunction> easing;
+    if (FAILED(compositor_->CreateCubicBezierEasingFunction(
+            {0.1f, 0.9f}, {0.2f, 1.0f}, &bezier)) ||
+        FAILED(bezier.As(&easing))) {
+      return;
+    }
+    ComPtr<wuc::ICompositionObject> target;
+    if (FAILED(sprite_.As(&target))) {
+      return;
+    }
+    StartScalarAnimation(target.Get(), L"Offset.Y", offset_y, 0.0f, duration,
+                         easing.Get());
+    StartScalarAnimation(target.Get(), L"Opacity", 0.0f, 1.0f, duration,
+                         easing.Get());
+  }
+
  private:
+  void StartScalarAnimation(wuc::ICompositionObject* target,
+                            const wchar_t* property,
+                            float from,
+                            float to,
+                            base::TimeDelta duration,
+                            wuc::ICompositionEasingFunction* easing) {
+    ComPtr<wuc::IScalarKeyFrameAnimation> scalar;
+    ComPtr<wuc::IKeyFrameAnimation> frames;
+    ComPtr<wuc::ICompositionAnimation> animation;
+    if (FAILED(compositor_->CreateScalarKeyFrameAnimation(&scalar)) ||
+        FAILED(scalar.As(&frames)) || FAILED(scalar.As(&animation))) {
+      return;
+    }
+    const ABI::Windows::Foundation::TimeSpan span = {
+        duration.InMicroseconds() * 10};
+    frames->put_Duration(span);
+    scalar->InsertKeyFrame(0.0f, from);
+    scalar->InsertKeyFrameWithEasingFunction(1.0f, to, easing);
+    target->StartAnimation(HStringReference(property).Get(), animation.Get());
+  }
+
   bool InitializeComposition() {
     if (!CreateDispatcherQueue()) {
       return false;
     }
 
-    ComPtr<IInspectable> instance;
-    HRESULT hr = ::RoActivateInstance(
-        HStringReference(RuntimeClass_Windows_UI_Composition_Compositor).Get(),
-        &instance);
-    if (FAILED(hr) || FAILED(instance.As(&compositor_))) {
-      VLOG(1) << "Compositor activation failed: 0x" << std::hex << hr;
+    compositor_ = SharedCompositor();
+    if (!compositor_) {
       return false;
     }
 
@@ -273,7 +330,8 @@ class SystemBackdropController::Impl {
     if (FAILED(compositor_.As(&interop))) {
       return false;
     }
-    hr = interop->CreateDesktopWindowTarget(hwnd_, false, &desktop_target_);
+    const HRESULT hr =
+        interop->CreateDesktopWindowTarget(hwnd_, false, &desktop_target_);
     if (FAILED(hr)) {
       VLOG(1) << "DesktopWindowTarget creation failed: 0x" << std::hex << hr;
       return false;
@@ -288,6 +346,18 @@ class SystemBackdropController::Impl {
         FAILED(sizing->put_RelativeSizeAdjustment({1.0f, 1.0f}))) {
       return false;
     }
+    if (config_.popup) {
+      visual->put_Opacity(0.0f);
+    }
+    const float scale = DpiScale();
+    const gfx::Insets& insets = config_.popup_insets;
+    if (!insets.IsEmpty()) {
+      visual->put_Offset({insets.left() * scale, insets.top() * scale, 0.0f});
+      visual->put_Size({-insets.width() * scale, -insets.height() * scale});
+    }
+    if (config_.corner_radius > 0.0f) {
+      ApplyRoundedClip(visual.Get());
+    }
     ComPtr<wuc::ICompositionTarget> target;
     if (FAILED(desktop_target_.As(&target)) ||
         FAILED(target->put_Root(visual.Get()))) {
@@ -301,7 +371,57 @@ class SystemBackdropController::Impl {
     return true;
   }
 
+  float DpiScale() const { return ::GetDpiForWindow(hwnd_) / 96.0f; }
+
+  void ApplyRoundedClip(wuc::IVisual* visual) {
+    RECT client = {};
+    if (!::GetClientRect(hwnd_, &client)) {
+      return;
+    }
+    ComPtr<wuc::ICompositor7> compositor7;
+    ComPtr<wuc::IRectangleClip> rectangle;
+    ComPtr<wuc::ICompositionClip> clip;
+    if (FAILED(compositor_.As(&compositor7)) ||
+        FAILED(compositor7->CreateRectangleClip(&rectangle)) ||
+        FAILED(rectangle.As(&clip))) {
+      return;
+    }
+    const float scale = DpiScale();
+    const ABI::Windows::Foundation::Numerics::Vector2 radius = {
+        config_.corner_radius * scale, config_.corner_radius * scale};
+    rectangle->put_Right(client.right - config_.popup_insets.width() * scale);
+    rectangle->put_Bottom(client.bottom -
+                          config_.popup_insets.height() * scale);
+    rectangle->put_TopLeftRadius(radius);
+    rectangle->put_TopRightRadius(radius);
+    rectangle->put_BottomLeftRadius(radius);
+    rectangle->put_BottomRightRadius(radius);
+    visual->put_Clip(clip.Get());
+  }
+
+  static ComPtr<wuc::ICompositor> SharedCompositor() {
+    static base::NoDestructor<ComPtr<wuc::ICompositor>> compositor;
+    if (*compositor) {
+      return *compositor;
+    }
+    ComPtr<IInspectable> instance;
+    const HRESULT hr = ::RoActivateInstance(
+        HStringReference(RuntimeClass_Windows_UI_Composition_Compositor).Get(),
+        &instance);
+    if (FAILED(hr) || FAILED(instance.As(&*compositor))) {
+      VLOG(1) << "Compositor activation failed: 0x" << std::hex << hr;
+      compositor->Reset();
+    }
+    return *compositor;
+  }
+
   bool CreateDispatcherQueue() {
+    static base::NoDestructor<
+        ComPtr<ABI::Windows::System::IDispatcherQueueController>>
+        queue;
+    if (*queue) {
+      return true;
+    }
     HMODULE core_messaging = ::LoadLibraryW(L"CoreMessaging.dll");
     if (!core_messaging) {
       return false;
@@ -316,8 +436,8 @@ class SystemBackdropController::Impl {
     }
     DispatcherQueueOptions options = {sizeof(DispatcherQueueOptions),
                                       DQTYPE_THREAD_CURRENT, DQTAT_COM_NONE};
-    const HRESULT hr = create(options, &queue_);
-    if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)) {
+    const HRESULT hr = create(options, &*queue);
+    if (FAILED(hr)) {
       VLOG(1) << "DispatcherQueue creation failed: 0x" << std::hex << hr;
       return false;
     }
@@ -467,7 +587,6 @@ class SystemBackdropController::Impl {
   bool active_ = false;
   bool dark_mode_ = true;
   bool composition_ = false;
-  ComPtr<ABI::Windows::System::IDispatcherQueueController> queue_;
   ComPtr<wuc::ICompositor> compositor_;
   ComPtr<wuc::Desktop::IDesktopWindowTarget> desktop_target_;
   ComPtr<wuc::ISpriteVisual> sprite_;
@@ -500,6 +619,15 @@ void SystemBackdropController::SetActive(bool active) {
 
 void SystemBackdropController::SetDarkMode(bool dark_mode) {
   impl_->SetDarkMode(dark_mode);
+}
+
+void SystemBackdropController::PlayReveal(float offset_y,
+                                          base::TimeDelta duration) {
+  impl_->PlayReveal(offset_y, duration);
+}
+
+base::WeakPtr<SystemBackdropController> SystemBackdropController::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 }  // namespace rail

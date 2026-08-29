@@ -53,9 +53,7 @@ class RailMenu {
             const std::vector<webui_browser::mojom::RailMenuItemPtr>& items);
   void Decorate();
   void StyleSubmenu(views::MenuItemView* item);
-  void AddShadow(views::MenuItemView* item, views::Widget* menu_widget);
-  void HideShadow(views::MenuItemView* item);
-  void CloseShadows();
+  void ReleaseBackdrop(views::MenuItemView* item);
   void OnClosed();
   void OnSwatchPicked(const std::string& command, const std::string& color);
 
@@ -71,8 +69,8 @@ class RailMenu {
   raw_ptr<views::MenuItemView> root_ = nullptr;
   raw_ptr<views::Widget> parent_ = nullptr;
   gfx::Point cursor_;
-  std::map<views::MenuItemView*, std::unique_ptr<views::Widget>> shadows_;
-  std::map<views::MenuItemView*, std::unique_ptr<AcrylicSlide>> slides_;
+  std::map<views::MenuItemView*, std::unique_ptr<SystemBackdropController>>
+      backdrops_;
   base::WeakPtrFactory<RailMenu> weak_factory_{this};
 };
 
