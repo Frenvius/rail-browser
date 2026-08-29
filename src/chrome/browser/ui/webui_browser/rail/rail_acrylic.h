@@ -15,7 +15,7 @@ class Widget;
 
 namespace rail {
 
-inline constexpr SkColor kAcrylicTint = SkColorSetARGB(0xB0, 0x14, 0x14, 0x1C);
+inline constexpr SkColor kAcrylicTint = SkColorSetARGB(0xB0, 0x14, 0x14, 0x14);
 inline constexpr int kAcrylicCornerRadius = 8;
 inline constexpr int kAcrylicShadowMargin = 16;
 inline constexpr int kAcrylicSlideDistance = 28;
@@ -46,6 +46,6 @@ class AcrylicSlide : public gfx::AnimationDelegate {
   gfx::LinearAnimation animation_;
 };
 
-}
+}  // namespace rail
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_ACRYLIC_H_

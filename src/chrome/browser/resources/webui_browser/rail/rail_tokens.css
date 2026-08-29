@@ -6,29 +6,26 @@
  * boundaries, so every part below the app host reads them without importing
  * this sheet again. */
 :host {
-  --rail-accent: #7c5cfc;
-  --rail-accent-soft: rgb(124 92 252 / 22%);
-  --rail-border: rgb(255 255 255 / 8%);
-  --rail-chrome: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 14%,
+  --rail-accent: var(--rail-space-color, #7c5cfc);
+  --rail-accent-soft: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 22%,
       transparent);
-  --rail-chrome-strong: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
-      rgb(30 30 50 / 92%));
-  --rail-surface: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 10%,
-      #252540);
+  --rail-border: rgb(255 255 255 / 10%);
+  --rail-chrome: color-mix(in srgb, var(--rail-space-tint, #7c5cfc) 12%,
+      transparent);
+  --rail-chrome-strong: color-mix(in srgb, var(--rail-space-tint, #7c5cfc) 85%,
+      rgb(0 0 0 / 70%));
+  --rail-surface: color-mix(in srgb, var(--rail-space-tint, #7c5cfc) 8%,
+      transparent);
   --rail-danger: #e57;
-  --rail-divider: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
-      rgb(42 42 66 / 90%));
-  --rail-elevated: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
-      rgb(40 40 64 / 92%));
-  --rail-hover: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 12%,
-      rgb(48 48 72 / 92%));
-  --rail-hover-strong: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 14%,
-      rgb(61 61 92 / 95%));
-  --rail-placeholder: #707088;
+  --rail-divider: rgb(255 255 255 / 10%);
+  --rail-elevated: rgb(255 255 255 / 6%);
+  --rail-hover: rgb(255 255 255 / 10%);
+  --rail-hover-strong: rgb(255 255 255 / 16%);
+  --rail-placeholder: #777;
   --rail-sidebar-width: 208px;
-  --rail-text: #f0f0ff;
-  --rail-text-dim: #b0b0c8;
-  --rail-text-label: #808098;
-  --rail-text-muted: #c0c0d8;
+  --rail-text: #f2f2f2;
+  --rail-text-dim: #b4b4b4;
+  --rail-text-label: #8a8a8a;
+  --rail-text-muted: #cfcfcf;
   --rail-titlebar-height: 36px;
 }

@@ -11,7 +11,8 @@
   --command-selected: color-mix(in srgb, var(--rail-space-color, #fff) 22%,
       rgb(255 255 255 / 7%));
 
-  background: rgb(20 20 28 / 69%);
+  background: color-mix(in srgb, var(--rail-space-color, #fff) 45%,
+      transparent);
   border: 1px solid var(--rail-border);
   border-radius: 8px;
   color: var(--rail-text);

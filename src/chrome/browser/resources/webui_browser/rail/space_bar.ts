@@ -8,13 +8,39 @@ import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/c
 import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
+import {browserProxyFactory, SystemBackdropMaterial} from '../browser.mojom-webui.js';
+
 import {announceMenuOpen} from './menu_overlay.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
 import type {SpaceMenuDetail} from './space_menu.js';
 import {openSpaceMenu} from './space_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
-import {SPACE_ICONS} from './spaces.js';
+import {
+  hexToHsl,
+  hslToHex,
+  spaceHex,
+  SPACE_COLORS,
+  SPACE_ICONS,
+  tintStrength,
+  withStrength,
+} from './spaces.js';
+
+const PICKER_SATURATION = 70;
+const PICKER_MIN_LIGHTNESS = 18;
+const PICKER_MAX_LIGHTNESS = 82;
+
+const BACKDROP_MATERIALS: ReadonlyArray<readonly[SystemBackdropMaterial, string]> = [
+  [SystemBackdropMaterial.kMica, 'Mica'],
+  [SystemBackdropMaterial.kMicaAlt, 'Mica Alt'],
+  [SystemBackdropMaterial.kAcrylic, 'Acrylic'],
+  [SystemBackdropMaterial.kAcrylicThin, 'Thin'],
+];
+
+function hexToArgb(hex: string): number {
+  const value = Number.parseInt(hex.slice(1, 7), 16);
+  return (0xff000000 | value) >>> 0;
+}
 
 export type SpaceCommand = 'create'|'move'|'newprofile'|'remove'|'rename'|
     'restyle'|'select'|'setprofile';
@@ -59,6 +85,15 @@ export class SpaceBarElement extends CrLitElement {
       editing_: {type: Boolean, state: true},
       confirming_: {type: Boolean, state: true},
       picking_: {type: Boolean, state: true},
+      coloring_: {type: Boolean, state: true},
+      hue_: {type: Number, state: true},
+      exactHex_: {type: String, state: true},
+      saturation_: {type: Number, state: true},
+      lightness_: {type: Number, state: true},
+      strength_: {type: Number, state: true},
+      material_: {type: Number, state: true},
+      tintOpacity_: {type: Number, state: true},
+      luminosityOpacity_: {type: Number, state: true},
       iconQuery_: {type: String, state: true},
       profileName_: {type: String, state: true},
       menuTarget_: {type: String, state: true},
@@ -73,9 +108,20 @@ export class SpaceBarElement extends CrLitElement {
   protected accessor editing_ = false;
   protected accessor confirming_ = false;
   protected accessor picking_ = false;
+  protected accessor coloring_ = false;
+  protected accessor hue_ = 0;
+  protected accessor exactHex_ = '';
+  protected accessor saturation_ = PICKER_SATURATION;
+  protected accessor lightness_ = 50;
+  protected accessor strength_ = 0;
+  protected accessor material_: SystemBackdropMaterial =
+      SystemBackdropMaterial.kAcrylic;
+  protected accessor tintOpacity_ = 20;
+  protected accessor luminosityOpacity_ = 90;
   protected accessor iconQuery_ = '';
   protected accessor profileName_ = '';
   protected accessor menuTarget_ = '';
+  private backdropFrame_ = 0;
   private menuX_ = 0;
   private menuY_ = 0;
 
@@ -92,7 +138,7 @@ export class SpaceBarElement extends CrLitElement {
   }
 
   protected activeColor_(): string {
-    return this.activeSpace_()?.color ?? '';
+    return spaceHex(this.activeSpace_()?.color ?? '');
   }
 
   protected targetSpace_(): Space|undefined {
@@ -138,7 +184,7 @@ export class SpaceBarElement extends CrLitElement {
   private runMenuCommand_(detail: SpaceMenuDetail) {
     switch (detail.command) {
       case 'recolor':
-        this.fire_('restyle', this.menuTarget_, {color: detail.color});
+        void this.openColorPicker_();
         return;
       case 'change-icon':
         void this.openIconPicker_();
@@ -175,6 +221,145 @@ export class SpaceBarElement extends CrLitElement {
     this.picking_ = true;
     await this.openPanel_();
     this.shadowRoot.querySelector<HTMLInputElement>('#iconSearch')?.focus();
+  }
+
+  private async openColorPicker_() {
+    const current = this.targetSpace_()?.color ?? SPACE_COLORS[0]!;
+    const [hue, saturation, lightness] = hexToHsl(current);
+    this.hue_ = hue;
+    this.saturation_ = saturation;
+    this.lightness_ = lightness;
+    this.exactHex_ = spaceHex(current);
+    this.strength_ = Math.round(tintStrength(current) * 100);
+    this.coloring_ = true;
+    await this.openPanel_();
+  }
+
+  protected swatches_(): readonly string[] {
+    return SPACE_COLORS;
+  }
+
+  protected pickedHex_(): string {
+    return this.exactHex_ ||
+        hslToHex(this.hue_, this.saturation_, this.lightness_);
+  }
+
+  protected trackGradient_(): string {
+    return `linear-gradient(to right, transparent, ${this.pickedHex_()})`;
+  }
+
+  protected dotLeft_(): string {
+    return `${this.hue_ / 360 * 100}%`;
+  }
+
+  protected dotTop_(): string {
+    return `${
+        (PICKER_MAX_LIGHTNESS - this.lightness_) /
+        (PICKER_MAX_LIGHTNESS - PICKER_MIN_LIGHTNESS) * 100}%`;
+  }
+
+  protected onFieldPointerdown_(e: PointerEvent) {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    this.trackField_(e);
+  }
+
+  protected onFieldPointermove_(e: PointerEvent) {
+    if (!e.buttons) {
+      return;
+    }
+    this.trackField_(e);
+  }
+
+  private trackField_(e: PointerEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+    this.hue_ = Math.round(x * 360);
+    this.saturation_ = PICKER_SATURATION;
+    this.lightness_ = Math.round(
+        PICKER_MAX_LIGHTNESS - y * (PICKER_MAX_LIGHTNESS - PICKER_MIN_LIGHTNESS));
+    this.exactHex_ = '';
+    this.commitColor_();
+  }
+
+  protected onHexInput_(e: Event) {
+    const text =
+        (e.target as HTMLInputElement).value.trim().replace(/^#/, '');
+    if (!/^[0-9a-fA-F]{6}$/.test(text)) {
+      return;
+    }
+    const [hue, saturation, lightness] = hexToHsl(`#${text}`);
+    this.hue_ = hue;
+    this.saturation_ = saturation;
+    this.lightness_ = lightness;
+    this.exactHex_ = `#${text.toLowerCase()}`;
+    this.commitColor_();
+  }
+
+  protected onHexKeydown_(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      this.$.menu.close();
+    }
+    e.stopPropagation();
+  }
+
+  protected onStrengthInput_(e: Event) {
+    this.strength_ = Number((e.target as HTMLInputElement).value);
+    this.commitColor_();
+  }
+
+  protected onSwatchClick_(e: Event) {
+    const color = (e.currentTarget as HTMLElement).dataset['color'] ?? '';
+    const [hue, saturation, lightness] = hexToHsl(color);
+    this.hue_ = hue;
+    this.saturation_ = saturation;
+    this.lightness_ = lightness;
+    this.exactHex_ = spaceHex(color);
+    this.commitColor_();
+  }
+
+  private commitColor_() {
+    this.fire_(
+        'restyle', this.menuTarget_,
+        {color: withStrength(this.pickedHex_(), this.strength_ / 100)});
+    this.commitBackdrop_();
+  }
+
+  protected materials_(): ReadonlyArray<readonly[SystemBackdropMaterial, string]> {
+    return BACKDROP_MATERIALS;
+  }
+
+  protected onMaterialClick_(e: Event) {
+    const value = (e.currentTarget as HTMLElement).dataset['material'] ?? '';
+    this.material_ = Number(value) as SystemBackdropMaterial;
+    this.commitBackdrop_();
+  }
+
+  protected onTintOpacityInput_(e: Event) {
+    this.tintOpacity_ = Number((e.target as HTMLInputElement).value);
+    this.commitBackdrop_();
+  }
+
+  protected onLuminosityOpacityInput_(e: Event) {
+    this.luminosityOpacity_ = Number((e.target as HTMLInputElement).value);
+    this.commitBackdrop_();
+  }
+
+  private commitBackdrop_() {
+    if (this.backdropFrame_ !== 0) {
+      return;
+    }
+    this.backdropFrame_ = requestAnimationFrame(() => {
+      this.backdropFrame_ = 0;
+      const color = hexToArgb(this.pickedHex_());
+      browserProxyFactory.getInstance().handler.setSystemBackdrop({
+        material: this.material_,
+        tintColor: color,
+        fallbackColor: color,
+        tintOpacity: this.tintOpacity_ / 100,
+        luminosityOpacity: this.luminosityOpacity_ / 100,
+      });
+    });
   }
 
   private async openRemoveConfirm_() {
@@ -282,6 +467,7 @@ export class SpaceBarElement extends CrLitElement {
   protected onMenuClose_() {
     this.confirming_ = false;
     this.picking_ = false;
+    this.coloring_ = false;
     this.iconQuery_ = '';
   }
 

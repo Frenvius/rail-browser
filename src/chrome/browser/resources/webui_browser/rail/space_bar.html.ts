@@ -49,6 +49,58 @@ ${this.variant === 'title' ? html`
       @click="${this.onConfirmRemoveClick_}">
       Delete Space
     </button>
+  ` : this.coloring_ ? html`
+    <div id="colorpicker">
+      <div class="panelhead">
+        <button class="panelback" title="Back"
+          @click="${this.onPickerBackClick_}">
+          <cr-icon icon="cr:arrow-back"></cr-icon>
+        </button>
+        <input id="colorname" spellcheck="false" maxlength="7"
+          aria-label="Hex color" .value="${this.pickedHex_()}"
+          @input="${this.onHexInput_}" @keydown="${this.onHexKeydown_}">
+        <div id="colorpreview" style="background: ${this.pickedHex_()}"></div>
+      </div>
+      <div id="colorfield" @pointerdown="${this.onFieldPointerdown_}"
+        @pointermove="${this.onFieldPointermove_}">
+        <div id="colordot"
+          style="left: ${this.dotLeft_()}; top: ${this.dotTop_()}"></div>
+      </div>
+      <input id="strength" type="range" min="0" max="100"
+        style="--track-gradient: ${this.trackGradient_()}"
+        .value="${String(this.strength_)}"
+        @input="${this.onStrengthInput_}">
+      <div id="swatches">
+        ${this.swatches_().map(color => html`
+          <button class="swatch" data-color="${color}" title="${color}"
+            style="background: ${color}"
+            @click="${this.onSwatchClick_}"></button>
+        `)}
+      </div>
+      <div id="backdrop">
+        <div id="materials">
+          ${this.materials_().map(([value, label]) => html`
+            <button class="material" data-material="${value}"
+              ?selected="${value === this.material_}"
+              @click="${this.onMaterialClick_}">${label}</button>
+          `)}
+        </div>
+        <label class="dial">
+          <span>Tint</span>
+          <input type="range" min="0" max="100"
+            .value="${String(this.tintOpacity_)}"
+            @input="${this.onTintOpacityInput_}">
+          <em>${this.tintOpacity_}</em>
+        </label>
+        <label class="dial">
+          <span>Lumin</span>
+          <input type="range" min="0" max="100"
+            .value="${String(this.luminosityOpacity_)}"
+            @input="${this.onLuminosityOpacityInput_}">
+          <em>${this.luminosityOpacity_}</em>
+        </label>
+      </div>
+    </div>
   ` : this.picking_ ? html`
     <div id="picker">
       <div class="panelhead">

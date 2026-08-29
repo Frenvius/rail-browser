@@ -32,7 +32,6 @@
   background: var(--rail-chrome);
   grid-row: 1;
   min-width: 0;
-  transition: background-color 260ms ease;
 }
 
 /* Hide browser frame in tab fullscreen mode */
@@ -201,11 +200,10 @@ webui-browser-tab-strip {
   display: flex;
   flex-direction: row;
   flex: 1;
-  background-color: var(--rail-chrome);
+  background: var(--rail-chrome);
   min-height: 0;
   padding: 0 6px 6px 0;
   position: relative;
-  transition: background-color 260ms ease;
 }
 
 #sidebarResizer {
@@ -263,9 +261,8 @@ webui-browser-tab-strip {
 
 content-region {
   background: var(--rail-surface);
-  transition: background-color 260ms ease;
   border-radius: 8px;
-  box-shadow: 0 0 8px rgb(10 10 24 / 50%);
+  box-shadow: 0 0 8px rgb(0 0 0 / 50%);
   overflow: hidden;
 }
 
@@ -276,9 +273,9 @@ content-region[hidden],
 
 #emptyState {
   align-items: center;
-  background: #252540;
+  background: var(--rail-surface);
   border-radius: 8px;
-  box-shadow: 0 0 8px rgb(10 10 24 / 50%);
+  box-shadow: 0 0 8px rgb(0 0 0 / 50%);
   display: flex;
   flex: 1;
   flex-direction: column;

@@ -6,6 +6,71 @@ import type {SidebarState, StoredSpace, StoredTab} from './sidebar_state.js';
 export const SPACE_COLORS =
     ['#7c5cfc', '#4488ee', '#ee5577', '#44cc77', '#eeaa33'];
 
+export function hslToHex(
+    hue: number, saturation: number, lightness: number): string {
+  const s = saturation / 100;
+  const l = lightness / 100;
+  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const segment = ((hue % 360) + 360) % 360 / 60;
+  const second = chroma * (1 - Math.abs(segment % 2 - 1));
+  const rgb = segment < 1 ? [chroma, second, 0] :
+      segment < 2       ? [second, chroma, 0] :
+      segment < 3       ? [0, chroma, second] :
+      segment < 4       ? [0, second, chroma] :
+      segment < 5       ? [second, 0, chroma] :
+                          [chroma, 0, second];
+  const base = l - chroma / 2;
+  return '#' +
+      rgb.map(channel => Math.round((channel + base) * 255)
+                             .toString(16)
+                             .padStart(2, '0'))
+          .join('');
+}
+
+export function hexToHsl(hex: string): [number, number, number] {
+  const text = spaceHex(hex).replace('#', '');
+  const full = text.length === 3 ?
+      text.split('').map(character => character + character).join('') :
+      text;
+  const [r, g, b] = [0, 2, 4].map(
+      offset => parseInt(full.slice(offset, offset + 2), 16) / 255);
+  if (r === undefined || g === undefined || b === undefined ||
+      Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return [0, 0, 50];
+  }
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const span = max - min;
+  const lightness = (max + min) / 2;
+  if (!span) {
+    return [0, 0, Math.round(lightness * 100)];
+  }
+  const hue = max === r ? ((g - b) / span + (g < b ? 6 : 0)) :
+      max === g        ? (b - r) / span + 2 :
+                         (r - g) / span + 4;
+  return [
+    Math.round(hue * 60),
+    Math.round(span / (1 - Math.abs(2 * lightness - 1)) * 100),
+    Math.round(lightness * 100),
+  ];
+}
+
+export function spaceHex(color: string): string {
+  return color.length === 9 ? color.slice(0, 7) : color;
+}
+
+export function tintStrength(color: string): number {
+  if (color.length !== 9) {
+    return 0;
+  }
+  return parseInt(color.slice(7), 16) / 255;
+}
+
+export function withStrength(hex: string, strength: number): string {
+  const alpha = Math.round(Math.min(1, Math.max(0, strength)) * 255);
+  return spaceHex(hex) + alpha.toString(16).padStart(2, '0');
+}
+
 export const SPACE_ICONS: ReadonlyArray<readonly[string, string]> = [
   ['🌐', 'globe web world internet'],
   ['👤', 'person personal profile user me'],
@@ -170,7 +235,8 @@ export class Spaces {
       const space: Space = {
         id: stored.id || crypto.randomUUID(),
         name: stored.name,
-        color: stored.color,
+        color: stored.color.length === 9 ? stored.color :
+                                            withStrength(stored.color, 0),
         icon: stored.icon || SPACE_ICONS[0]![0],
         profile: stored.profile ?? '',
         activeKey: '',
@@ -721,7 +787,7 @@ export class Spaces {
     return {
       id,
       name: `Space ${index + 1}`,
-      color: SPACE_COLORS[index % SPACE_COLORS.length]!,
+      color: withStrength(SPACE_COLORS[index % SPACE_COLORS.length]!, 0),
       icon: SPACE_ICONS[index % SPACE_ICONS.length]![0],
       profile: '',
       activeKey: '',

@@ -1,7 +1,7 @@
 import type {NativeMenuItem} from './native_menu.js';
 import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
-import {DEFAULT_PROFILE_NAME, SPACE_COLORS} from './spaces.js';
+import {DEFAULT_PROFILE_NAME} from './spaces.js';
 
 export type SpaceMenuCommand = 'change-icon'|'move'|'new-profile'|'recolor'|
     'remove'|'rename'|'set-profile';
@@ -37,11 +37,7 @@ function profileItems(context: SpaceMenuContext): NativeMenuItem[] {
 
 function buildItems(context: SpaceMenuContext): NativeMenuItem[] {
   return menuItems([
-    {
-      command: 'recolor:',
-      swatches: [...SPACE_COLORS],
-      selected: context.space.color,
-    },
+    {command: 'recolor', label: 'Change Color'},
     {command: 'change-icon', label: 'Change Icon'},
     context.canRename && {command: 'rename', label: 'Rename Space'},
     {
