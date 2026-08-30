@@ -280,10 +280,10 @@ void RailCommandBubble::ShowUI() {
   if (!shadow_) {
     shadow_ = CreateAcrylicShadow(window_->widget(), widget_.get());
   }
-  widget_->Show();
-  shadow_->ShowInactive();
   RevealAcrylic(widget_.get(), shadow_.get(), backdrop_.get(),
                 -kAcrylicSlideDistance);
+  widget_->Show();
+  shadow_->ShowInactive();
   widget_->Activate();
   if (web_view_) {
     web_view_->RequestFocus();
@@ -315,6 +315,23 @@ void RailCommandBubble::Hide() {
   if (widget_) {
     widget_->Hide();
   }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&RailCommandBubble::DestroyWidget,
+                                weak_factory_.GetWeakPtr()));
+}
+
+void RailCommandBubble::DestroyWidget() {
+  if (showing_ || waiting_ready_ || !widget_) {
+    return;
+  }
+  observation_.Reset();
+  if (web_view_) {
+    web_view_->SetWebContents(nullptr);
+    web_view_ = nullptr;
+  }
+  shadow_.reset();
+  backdrop_.reset();
+  widget_.reset();
 }
 
 void RailCommandBubble::ResizeDueToAutoResize(content::WebContents* source,

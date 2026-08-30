@@ -3,7 +3,7 @@ import '../webui_browser_searchbox.js';
 
 import {loadTimeData} from '//resources/js/load_time_data.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
-import {TabStripService} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
+import {TabsObserverCallbackRouter, TabStripService} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
 import type {TabStripServiceRemote} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
 import type {Container, Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 
@@ -51,6 +51,7 @@ export class RailCommandElement extends CrLitElement {
 
   private readonly tabStripService_: TabStripServiceRemote =
       TabStripService.getRemote();
+  private tabsObserver_: TabsObserverCallbackRouter|null = null;
   private tabs_: Tab[] = [];
   private profileTabs_ = new Set<string>();
   private text_ = '';
@@ -96,17 +97,18 @@ export class RailCommandElement extends CrLitElement {
     }
     this.$.address.queryAutocomplete(text);
 
+    await this.loadTabs_();
     this.refreshRows_();
     await this.updateComplete;
     browserProxyFactory.getInstance().handler.ready(
         Math.ceil(document.body.getBoundingClientRect().height));
-
-    await this.loadTabs_();
-    this.refreshRows_();
   }
 
   private async loadTabs_() {
     const snapshot = await this.tabStripService_.getTabs();
+    this.tabsObserver_?.$.close();
+    this.tabsObserver_ = new TabsObserverCallbackRouter();
+    this.tabsObserver_.$.bindHandle(snapshot.stream.handle);
     this.tabs_ = collectTabs(snapshot.tabStrip)
                      .filter(tab => this.profileTabs_.has(tab.id));
   }
