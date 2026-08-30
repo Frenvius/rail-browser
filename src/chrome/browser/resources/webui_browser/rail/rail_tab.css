@@ -45,7 +45,6 @@
 
 #faviconContainer {
     align-items: center;
-    background: var(--rail-hover, #303048);
     border-radius: 5px;
     display: flex;
     flex: 0 0 20px;
@@ -202,11 +201,11 @@
 }
 
 :host([dormant]) #faviconContainer {
-    background: transparent;
     position: relative;
 }
 
 :host([dormant]) #faviconContainer::after {
+    background: currentcolor;
     color: var(--rail-text-label, #808098);
     content: '';
     height: 17.5px;
@@ -215,26 +214,14 @@
     top: 50%;
     transform: translate(-50%, -50%);
     width: 17.5px;
-    background: conic-gradient(
-        transparent 0deg 10deg, currentcolor 10deg 35deg,
-        transparent 35deg 55deg, currentcolor 55deg 80deg,
-        transparent 80deg 100deg, currentcolor 100deg 125deg,
-        transparent 125deg 145deg, currentcolor 145deg 170deg,
-        transparent 170deg 190deg, currentcolor 190deg 350deg,
-        transparent 350deg 360deg);
-    mask-image: radial-gradient(
-        circle, transparent 7.45px, #000 7.45px, #000 8.75px,
-        transparent 8.75px);
+    mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17.5 17.5'><circle cx='8.75' cy='8.75' r='8.1' fill='none' stroke='%23000' stroke-width='1.3' stroke-linecap='round' stroke-dasharray='3.5 2.8 3.5 2.8 3.5 2.8 3.5 2.8 22.6 2.8' transform='rotate(-80 8.75 8.75)'/></svg>");
+    mask-size: 17.5px 17.5px;
 }
 
 :host([dormant]) #favicon {
     border-radius: 50%;
     height: 12.25px;
     width: 12.25px;
-}
-
-:host([dormant]) #title {
-    color: var(--rail-text-label, #808098);
 }
 
 :host([blocked]) .tab {
@@ -302,7 +289,6 @@ cr-icon {
 :host([tile]) #faviconContainer {
     --favicon-size: 18px;
 
-    background: transparent;
     flex: 0 0 24px;
     height: 24px;
     width: 24px;
