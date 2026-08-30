@@ -97,11 +97,13 @@ export class RailCommandElement extends CrLitElement {
     }
     this.$.address.queryAutocomplete(text);
 
-    await this.loadTabs_();
+    const tabsLoaded = this.loadTabs_();
     this.refreshRows_();
     await this.updateComplete;
     browserProxyFactory.getInstance().handler.ready(
         Math.ceil(document.body.getBoundingClientRect().height));
+    await tabsLoaded;
+    this.refreshRows_();
   }
 
   private async loadTabs_() {

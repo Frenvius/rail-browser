@@ -277,6 +277,17 @@ class SystemBackdropController::Impl {
     }
   }
 
+  void HideReveal() {
+    ComPtr<wuc::ICompositionObject> target;
+    ComPtr<wuc::IVisual> visual;
+    if (!sprite_ || FAILED(sprite_.As(&target)) ||
+        FAILED(sprite_.As(&visual))) {
+      return;
+    }
+    target->StopAnimation(HStringReference(L"Opacity").Get());
+    visual->put_Opacity(0.0f);
+  }
+
   void PlayReveal(float offset_y, base::TimeDelta duration) {
     if (!sprite_) {
       return;
@@ -632,6 +643,10 @@ void SystemBackdropController::SetDarkMode(bool dark_mode) {
 void SystemBackdropController::PlayReveal(float offset_y,
                                           base::TimeDelta duration) {
   impl_->PlayReveal(offset_y, duration);
+}
+
+void SystemBackdropController::HideReveal() {
+  impl_->HideReveal();
 }
 
 void SystemBackdropController::UpdateClip() {

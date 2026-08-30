@@ -65,6 +65,7 @@ class RailCommandBubble : public WebUIContentsWrapper::Host,
   void OnFirstFrame(bool success);
   int DesiredWidth() const;
   void EnsureContents();
+  void WarmWidget();
   void CreateWidget();
   void DestroyWidget();
   void PositionWidget(const gfx::Size& contents_size);

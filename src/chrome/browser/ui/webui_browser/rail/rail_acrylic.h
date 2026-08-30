@@ -29,6 +29,8 @@ void RevealAcrylic(views::Widget* target,
                    int start_offset,
                    bool wait_for_frame = true);
 
+void WarmAcrylic(views::Widget* target, SystemBackdropController* backdrop);
+
 }  // namespace rail
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_ACRYLIC_H_

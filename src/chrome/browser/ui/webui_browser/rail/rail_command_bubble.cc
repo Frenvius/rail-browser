@@ -108,6 +108,23 @@ void RailCommandBubble::SetCommandContext(
     rail_command::mojom::CommandContextPtr context) {
   context_ = std::move(context);
   EnsureContents();
+  WarmWidget();
+}
+
+void RailCommandBubble::WarmWidget() {
+  if (showing_ || waiting_ready_) {
+    return;
+  }
+  CreateWidget();
+  if (!widget_) {
+    return;
+  }
+  PositionWidget(content_size_);
+  WarmAcrylic(widget_.get(), backdrop_.get());
+  if (!shadow_) {
+    shadow_ = CreateAcrylicShadow(window_->widget(), widget_.get());
+  }
+  contents_->web_contents()->WasShown();
 }
 
 void RailCommandBubble::EnsureContents() {
@@ -281,7 +298,7 @@ void RailCommandBubble::ShowUI() {
     shadow_ = CreateAcrylicShadow(window_->widget(), widget_.get());
   }
   RevealAcrylic(widget_.get(), shadow_.get(), backdrop_.get(),
-                -kAcrylicSlideDistance);
+                -kAcrylicSlideDistance, false);
   widget_->Show();
   shadow_->ShowInactive();
   widget_->Activate();
@@ -332,6 +349,7 @@ void RailCommandBubble::DestroyWidget() {
   shadow_.reset();
   backdrop_.reset();
   widget_.reset();
+  WarmWidget();
 }
 
 void RailCommandBubble::ResizeDueToAutoResize(content::WebContents* source,

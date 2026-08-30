@@ -40,7 +40,7 @@ namespace {
 constexpr int kShadowBlur = 16;
 constexpr int kShadowOffsetY = 3;
 constexpr SkAlpha kShadowAlpha = 0x33;
-constexpr base::TimeDelta kSlideDuration = base::Milliseconds(200);
+constexpr base::TimeDelta kSlideDuration = base::Milliseconds(100);
 constexpr float kHiddenOpacity = 0.01f;
 
 void NeutralizeDwmFrame(HWND hwnd) {
@@ -204,6 +204,23 @@ void StartReveal(base::WeakPtr<views::Widget> target,
 
 }  // namespace
 
+void WarmAcrylic(views::Widget* target, SystemBackdropController* backdrop) {
+  if (!target) {
+    return;
+  }
+  HideLayer(target, 0);
+  if (backdrop) {
+    backdrop->HideReveal();
+  }
+  HWND hwnd = views::HWNDForWidget(target);
+  if (hwnd) {
+    ::SetWindowLongPtr(hwnd, GWL_EXSTYLE,
+                       ::GetWindowLongPtr(hwnd, GWL_EXSTYLE) |
+                           WS_EX_TRANSPARENT | WS_EX_NOACTIVATE);
+  }
+  target->ShowInactive();
+}
+
 void RevealAcrylic(views::Widget* target,
                    views::Widget* shadow,
                    SystemBackdropController* backdrop,
@@ -211,6 +228,12 @@ void RevealAcrylic(views::Widget* target,
                    bool wait_for_frame) {
   if (!target) {
     return;
+  }
+  HWND hwnd = views::HWNDForWidget(target);
+  if (hwnd) {
+    ::SetWindowLongPtr(hwnd, GWL_EXSTYLE,
+                       ::GetWindowLongPtr(hwnd, GWL_EXSTYLE) &
+                           ~(WS_EX_TRANSPARENT | WS_EX_NOACTIVATE));
   }
   HideLayer(target, start_offset);
   HideLayer(shadow, start_offset);

@@ -50,6 +50,7 @@ class SystemBackdropController {
   void SetActive(bool active);
   void SetDarkMode(bool dark_mode);
   void PlayReveal(float offset_y, base::TimeDelta duration);
+  void HideReveal();
   void UpdateClip();
   base::WeakPtr<SystemBackdropController> GetWeakPtr();
 
