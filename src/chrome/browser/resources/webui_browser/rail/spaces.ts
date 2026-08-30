@@ -3,8 +3,10 @@ import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 import type {PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredSpace, StoredTab} from './sidebar_state.js';
 
-export const SPACE_COLORS =
-    ['#7c5cfc', '#4488ee', '#ee5577', '#44cc77', '#eeaa33'];
+export const SPACE_COLORS = [
+  '#331b47', '#591b1c', '#58341a', '#725919',
+  '#163e17', '#173634', '#192e50',
+];
 
 export function hslToHex(
     hue: number, saturation: number, lightness: number): string {

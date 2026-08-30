@@ -150,7 +150,11 @@ class RailMenu::Delegate : public ui::SimpleMenuModel::Delegate {
     return checked_.count(command_id) > 0;
   }
 
-  bool IsCommandIdEnabled(int command_id) const override { return true; }
+  void Disable(int command_id) { disabled_.insert(command_id); }
+
+  bool IsCommandIdEnabled(int command_id) const override {
+    return disabled_.count(command_id) == 0;
+  }
 
   void ExecuteCommand(int command_id, int event_flags) override {
     const auto entry = commands_.find(command_id);
@@ -163,6 +167,7 @@ class RailMenu::Delegate : public ui::SimpleMenuModel::Delegate {
   base::RepeatingCallback<void(const std::string&)> on_command_;
   std::map<int, std::string> commands_;
   std::set<int> checked_;
+  std::set<int> disabled_;
   int next_id_ = kFirstCommandId;
 };
 
@@ -172,11 +177,9 @@ class RailMenu::Adapter : public views::MenuModelAdapter {
 
   Adapter(ui::MenuModel* model,
           base::RepeatingClosure on_closed,
-          MenuCallback on_will_show,
-          MenuCallback on_will_hide)
+          MenuCallback on_will_show)
       : views::MenuModelAdapter(model, std::move(on_closed)),
-        on_will_show_(std::move(on_will_show)),
-        on_will_hide_(std::move(on_will_hide)) {}
+        on_will_show_(std::move(on_will_show)) {}
 
   void WillShowMenu(views::MenuItemView* menu) override {
     views::MenuModelAdapter::WillShowMenu(menu);
@@ -184,14 +187,8 @@ class RailMenu::Adapter : public views::MenuModelAdapter {
         FROM_HERE, base::BindOnce(on_will_show_, menu));
   }
 
-  void WillHideMenu(views::MenuItemView* menu) override {
-    views::MenuModelAdapter::WillHideMenu(menu);
-    on_will_hide_.Run(menu);
-  }
-
  private:
   MenuCallback on_will_show_;
-  MenuCallback on_will_hide_;
 };
 
 RailMenu::RailMenu(base::RepeatingCallback<void(const std::string&)> on_command,
@@ -215,9 +212,7 @@ void RailMenu::ShowAtCursor(
   adapter_ = std::make_unique<Adapter>(
       model_.get(),
       base::BindRepeating(&RailMenu::OnClosed, weak_factory_.GetWeakPtr()),
-      base::BindRepeating(&RailMenu::StyleSubmenu, weak_factory_.GetWeakPtr()),
-      base::BindRepeating(&RailMenu::ReleaseBackdrop,
-                          weak_factory_.GetWeakPtr()));
+      base::BindRepeating(&RailMenu::StyleSubmenu, weak_factory_.GetWeakPtr()));
   std::unique_ptr<views::MenuItemView> root = adapter_->CreateMenu();
   root_ = root.get();
   Decorate();
@@ -237,14 +232,20 @@ void RailMenu::StyleSubmenu(views::MenuItemView* item) {
   if (!submenu || !submenu->IsShowing()) {
     return;
   }
-  if (backdrops_.count(item)) {
+  views::MenuScrollViewContainer* container = submenu->GetScrollViewContainer();
+  views::Widget* menu_widget = submenu->GetWidget();
+  if (!menu_widget) {
     return;
   }
-  views::MenuScrollViewContainer* container = submenu->GetScrollViewContainer();
   container->SetBackground(views::CreateSolidBackground(SK_ColorTRANSPARENT));
-  views::Widget* menu_widget = submenu->GetWidget();
-  backdrops_[item] =
-      ApplyAcrylicBackdrop(menu_widget, container->outside_border_insets());
+  if (!backdrops_.count(menu_widget)) {
+    backdrops_[menu_widget] =
+        ApplyAcrylicBackdrop(menu_widget, container->outside_border_insets());
+  }
+  if (!observations_.IsObservingSource(menu_widget)) {
+    observations_.AddObservation(menu_widget);
+  }
+  submenu_items_[menu_widget] = item;
 
   const gfx::Rect menu_bounds = menu_widget->GetWindowBoundsInScreen();
   const int anchor_bottom = item == root_
@@ -252,16 +253,68 @@ void RailMenu::StyleSubmenu(views::MenuItemView* item) {
                                 : item->GetBoundsInScreen().bottom();
   const bool opens_upward =
       menu_bounds.bottom() <= anchor_bottom + kSlideAnchorSlack;
-  RevealAcrylic(menu_widget, nullptr, backdrops_[item].get(),
-                opens_upward ? kAcrylicSlideDistance : -kAcrylicSlideDistance);
+  if (item != root_) {
+    gfx::Rect bounds(menu_bounds.origin(), container->GetPreferredSize({}));
+    if (!opens_upward) {
+      bounds.set_y(item->GetBoundsInScreen().y() -
+                   container->GetInsets().top());
+    }
+    if (bounds != menu_bounds) {
+      menu_widget->SetBounds(bounds);
+      RefreshClip(menu_widget);
+    }
+  }
+  RefreshClip(menu_widget);
+  RevealAcrylic(menu_widget, nullptr, backdrops_[menu_widget].get(),
+                opens_upward ? kAcrylicSlideDistance : -kAcrylicSlideDistance,
+                item == root_);
 }
 
-void RailMenu::ReleaseBackdrop(views::MenuItemView* item) {
-  backdrops_.erase(item);
+void RailMenu::OnWidgetVisibilityChanged(views::Widget* widget, bool visible) {
+  if (visible) {
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&RailMenu::CloseHiddenSubmenu,
+                                weak_factory_.GetWeakPtr(), widget));
+}
+
+void RailMenu::CloseHiddenSubmenu(views::Widget* widget) {
+  const auto entry = submenu_items_.find(widget);
+  if (entry == submenu_items_.end() || entry->second == root_ || !runner_) {
+    return;
+  }
+  views::SubmenuView* submenu = entry->second->GetSubmenu();
+  if (submenu && submenu->GetWidget() == widget && !submenu->IsShowing()) {
+    submenu->Close();
+  }
+}
+
+void RailMenu::RefreshClip(views::Widget* widget) {
+  const auto entry = backdrops_.find(widget);
+  if (entry != backdrops_.end() && entry->second) {
+    entry->second->UpdateClip();
+  }
+}
+
+void RailMenu::OnWidgetBoundsChanged(views::Widget* widget,
+                                     const gfx::Rect& new_bounds) {
+  RefreshClip(widget);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&RailMenu::RefreshClip,
+                                weak_factory_.GetWeakPtr(), widget));
+}
+
+void RailMenu::OnWidgetDestroying(views::Widget* widget) {
+  observations_.RemoveObservation(widget);
+  backdrops_.erase(widget);
+  submenu_items_.erase(widget);
 }
 
 void RailMenu::OnClosed() {
+  observations_.RemoveAllObservations();
   backdrops_.clear();
+  submenu_items_.clear();
   on_closed_.Run();
 }
 
@@ -281,6 +334,12 @@ void RailMenu::Fill(
       continue;
     }
     const std::u16string label = base::UTF8ToUTF16(item->label);
+    if (item->command.empty() && item->children.empty()) {
+      const int id = delegate_->Register(std::string(), false);
+      delegate_->Disable(id);
+      model->AddItem(id, label);
+      continue;
+    }
     if (!item->children.empty()) {
       auto submodel = std::make_unique<ui::SimpleMenuModel>(delegate_.get());
       Fill(submodel.get(), item->children);

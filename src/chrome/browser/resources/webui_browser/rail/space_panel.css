@@ -1,0 +1,275 @@
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #import=./rail_tokens.css.js
+ * #scheme=relative
+ * #include=rail-tokens
+ * #css_wrapper_metadata_end */
+
+:host {
+  border: 1px solid var(--rail-border);
+  border-radius: 8px;
+  color: var(--rail-text);
+  color-scheme: dark;
+  display: block;
+  font-size: 13px;
+  overflow: hidden;
+  user-select: none;
+}
+
+#picker,
+#colorpicker {
+  width: 250px;
+}
+
+#colorpicker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+#colorname {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--rail-text-label);
+  flex: 1;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  min-width: 0;
+  outline: none;
+  padding: 3px 5px;
+  text-transform: uppercase;
+}
+
+#colorname:hover {
+  border-color: var(--rail-border);
+}
+
+#colorname:focus {
+  background: var(--rail-surface);
+  border-color: var(--rail-border);
+  color: var(--rail-text);
+}
+
+#colorpreview {
+  border: 1px solid var(--rail-border);
+  border-radius: 5px;
+  flex: 0 0 18px;
+  height: 18px;
+}
+
+#colorfield {
+  background:
+      radial-gradient(closest-side,
+          hsl(0 0% 18%), hsl(0 0% 18% / 0%) 50%,
+          hsl(0 0% 82% / 0%) 50%, hsl(0 0% 82%)),
+      conic-gradient(from 90deg,
+          hsl(0 70% 50%), hsl(60 70% 50%), hsl(120 70% 50%),
+          hsl(180 70% 50%), hsl(240 70% 50%), hsl(300 70% 50%),
+          hsl(360 70% 50%));
+  border-radius: 50%;
+  cursor: crosshair;
+  height: 200px;
+  margin: 0 auto;
+  position: relative;
+  touch-action: none;
+  width: 200px;
+}
+
+#colordot {
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgb(0 0 0 / 60%);
+  height: 12px;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 12px;
+}
+
+#strength {
+  appearance: none;
+  background: var(--track-gradient);
+  border: 1px solid var(--rail-border);
+  border-radius: 7px;
+  cursor: pointer;
+  height: 14px;
+  margin: 0 10px;
+  outline: none;
+}
+
+#strength::-webkit-slider-thumb {
+  appearance: none;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgb(0 0 0 / 60%);
+  height: 14px;
+  width: 14px;
+}
+
+#swatches {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, 26px);
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+.swatch {
+  border: 2px solid rgb(255 255 255 / 12%);
+  border-radius: 50%;
+  cursor: pointer;
+  height: 26px;
+  padding: 0;
+  transition: border-color 120ms ease;
+  width: 26px;
+}
+
+.swatch:hover {
+  border-color: rgb(255 255 255 / 45%);
+}
+
+#backdrop {
+  border-top: 1px solid var(--rail-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px 10px 0;
+}
+
+#materials {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.material {
+  background: transparent;
+  border: 1px solid var(--rail-border);
+  border-radius: 6px;
+  color: var(--rail-text-label);
+  cursor: pointer;
+  font-size: 10px;
+  overflow: hidden;
+  padding: 4px 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material:hover {
+  border-color: var(--rail-accent);
+}
+
+.material[selected] {
+  background: var(--rail-accent);
+  border-color: var(--rail-accent);
+  color: var(--rail-text);
+}
+
+.panelhead {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px 6px;
+}
+
+.panelclose {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--rail-text-label, #808098);
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 22px;
+  height: 22px;
+  justify-content: center;
+  padding: 0;
+  --iron-icon-width: 14px;
+  --iron-icon-height: 14px;
+  --iron-icon-fill-color: currentcolor;
+}
+
+.panelclose:hover {
+  background: var(--rail-hover, #303048);
+  color: var(--rail-text, #f0f0ff);
+}
+
+#iconSearch {
+  background: var(--rail-elevated, #282840);
+  border: none;
+  border-radius: 6px;
+  color: var(--rail-text, #f0f0ff);
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  height: 24px;
+  min-width: 0;
+  outline: none;
+  padding: 0 8px;
+}
+
+#iconSearch:focus {
+  outline: 1px solid var(--rail-accent, #7c5cfc);
+}
+
+#iconGrid {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(8, 1fr);
+  max-height: 184px;
+  overflow-y: auto;
+  padding: 0 10px 8px;
+}
+
+#iconGrid::-webkit-scrollbar {
+  width: 6px;
+}
+
+#iconGrid::-webkit-scrollbar-thumb {
+  background: var(--rail-hover-strong, #3d3d5c);
+  border-radius: 3px;
+}
+
+#noicons {
+  color: var(--rail-text-label, #808098);
+  font-size: 12px;
+  padding: 0 16px 10px;
+}
+
+.glyph {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--rail-text-muted, #c0c0d8);
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  height: 22px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 22px;
+  --iron-icon-width: 14px;
+  --iron-icon-height: 14px;
+  --iron-icon-fill-color: currentcolor;
+}
+
+.glyph:hover {
+  background: var(--rail-hover, #303048);
+}
+
+#iconGrid .glyph {
+  font-size: 15px;
+  height: 25px;
+  width: 100%;
+}
+
+.glyph[selected] {
+  background: var(--rail-hover-strong, #3d3d5c);
+  color: var(--rail-text, #f0f0ff);
+}

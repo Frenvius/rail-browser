@@ -26,7 +26,8 @@ std::unique_ptr<views::Widget> CreateAcrylicShadow(views::Widget* parent,
 void RevealAcrylic(views::Widget* target,
                    views::Widget* shadow,
                    SystemBackdropController* backdrop,
-                   int start_offset);
+                   int start_offset,
+                   bool wait_for_frame = true);
 
 }  // namespace rail
 

@@ -269,6 +269,14 @@ class SystemBackdropController::Impl {
     ApplyDwmDarkMode();
   }
 
+  void UpdateClip() {
+    ComPtr<wuc::IVisual> visual;
+    if (config_.corner_radius > 0.0f && sprite_ &&
+        SUCCEEDED(sprite_.As(&visual))) {
+      ApplyRoundedClip(visual.Get());
+    }
+  }
+
   void PlayReveal(float offset_y, base::TimeDelta duration) {
     if (!sprite_) {
       return;
@@ -624,6 +632,10 @@ void SystemBackdropController::SetDarkMode(bool dark_mode) {
 void SystemBackdropController::PlayReveal(float offset_y,
                                           base::TimeDelta duration) {
   impl_->PlayReveal(offset_y, duration);
+}
+
+void SystemBackdropController::UpdateClip() {
+  impl_->UpdateClip();
 }
 
 base::WeakPtr<SystemBackdropController> SystemBackdropController::GetWeakPtr() {

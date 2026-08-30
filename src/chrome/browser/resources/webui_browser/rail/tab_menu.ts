@@ -46,16 +46,34 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
   const {target, spaces, activeSpace, windows} = context;
   const single = target.count <= 1;
   const others = spaces.filter(space => space.id !== activeSpace);
+  const destinations = menuItems([
+    ...others.map(space => ({
+                    command: `move-to-space:${space.id}`,
+                    label: space.name,
+                  })),
+    separator(),
+    ...(target.tabId ? windows.map(row => ({
+                         command: `move-to-window:${row.id}`,
+                         label: row.title || 'Untitled Window',
+                       })) :
+                       []),
+    !!target.tabId && target.hasOthers &&
+        {command: 'new-window', label: 'New Window'},
+  ]);
   return menuItems([
-    single && {command: 'new-tab-below', label: 'New Tab Below'},
-    single && !target.dormant && {command: 'reload', label: 'Reload'},
+    {label: 'Tab Context Menu'},
     single && {command: 'copy-link', label: 'Copy Link'},
-    {command: 'duplicate', label: 'Duplicate'},
-    !target.dormant && {command: 'sleep', label: `Sleep ${noun(target)}`},
+    single && !target.dormant && {command: 'reload', label: 'Reload'},
     !target.dormant && {
       command: 'mute',
-      label: `${target.muted ? 'Unmute' : 'Mute'} ${noun(target)}`,
+      label: target.muted ? 'Unmute' : 'Mute',
     },
+    separator(),
+    single && {command: 'new-tab-below', label: 'New Tab Below'},
+    {command: 'duplicate', label: 'Duplicate'},
+    !target.dormant && {command: 'sleep', label: `Sleep ${noun(target)}`},
+    destinations.length > 0 &&
+        {command: 'move-to', label: 'Move to', children: destinations},
     separator(),
     {
       command: target.pinned ? 'unpin' : 'pin',
@@ -65,28 +83,15 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
       command: 'essential',
       label: target.essential ? 'Remove from Essentials' : 'Add to Essentials',
     },
-    !!target.tabId && target.hasOthers &&
-        {command: 'new-window', label: `Move ${noun(target)} to New Window`},
-    ...(target.tabId ? windows.map(row => ({
-                         command: `move-to-window:${row.id}`,
-                         label: `Move to ${row.title || 'Untitled Window'}`,
-                       })) :
-                       []),
     separator(),
-    ...others.map(space => ({
-                    command: `move-to-space:${space.id}`,
-                    label: `Move to ${space.name}`,
-                  })),
-    separator(),
+    target.hasOthers && single &&
+        {command: 'close-others', label: 'Close Other Tabs'},
     {
       command: 'close',
       label: target.dormant ? 'Remove' : `Close ${noun(target)}`,
-      danger: true,
     },
-    target.hasOthers && single &&
-        {command: 'close-others', label: 'Close Other Tabs'},
     target.hasRight && single &&
-        {command: 'close-right', label: 'Close Tabs to the Right'},
+        {command: 'close-right', label: 'Close Tabs Below'},
   ]);
 }
 

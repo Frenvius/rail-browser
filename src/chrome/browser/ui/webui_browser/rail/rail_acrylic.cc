@@ -7,7 +7,9 @@
 #include <utility>
 
 #include "base/functional/bind.h"
+#include "base/location.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "cc/paint/paint_canvas.h"
 #include "cc/paint/paint_flags.h"
@@ -58,8 +60,8 @@ SystemBackdropConfig PopupBackdropConfig() {
   config.material = SystemBackdropMaterial::kAcrylic;
   config.tint_color = SkColorSetRGB(0x14, 0x14, 0x14);
   config.fallback_color = SkColorSetRGB(0x1c, 0x1c, 0x1c);
-  config.tint_opacity = 0.85f;
-  config.luminosity_opacity = 1.0f;
+  config.tint_opacity = 0.55f;
+  config.luminosity_opacity = 0.85f;
   config.popup = true;
   config.corner_radius = kAcrylicCornerRadius;
   return config;
@@ -205,24 +207,30 @@ void StartReveal(base::WeakPtr<views::Widget> target,
 void RevealAcrylic(views::Widget* target,
                    views::Widget* shadow,
                    SystemBackdropController* backdrop,
-                   int start_offset) {
+                   int start_offset,
+                   bool wait_for_frame) {
   if (!target) {
     return;
   }
   HideLayer(target, start_offset);
   HideLayer(shadow, start_offset);
+  base::WeakPtr<views::Widget> shadow_weak =
+      shadow ? shadow->GetWeakPtr() : base::WeakPtr<views::Widget>();
+  base::WeakPtr<SystemBackdropController> backdrop_weak =
+      backdrop ? backdrop->GetWeakPtr()
+               : base::WeakPtr<SystemBackdropController>();
   ui::Compositor* compositor = target->GetCompositor();
-  if (!compositor) {
-    AnimateLayer(target);
-    AnimateLayer(shadow);
+  if (!wait_for_frame || !compositor) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&StartReveal, target->GetWeakPtr(), shadow_weak,
+                       backdrop_weak, start_offset,
+                       viz::FrameTimingDetails()));
     return;
   }
-  compositor->RequestSuccessfulPresentationTimeForNextFrame(base::BindOnce(
-      &StartReveal, target->GetWeakPtr(),
-      shadow ? shadow->GetWeakPtr() : base::WeakPtr<views::Widget>(),
-      backdrop ? backdrop->GetWeakPtr()
-               : base::WeakPtr<SystemBackdropController>(),
-      start_offset));
+  compositor->RequestSuccessfulPresentationTimeForNextFrame(
+      base::BindOnce(&StartReveal, target->GetWeakPtr(), shadow_weak,
+                     backdrop_weak, start_offset));
 }
 
 }  // namespace rail

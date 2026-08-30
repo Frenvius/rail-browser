@@ -37,9 +37,10 @@ function profileItems(context: SpaceMenuContext): NativeMenuItem[] {
 
 function buildItems(context: SpaceMenuContext): NativeMenuItem[] {
   return menuItems([
-    {command: 'recolor', label: 'Change Color'},
-    {command: 'change-icon', label: 'Change Icon'},
-    context.canRename && {command: 'rename', label: 'Rename Space'},
+    {label: 'Space Context Menu'},
+    {command: 'change-icon', label: 'Change Space Icon...'},
+    context.canRename && {command: 'rename', label: 'Rename Space...'},
+    {command: 'recolor', label: 'Edit Theme Color...'},
     {
       command: 'set-profile',
       label: 'Set Profile',

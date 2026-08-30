@@ -244,6 +244,9 @@ void RailCommandBubble::PositionWidget(const gfx::Size& contents_size) {
                    area.y() + static_cast<int>(area.height() * kTopFraction),
                    width, height);
   widget_->SetBounds(bounds);
+  if (backdrop_) {
+    backdrop_->UpdateClip();
+  }
 
   if (shadow_) {
     gfx::Rect shadow_bounds = bounds;
