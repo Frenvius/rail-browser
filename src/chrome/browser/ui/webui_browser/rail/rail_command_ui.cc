@@ -1,6 +1,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_command_ui.h"
 
 #include <utility>
+#include <vector>
 
 #include "base/functional/bind.h"
 #include "chrome/browser/contextual_search/contextual_search_service_factory.h"
@@ -9,6 +10,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/omnibox/omnibox_next_features.h"
 #include "chrome/browser/ui/tabs/tab_strip_api/tab_strip_service_feature.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/cr_components/searchbox/searchbox_handler.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
@@ -22,6 +24,7 @@
 #include "components/contextual_search/contextual_search_service.h"
 #include "components/contextual_search/contextual_search_session_handle.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -36,6 +39,23 @@ WebUIBrowserWindow* WindowFor(content::WebUI* web_ui) {
   BrowserWindowInterface* browser =
       webui::GetBrowserWindowInterface(web_ui->GetWebContents());
   return browser ? WebUIBrowserWindow::FromBrowser(browser) : nullptr;
+}
+
+std::vector<tabs_api::NodeId> TabsInProfile(WebUIBrowserWindow* window,
+                                            Profile* profile) {
+  std::vector<tabs_api::NodeId> ids;
+  if (!window || !profile) {
+    return ids;
+  }
+  TabStripModel* model = window->browser()->tab_strip_model();
+  for (int index = 0; index < model->count(); ++index) {
+    tabs::TabInterface* tab = model->GetTabAtIndex(index);
+    content::WebContents* contents = tab ? tab->GetContents() : nullptr;
+    if (contents && contents->GetBrowserContext() == profile) {
+      ids.push_back(tabs_api::NodeId::FromTabHandle(tab->GetHandle()));
+    }
+  }
+  return ids;
 }
 
 }
@@ -132,8 +152,9 @@ void RailCommandUI::Open(const std::string& text,
                          bool new_tab_mode,
                          int width,
                          rail_command::mojom::CommandContextPtr context) {
-  context->profile_changed =
-      searchbox_profile_ && searchbox_profile_ != CurrentProfile();
+  Profile* profile = CurrentProfile();
+  context->profile_changed = searchbox_profile_ && searchbox_profile_ != profile;
+  context->profile_tabs = TabsInProfile(WindowFor(web_ui()), profile);
   if (!page_) {
     pending_open_ =
         PendingOpen{text, select_all, new_tab_mode, width, std::move(context)};

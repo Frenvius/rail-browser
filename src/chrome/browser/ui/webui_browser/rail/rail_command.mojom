@@ -1,5 +1,7 @@
 module rail_command.mojom;
 
+import "components/browser_apis/tab_strip/tab_strip_api_types.mojom";
+
 struct CommandContext {
   bool has_tab;
   bool pinned;
@@ -8,6 +10,7 @@ struct CommandContext {
   bool has_right;
   string space_color;
   bool profile_changed;
+  array<tabs_api.mojom.NodeId> profile_tabs;
 };
 
 interface PageHandlerFactory {

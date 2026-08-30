@@ -52,6 +52,7 @@ export class RailCommandElement extends CrLitElement {
   private readonly tabStripService_: TabStripServiceRemote =
       TabStripService.getRemote();
   private tabs_: Tab[] = [];
+  private profileTabs_ = new Set<string>();
   private text_ = '';
   private target_: TabMenuTarget|null = null;
 
@@ -69,6 +70,8 @@ export class RailCommandElement extends CrLitElement {
     document.documentElement.style.setProperty(
         '--rail-space-color', context.spaceColor || '#ffffff');
     this.text_ = selectAll ? '' : text.trim().toLowerCase();
+    this.profileTabs_ = new Set(context.profileTabs);
+    this.tabs_ = [];
     this.target_ = context.hasTab ? {
       id: '',
       tabId: null,
@@ -104,7 +107,8 @@ export class RailCommandElement extends CrLitElement {
 
   private async loadTabs_() {
     const snapshot = await this.tabStripService_.getTabs();
-    this.tabs_ = collectTabs(snapshot.tabStrip);
+    this.tabs_ = collectTabs(snapshot.tabStrip)
+                     .filter(tab => this.profileTabs_.has(tab.id));
   }
 
   private query_(): string {

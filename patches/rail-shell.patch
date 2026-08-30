@@ -3722,6 +3722,29 @@ index f8363d5b29..101252dc70 100644
  COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
  MAC_BUNDLE_ID=org.chromium.Chromium
  MAC_CREATOR_CODE=Cr24
+diff --git a/chrome/browser/autocomplete/tab_matcher_desktop.cc b/chrome/browser/autocomplete/tab_matcher_desktop.cc
+index 0adad2ca2f..8e919313ee 100644
+--- a/chrome/browser/autocomplete/tab_matcher_desktop.cc
++++ b/chrome/browser/autocomplete/tab_matcher_desktop.cc
+@@ -106,14 +106,13 @@ std::vector<content::WebContents*> TabMatcherDesktop::GetOpenWebContents(
+ 
+   std::vector<content::WebContents*> all_tabs;
+   for (BrowserWindowInterface* bwi : GetAllBrowserWindowInterfaces()) {
+-    if (profile_ != bwi->GetProfile()) {
+-      // Only look at the same profile (and anonymity level).
+-      continue;
+-    }
+-
+     TabStripModel* const tab_strip_model = bwi->GetTabStripModel();
+     for (int i = 0; i < tab_strip_model->count(); ++i) {
+       auto* web_contents = tab_strip_model->GetWebContentsAt(i);
++      // Only look at the same profile (and anonymity level).
++      if (profile_.get() != web_contents->GetBrowserContext()) {
++        continue;
++      }
+       if (web_contents != active_tab || !exclude_active_tab) {
+         all_tabs.push_back(web_contents);
+       }
 diff --git a/chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc b/chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc
 index 5054aba1e7..d4216aa83d 100644
 --- a/chrome/browser/chrome_browser_interface_binders_webui_parts_desktop.cc
@@ -4438,7 +4461,7 @@ index 8ebad94626..5f39f84978 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..8106b52b2e 100644
+index caed98ffda..89b6dc8407 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4672,7 +4695,7 @@ index caed98ffda..8106b52b2e 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +395,81 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +395,82 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4756,6 +4779,7 @@ index caed98ffda..8106b52b2e 100644
 +      spaceColor: document.documentElement.style.getPropertyValue(
 +          '--rail-space-color'),
 +      profileChanged: false,
++      profileTabs: [],
 +    });
    }
  
@@ -4781,7 +4805,7 @@ index caed98ffda..8106b52b2e 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +488,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +489,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -4798,7 +4822,7 @@ index caed98ffda..8106b52b2e 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +527,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +528,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
