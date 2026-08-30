@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_webui_config.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_command.mojom.h"
@@ -18,7 +19,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ui/webui/mojo_web_ui_controller.h"
 
-class RealboxHandler;
+class Profile;
 
 namespace contextual_search {
 class ContextualSearchSessionHandle;
@@ -31,6 +32,7 @@ class WebUI;
 namespace rail {
 
 class RailCommandUI;
+class RailSearchboxHandler;
 
 inline constexpr char kRailCommandHost[] = "rail-command";
 inline constexpr char kRailCommandURL[] = "chrome://rail-command/";
@@ -89,6 +91,8 @@ class RailCommandUI : public TopChromeWebUIController,
   contextual_search::ContextualSearchSessionHandle*
   GetOrCreateContextualSessionHandle();
 
+  Profile* CurrentProfile();
+
   struct PendingOpen {
     std::string text;
     bool select_all;
@@ -107,7 +111,8 @@ class RailCommandUI : public TopChromeWebUIController,
 
   mojo::Receiver<searchbox::mojom::PageHandlerFactory>
       searchbox_page_factory_receiver_{this};
-  std::unique_ptr<RealboxHandler> realbox_handler_;
+  std::unique_ptr<RailSearchboxHandler> searchbox_handler_;
+  raw_ptr<Profile> searchbox_profile_ = nullptr;
   std::unique_ptr<contextual_search::ContextualSearchSessionHandle>
       session_handle_;
 

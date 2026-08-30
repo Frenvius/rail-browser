@@ -4438,7 +4438,7 @@ index 8ebad94626..5f39f84978 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..5d72467486 100644
+index caed98ffda..8106b52b2e 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4672,7 +4672,7 @@ index caed98ffda..5d72467486 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +395,80 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +395,81 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4755,6 +4755,7 @@ index caed98ffda..5d72467486 100644
 +      hasRight: tab?.hasRight === true,
 +      spaceColor: document.documentElement.style.getPropertyValue(
 +          '--rail-space-color'),
++      profileChanged: false,
 +    });
    }
  
@@ -4780,7 +4781,7 @@ index caed98ffda..5d72467486 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +487,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +488,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -4797,7 +4798,7 @@ index caed98ffda..5d72467486 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +526,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +527,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -6577,10 +6578,27 @@ index 45603d71ea..bf167924d3 100644
    `;
  }
 diff --git a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts b/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
-index cee7a49569..21f19f527e 100644
+index cee7a49569..5ef57054bd 100644
 --- a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
 +++ b/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
-@@ -116,6 +116,21 @@ export class WebuiBrowserSearchboxElement extends
+@@ -10,6 +10,7 @@ import type {SearchboxDropdownElement} from '//resources/cr_components/searchbox
+ import type {SearchboxInputElement} from '//resources/cr_components/searchbox/searchbox_input.js';
+ import type {SearchboxMixinInterface} from '//resources/cr_components/searchbox/searchbox_mixin.js';
+ import {SearchboxMixin} from '//resources/cr_components/searchbox/searchbox_mixin.js';
++import {mojoTimeTicks} from '//resources/cr_components/searchbox/utils.js';
+ import {I18nMixinLit} from '//resources/cr_elements/i18n_mixin_lit.js';
+ import {WebUiListenerMixinLit} from '//resources/cr_elements/web_ui_listener_mixin_lit.js';
+ import {loadTimeData} from '//resources/js/load_time_data.js';
+@@ -28,6 +29,8 @@ export interface WebuiBrowserSearchboxElement {
+   };
+ }
+ 
++const TAB_ICON = 'tab_cr23.svg';
++
+ const WebuiBrowserSearchboxElementBase =
+     SearchboxMixin(I18nMixinLit(WebUiListenerMixinLit(CrLitElement)));
+ 
+@@ -116,6 +119,21 @@ export class WebuiBrowserSearchboxElement extends
      }
    }
  
@@ -6602,7 +6620,7 @@ index cee7a49569..21f19f527e 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
  
-@@ -129,6 +144,32 @@ export class WebuiBrowserSearchboxElement extends
+@@ -129,6 +147,44 @@ export class WebuiBrowserSearchboxElement extends
      this.initialInputScrollHeight = this.$.input.scrollHeight;
    }
  
@@ -6614,6 +6632,18 @@ index cee7a49569..21f19f527e 100644
 +    // Read before firing: the host closes the command bar synchronously on
 +    // this event, and closing clears the mode.
 +    const opensInNewTab = this.newTabMode;
++    const match = this.result?.matches?.[matchIndex];
++    const tabSwitchIndex = match?.actions?.findIndex(
++                               action => action.iconPath.endsWith(TAB_ICON)) ??
++        -1;
++    if (tabSwitchIndex >= 0) {
++      this.fire('searchbox-match-opened');
++      this.pageHandler_.executeAction(
++          matchIndex, tabSwitchIndex, match!.destinationUrl,
++          mojoTimeTicks(Date.now()), /*mouse_button=*/ 0, /*alt_key=*/ false,
++          /*ctrl_key=*/ false, /*meta_key=*/ false, /*shift_key=*/ false);
++      return;
++    }
 +    this.fire('searchbox-match-opened');
 +    if (!opensInNewTab) {
 +      super.navigateToMatch(matchIndex, e);
@@ -7317,7 +7347,7 @@ index 806ff8ed9e..739ef0e7ad 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..86fbd4e6a1 100644
+index 3d4fe27f4f..cc9e18e2dc 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,19 @@ source_set("headers") {
@@ -7357,7 +7387,7 @@ index 3d4fe27f4f..86fbd4e6a1 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/tab_drag:mojom",
      "//components/browser_apis/tab_strip:mojom_experiment",
-@@ -52,6 +68,29 @@ source_set("impl") {
+@@ -52,6 +68,31 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -7366,6 +7396,8 @@ index 3d4fe27f4f..86fbd4e6a1 100644
 +    "rail/rail_app_menu_model.cc",
 +    "rail/rail_command_bubble.cc",
 +    "rail/rail_command_ui.cc",
++    "rail/rail_searchbox_handler.cc",
++    "rail/rail_searchbox_handler.h",
 +    "rail/rail_space_panel.cc",
 +    "rail/rail_space_panel_ui.cc",
 +    "rail/rail_app_menu_model.h",
@@ -7387,7 +7419,7 @@ index 3d4fe27f4f..86fbd4e6a1 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -75,6 +114,15 @@ source_set("impl") {
+@@ -75,6 +116,15 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -7403,7 +7435,7 @@ index 3d4fe27f4f..86fbd4e6a1 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -86,6 +134,7 @@ source_set("impl") {
+@@ -86,6 +136,7 @@ source_set("impl") {
      "//chrome/browser/devtools",
      "//chrome/browser/extensions",
      "//chrome/browser/profiles",
@@ -7411,7 +7443,7 @@ index 3d4fe27f4f..86fbd4e6a1 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/themes",
      "//chrome/browser/ui/bookmarks",
-@@ -106,7 +155,9 @@ source_set("impl") {
+@@ -106,7 +157,9 @@ source_set("impl") {
      "//chrome/browser/ui/views/toolbar",
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
@@ -7421,7 +7453,7 @@ index 3d4fe27f4f..86fbd4e6a1 100644
      "//chrome/browser/ui/webui/util",
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/zoom:browser_window_zoom_observer",
-@@ -140,6 +191,14 @@ source_set("impl") {
+@@ -140,6 +193,14 @@ source_set("impl") {
      ]
    }
  
@@ -7436,7 +7468,7 @@ index 3d4fe27f4f..86fbd4e6a1 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -149,11 +208,14 @@ mojom("browser_mojo_bindings") {
+@@ -149,11 +210,14 @@ mojom("browser_mojo_bindings") {
    sources = [
      "bookmark_bar.mojom",
      "browser.mojom",

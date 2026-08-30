@@ -7,6 +7,7 @@ struct CommandContext {
   bool has_others;
   bool has_right;
   string space_color;
+  bool profile_changed;
 };
 
 interface PageHandlerFactory {

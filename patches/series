@@ -1,5 +1,6 @@
 restore-variations-header-symbol.patch
 restore-google-search-engine.patch
 restore-webstore-install.patch
+enable-search-suggestions.patch
 preinstall-ublock-origin.patch
 rail-shell.patch

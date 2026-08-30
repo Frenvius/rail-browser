@@ -82,7 +82,9 @@ export class RailCommandElement extends CrLitElement {
       count: 1,
     } : null;
 
-    this.$.address.rebindProxy();
+    if (context.profileChanged) {
+      this.$.address.rebindProxy();
+    }
     this.$.address.newTabMode = newTabMode;
     this.$.address.setInputText(text);
     this.$.address.focusInput();
@@ -91,11 +93,13 @@ export class RailCommandElement extends CrLitElement {
     }
     this.$.address.queryAutocomplete(text);
 
-    await this.loadTabs_();
     this.refreshRows_();
     await this.updateComplete;
     browserProxyFactory.getInstance().handler.ready(
         Math.ceil(document.body.getBoundingClientRect().height));
+
+    await this.loadTabs_();
+    this.refreshRows_();
   }
 
   private async loadTabs_() {

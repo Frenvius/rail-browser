@@ -10,9 +10,9 @@
 #include "chrome/browser/ui/omnibox/omnibox_next_features.h"
 #include "chrome/browser/ui/tabs/tab_strip_api/tab_strip_service_feature.h"
 #include "chrome/browser/ui/webui/cr_components/searchbox/searchbox_handler.h"
-#include "chrome/browser/ui/webui/searchbox/realbox_handler.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_searchbox_handler.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 #include "chrome/grit/generated_resources.h"
@@ -112,15 +112,19 @@ void RailCommandUI::CreatePageHandler(
 void RailCommandUI::CreatePageHandler(
     mojo::PendingRemote<searchbox::mojom::Page> page,
     mojo::PendingReceiver<searchbox::mojom::PageHandler> handler) {
-  content::WebContents* web_contents = web_ui()->GetWebContents();
+  searchbox_profile_ = CurrentProfile();
+  searchbox_handler_ = std::make_unique<RailSearchboxHandler>(
+      std::move(handler), std::move(page), searchbox_profile_,
+      web_ui()->GetWebContents(),
+      base::BindRepeating(&RailCommandUI::GetOrCreateContextualSessionHandle,
+                          base::Unretained(this)));
+}
+
+Profile* RailCommandUI::CurrentProfile() {
   WebUIBrowserWindow* window = WindowFor(web_ui());
   Profile* profile =
       window ? ProfileForNewTab(window->browser(), nullptr) : nullptr;
-  realbox_handler_ = std::make_unique<RealboxHandler>(
-      std::move(handler), std::move(page),
-      profile ? profile : Profile::FromWebUI(web_ui()), web_contents,
-      base::BindRepeating(&RailCommandUI::GetOrCreateContextualSessionHandle,
-                          base::Unretained(this)));
+  return profile ? profile : Profile::FromWebUI(web_ui());
 }
 
 void RailCommandUI::Open(const std::string& text,
@@ -128,6 +132,8 @@ void RailCommandUI::Open(const std::string& text,
                          bool new_tab_mode,
                          int width,
                          rail_command::mojom::CommandContextPtr context) {
+  context->profile_changed =
+      searchbox_profile_ && searchbox_profile_ != CurrentProfile();
   if (!page_) {
     pending_open_ =
         PendingOpen{text, select_all, new_tab_mode, width, std::move(context)};
