@@ -74,7 +74,7 @@ export class RailCommandElement extends CrLitElement {
       tabId: null,
       url: '',
       pinned: context.pinned,
-      essential: context.essential,
+      favorite: context.favorite,
       dormant: false,
       muted: false,
       hasOthers: context.hasOthers,

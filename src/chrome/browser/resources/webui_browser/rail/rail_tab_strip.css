@@ -40,22 +40,21 @@
   width: 0;
 }
 
-#essentialsList {
-  display: flex;
+#favoritesList {
+  display: grid;
   flex: 0 0 auto;
-  flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   max-height: 30%;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0 6px;
+  padding: 0 6px 10px;
 }
 
-#essentialsList::-webkit-scrollbar {
+#favoritesList::-webkit-scrollbar {
   width: 0;
 }
 
-#essentialsDivider,
 #pinnedDivider {
   background: rgb(255 255 255 / 14%);
   flex: 0 0 auto;
@@ -95,7 +94,7 @@ webui-browser-tab.dragsource {
   width: 0;
 }
 
-#essentialsList,
+#favoritesList,
 #newTabButton,
 #pinnedList,
 webui-browser-tab {

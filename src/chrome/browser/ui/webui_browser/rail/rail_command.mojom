@@ -3,7 +3,7 @@ module rail_command.mojom;
 struct CommandContext {
   bool has_tab;
   bool pinned;
-  bool essential;
+  bool favorite;
   bool has_others;
   bool has_right;
   string space_color;

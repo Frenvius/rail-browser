@@ -819,7 +819,7 @@ export function serializeSidebar(
   return {
     activeSpace: spaces.activeId,
     spaces: stored,
-    essentials: pinned.essentials().map(({home, url, title, favicon}) => ({
+    favorites: pinned.favorites().map(({home, url, title, favicon}) => ({
       home,
       url,
       title,

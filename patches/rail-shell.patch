@@ -4438,7 +4438,7 @@ index 8ebad94626..5f39f84978 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..edece14962 100644
+index caed98ffda..5d72467486 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4750,7 +4750,7 @@ index caed98ffda..edece14962 100644
 +    browserProxyFactory.getInstance().handler.setRailCommandContext({
 +      hasTab: tab !== null,
 +      pinned: tab?.pinned === true,
-+      essential: tab?.essential === true,
++      favorite: tab?.favorite === true,
 +      hasOthers: tab?.hasOthers === true,
 +      hasRight: tab?.hasRight === true,
 +      spaceColor: document.documentElement.style.getPropertyValue(
@@ -5045,7 +5045,7 @@ index 5d7329b14c..5acfcdd3a8 100644
    </cr-icon-button>
    <div id="bottomCorners" ?hidden="${!this.tabData.isActive}">
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
-index 2fbabd09ef..227b1d370f 100644
+index 2fbabd09ef..15d19a0180 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
 @@ -3,14 +3,14 @@
@@ -5067,11 +5067,15 @@ index 2fbabd09ef..227b1d370f 100644
  
  import {getCss} from './tab.css.js';
  import {getHtml} from './tab.html.js';
-@@ -39,6 +39,30 @@ export class TabElement extends CrLitElement {
+@@ -39,6 +39,34 @@ export class TabElement extends CrLitElement {
          type: Boolean,
          reflect: true,
        },
 +      pinned: {
++        type: Boolean,
++        reflect: true,
++      },
++      tile: {
 +        type: Boolean,
 +        reflect: true,
 +      },
@@ -5098,7 +5102,7 @@ index 2fbabd09ef..227b1d370f 100644
      };
    }
  
-@@ -48,6 +72,7 @@ export class TabElement extends CrLitElement {
+@@ -48,6 +76,7 @@ export class TabElement extends CrLitElement {
      id: '',
      isActive: false,
      isBlocked: false,
@@ -5106,7 +5110,7 @@ index 2fbabd09ef..227b1d370f 100644
      isSelected: false,
      networkState: TabNetworkState.kNone,
      title: '',
-@@ -56,36 +81,107 @@ export class TabElement extends CrLitElement {
+@@ -56,36 +85,108 @@ export class TabElement extends CrLitElement {
  
    protected accessor dragInProgress = false;
    protected accessor active = false;
@@ -5119,6 +5123,7 @@ index 2fbabd09ef..227b1d370f 100644
 -    this.tabStripUiController_ = TabStripUIController.getRemote();
 -  }
 +  accessor pinned = false;
++  accessor tile = false;
 +  accessor dormant = false;
 +  accessor selected = false;
 +  protected accessor loading = false;
@@ -5226,7 +5231,7 @@ index 2fbabd09ef..227b1d370f 100644
      }
    }
  
-@@ -109,7 +205,8 @@ export class TabElement extends CrLitElement {
+@@ -109,7 +210,8 @@ export class TabElement extends CrLitElement {
      return matrix.m41;
    }
  
@@ -5277,7 +5282,7 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..83eb6a494b 100644
+index 65d7e76ce5..88057f6343 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 @@ -9,22 +9,75 @@ import type {TabStripElement} from './tab_strip.js';
@@ -5287,12 +5292,13 @@ index 65d7e76ce5..83eb6a494b 100644
 -<div id="tabstrip">
 -    ${this.items_.map(item => item.type === 'tab' ? html`
 +<div id="tabstrip" @contextmenu="${this.onStripContextmenu_}">
-+  <div id="essentialsList" ?hidden="${!this.essentialRows_.length}">
-+    ${this.essentialRows_.map(row => html`
++  <div id="favoritesList" ?hidden="${!this.favoriteRows_.length}">
++    ${this.favoriteRows_.map(row => html`
 +          <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
 +              .tabData="${row.item.tabData}"
 +              .dragInProgress="${this.dragInProgress_}"
 +              .pinned="${true}"
++              .tile="${true}"
 +              .dormant="${row.dormant}"
 +              .selected="${this.isSelected_(row.item.id)}"
 +              @mousedown="${this.onTabMousedown_}"
@@ -5303,7 +5309,6 @@ index 65d7e76ce5..83eb6a494b 100644
 +          </webui-browser-tab>
 +        `)}
 +  </div>
-+  <div id="essentialsDivider" ?hidden="${!this.essentialRows_.length}"></div>
 +  <rail-space-bar id="spaceTitle" variant="title"
 +      .spaces="${this.spaceRows_}" .activeId="${this.activeSpace_}"
 +      .tabCounts="${this.spaceCounts_}" .profiles="${this.profileRows_}"
@@ -5363,7 +5368,7 @@ index 65d7e76ce5..83eb6a494b 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..0da96a54b0 100644
+index aa4e0fe69e..1431ac10c9 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -5380,7 +5385,7 @@ index aa4e0fe69e..0da96a54b0 100644
  
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
-+import {ESSENTIALS, PinnedTabs} from '../rail/pinned_tabs.js';
++import {FAVORITES, PinnedTabs} from '../rail/pinned_tabs.js';
 +import type {PinnedRow} from '../rail/sections.js';
 +import {splitSections} from '../rail/sections.js';
 +import {readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
@@ -5427,7 +5432,7 @@ index aa4e0fe69e..0da96a54b0 100644
        items_: {
          type: Array,
        },
-+      essentialRows_: {
++      favoriteRows_: {
 +        type: Array,
 +        state: true,
 +      },
@@ -5474,7 +5479,7 @@ index aa4e0fe69e..0da96a54b0 100644
    }
  
    protected accessor items_: TabStripItem[] = [];
-+  protected accessor essentialRows_: PinnedRow[] = [];
++  protected accessor favoriteRows_: PinnedRow[] = [];
 +  protected accessor pinnedRows_: PinnedRow[] = [];
 +  protected accessor looseItems_: TabStripItem[] = [];
    protected accessor activeTab_: string = '';
@@ -5765,7 +5770,7 @@ index aa4e0fe69e..0da96a54b0 100644
 +
 +  private rowOrder_(): string[] {
 +    return [
-+      ...this.essentialRows_.map(row => row.item.id),
++      ...this.favoriteRows_.map(row => row.item.id),
 +      ...this.pinnedRows_.map(row => row.item.id),
 +      ...this.looseTabIds_(),
 +    ];
@@ -5913,8 +5918,8 @@ index aa4e0fe69e..0da96a54b0 100644
 +      case 'unpin':
 +        this.unpinTab_(target.id);
 +        break;
-+      case 'essential':
-+        this.toggleEssential_(target);
++      case 'favorite':
++        this.toggleFavorite_(target);
 +        break;
 +      case 'close':
 +        this.closeTarget_(target.id);
@@ -5966,14 +5971,14 @@ index aa4e0fe69e..0da96a54b0 100644
 +    return entry;
 +  }
 +
-+  private toggleEssential_(target: TabMenuTarget) {
++  private toggleFavorite_(target: TabMenuTarget) {
 +    const entry = this.entryFor_(target.id) ?? this.pinTab_(target.id);
 +    if (!entry) {
 +      return;
 +    }
 +    this.pinnedTabs_.moveTo(
 +        entry.key,
-+        entry.space === ESSENTIALS ? this.spaces_.activeId : ESSENTIALS);
++        entry.space === FAVORITES ? this.spaces_.activeId : FAVORITES);
 +    this.refreshSections_();
 +  }
 +
@@ -6241,7 +6246,7 @@ index aa4e0fe69e..0da96a54b0 100644
 +  private refreshSections_() {
 +    const sections =
 +        splitSections(this.items_, this.pinnedTabs_, this.spaces_);
-+    this.essentialRows_ = sections.essentialRows;
++    this.favoriteRows_ = sections.favoriteRows;
 +    this.pinnedRows_ = sections.pinnedRows;
 +    this.looseItems_ = sections.looseItems;
 +    this.spaceRows_ = [...this.spaces_.all];
@@ -6269,7 +6274,7 @@ index aa4e0fe69e..0da96a54b0 100644
 +    return this.looseItems_.some(
 +               item => item.type === 'tab' && !this.isDormant_(item.id)) ||
 +        this.pinnedRows_.some(row => !row.dormant) ||
-+        this.essentialRows_.some(row => !row.dormant);
++        this.favoriteRows_.some(row => !row.dormant);
    }
  
    protected activateTab(tabId: NodeId) {
@@ -6398,7 +6403,7 @@ index aa4e0fe69e..0da96a54b0 100644
 +      tabId: item ? item.id : null,
 +      url: item ? item.tabData.url : (entry?.url ?? sleeping!.url),
 +      pinned: entry !== undefined,
-+      essential: entry?.space === ESSENTIALS,
++      favorite: entry?.space === FAVORITES,
 +      dormant: sleeping !== undefined || (entry !== undefined && !entry.tabId),
 +      muted: item !== undefined &&
 +          item.tabData.alertStates.includes(TabAlertState.kAudioMuting),

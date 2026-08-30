@@ -95,12 +95,12 @@ export const COMMANDS: Command[] = [
     run: onActiveTab('unpin'),
   },
   {
-    id: 'toggle-essential',
-    label: 'Toggle Essential',
+    id: 'toggle-favorite',
+    label: 'Toggle Favorite',
     hint: '',
-    keywords: 'essentials global favorite',
+    keywords: 'favorites essentials global',
     enabled: hasTab,
-    run: onActiveTab('essential'),
+    run: onActiveTab('favorite'),
   },
   {
     id: 'close-others',

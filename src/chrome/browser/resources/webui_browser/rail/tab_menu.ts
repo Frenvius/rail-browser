@@ -7,7 +7,7 @@ export interface TabMenuTarget {
   tabId: string|null;
   url: string;
   pinned: boolean;
-  essential: boolean;
+  favorite: boolean;
   dormant: boolean;
   muted: boolean;
   hasOthers: boolean;
@@ -16,7 +16,7 @@ export interface TabMenuTarget {
 }
 
 export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
-    'duplicate'|'essential'|'move-to-space'|'move-to-window'|'mute'|
+    'duplicate'|'favorite'|'move-to-space'|'move-to-window'|'mute'|
     'new-tab-below'|'new-window'|'pin'|'reload'|'sleep'|'unpin';
 
 export interface WindowRow {
@@ -80,8 +80,8 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
       label: `${target.pinned ? 'Unpin' : 'Pin'} ${noun(target)}`,
     },
     {
-      command: 'essential',
-      label: target.essential ? 'Remove from Essentials' : 'Add to Essentials',
+      command: 'favorite',
+      label: target.favorite ? 'Remove from Favorites' : 'Add to Favorites',
     },
     separator(),
     target.hasOthers && single &&

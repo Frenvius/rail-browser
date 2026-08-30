@@ -10,7 +10,7 @@ export interface PinnedRow {
 }
 
 export interface Sections {
-  essentialRows: PinnedRow[];
+  favoriteRows: PinnedRow[];
   pinnedRows: PinnedRow[];
   looseItems: TabStripItem[];
 }
@@ -35,7 +35,7 @@ export function splitSections(
     return {item, dormant: spaces.isAsleep(item.id)};
   });
 
-  const essentialRows = rowsFor(pinned.essentials());
+  const favoriteRows = rowsFor(pinned.favorites());
   const pinnedRows = rowsFor(pinned.entriesIn(spaces.activeId));
 
   const looseItems: TabStripItem[] = [];
@@ -59,5 +59,5 @@ export function splitSections(
   looseItems.push(...items.filter(
       item => item.type === 'group' && spaces.owns(item.id)));
 
-  return {essentialRows, pinnedRows, looseItems};
+  return {favoriteRows, pinnedRows, looseItems};
 }

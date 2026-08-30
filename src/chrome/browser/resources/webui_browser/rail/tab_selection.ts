@@ -3,7 +3,7 @@ import type {TabCommand} from './tab_menu.js';
 const MULTI: ReadonlySet<TabCommand> = new Set<TabCommand>([
   'close',
   'duplicate',
-  'essential',
+  'favorite',
   'move-to-space',
   'move-to-window',
   'mute',

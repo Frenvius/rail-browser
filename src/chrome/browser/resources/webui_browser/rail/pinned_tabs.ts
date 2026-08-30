@@ -4,7 +4,7 @@ import {TabNetworkState} from '../tabs.mojom-webui.js';
 
 import type {SidebarState, StoredPin} from './sidebar_state.js';
 
-export const ESSENTIALS = '';
+export const FAVORITES = '';
 
 export interface PinnedEntry {
   key: string;
@@ -32,14 +32,14 @@ export class PinnedTabs {
     return this.entries_.filter(entry => entry.space === spaceId);
   }
 
-  essentials(): PinnedEntry[] {
-    return this.entriesIn(ESSENTIALS);
+  favorites(): PinnedEntry[] {
+    return this.entriesIn(FAVORITES);
   }
 
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
     const groups: Array<[string, StoredPin[]]> =
         (state?.spaces ?? []).map(space => [space.id, space.pinned ?? []]);
-    groups.push([ESSENTIALS, state?.essentials ?? []]);
+    groups.push([FAVORITES, state?.favorites ?? state?.essentials ?? []]);
     for (const [spaceId, stored] of groups) {
       for (const pin of stored) {
         const tab = tabs.find(
