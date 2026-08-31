@@ -20,10 +20,13 @@
 #include "ui/aura/window_tree_host.h"
 #include "ui/compositor/compositor.h"
 #include "ui/display/screen.h"
+#include "ui/display/win/screen_win.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/geometry/size_conversions.h"
+#include "ui/gfx/geometry/size_f.h"
 #include "ui/gfx/win/hwnd_util.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -238,6 +241,33 @@ bool IsWidgetOnCurrentWorkspace(const views::Widget* widget) {
   }
   return gfx::IsWindowOnCurrentVirtualDesktop(hwnd, virtual_desktop_manager) !=
          false;
+}
+
+gfx::Rect StableSavedBounds(const views::Widget* widget,
+                            const gfx::Rect& bounds) {
+  if (!widget || !widget->GetNativeWindow()) {
+    return bounds;
+  }
+  const HWND hwnd = views::HWNDForNativeWindow(widget->GetNativeWindow());
+  WINDOWPLACEMENT placement = {};
+  placement.length = sizeof(placement);
+  if (!hwnd || !::GetWindowPlacement(hwnd, &placement)) {
+    return bounds;
+  }
+  RECT rect = placement.rcNormalPosition;
+  if (placement.showCmd == SW_SHOWNORMAL && !::GetWindowRect(hwnd, &rect)) {
+    return bounds;
+  }
+  const float scale =
+      display::win::GetScreenWin()->GetScaleFactorForHWND(hwnd);
+  if (scale <= 0.f) {
+    return bounds;
+  }
+  gfx::Rect stable = bounds;
+  stable.set_size(gfx::ToFlooredSize(
+      gfx::SizeF(static_cast<float>(rect.right - rect.left) / scale,
+                 static_cast<float>(rect.bottom - rect.top) / scale)));
+  return stable;
 }
 
 void InstallResizeCursorSubclass(views::Widget* widget) {

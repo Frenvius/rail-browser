@@ -13,6 +13,7 @@ class WebContents;
 
 namespace gfx {
 class Point;
+class Rect;
 class Size;
 }  // namespace gfx
 
@@ -31,6 +32,9 @@ void PrepareSystemBackdropWindow(views::Widget* widget);
 void MakeShellContentsTransparent(content::WebContents* contents);
 
 bool IsWidgetOnCurrentWorkspace(const views::Widget* widget);
+
+gfx::Rect StableSavedBounds(const views::Widget* widget,
+                            const gfx::Rect& bounds);
 
 // A frameless window has no native frame to grab, so the client area answers
 // for the resize edges and the caption itself.

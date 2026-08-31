@@ -8400,7 +8400,7 @@ index e242711595..ba27170c35 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..633688d669 100644
+index 3fabca0c2a..832cc81355 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -8412,7 +8412,15 @@ index 3fabca0c2a..633688d669 100644
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/browser/themes/custom_theme_supplier.h"
  #include "chrome/browser/themes/theme_service.h"
-@@ -27,6 +29,9 @@
+@@ -16,6 +18,7 @@
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/browser_window_state.h"
+ #include "chrome/browser/ui/browser_window_theme_observer.h"
+ #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
+ #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
+@@ -27,6 +30,9 @@
  #include "chrome/browser/ui/views/zoom/zoom_view_controller.h"
  #include "chrome/browser/ui/web_applications/app_browser_controller.h"
  #include "chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.h"
@@ -8422,7 +8430,7 @@ index 3fabca0c2a..633688d669 100644
  #include "chrome/browser/ui/webui_browser/webui_browser_client_view.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_exclusive_access_context.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_modal_dialog_host.h"
-@@ -53,6 +58,11 @@
+@@ -53,6 +59,11 @@
  #include "ui/views/widget/widget.h"
  #include "ui/views/widget/widget_delegate.h"
  
@@ -8434,8 +8442,29 @@ index 3fabca0c2a..633688d669 100644
  #if BUILDFLAG(IS_CHROMEOS)
  #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
  #endif  // BUILDFLAG(IS_CHROMEOS)
-@@ -127,16 +137,28 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
-   params.bounds = gfx::Rect(0, 0, 800, 600);
+@@ -104,6 +115,15 @@ class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
+ 
+   views::ClientView* CreateClientView(views::Widget* widget) override;
+   std::u16string GetWindowTitle() const override;
++  std::string GetWindowName() const override;
++  bool ShouldSaveWindowPlacement() const override;
++  void SaveWindowPlacement(const gfx::Rect& bounds,
++                           ui::mojom::WindowShowState show_state) override;
++  bool GetSavedWindowPlacement(
++      const views::Widget* widget,
++      gfx::Rect* bounds,
++      ui::mojom::WindowShowState* show_state) const override;
++  void SaveCurrentWindowPlacement();
+   bool ShouldDescendIntoChildForEventHandling(
+       gfx::NativeView child,
+       const gfx::Point& location) override;
+@@ -124,19 +144,33 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+   views::Widget::InitParams params(
+       views::Widget::InitParams::CLIENT_OWNS_WIDGET);
+   params.name = "WebUIBrowserWindow";
+-  params.bounds = gfx::Rect(0, 0, 800, 600);
++  chrome::GetSavedWindowBoundsAndShowState(browser_, &params.bounds,
++                                           &params.show_state);
    params.delegate = widget_delegate_.get();
    params.native_widget = CreateNativeWidget();
 -#if BUILDFLAG(IS_CHROMEOS)
@@ -8447,6 +8476,7 @@ index 3fabca0c2a..633688d669 100644
  #endif
    widget_->Init(std::move(params));
    widget_->SetNativeWindowProperty(kWebUIBrowserWindowKey, this);
++  widget_->SetNativeWindowProperty(Profile::kProfileKey, browser_->profile());
 +#if BUILDFLAG(IS_WIN)
 +  backdrop_controller_ = rail::SystemBackdropController::Create(
 +      widget_.get(), rail::SystemBackdropConfig());
@@ -8464,7 +8494,7 @@ index 3fabca0c2a..633688d669 100644
    web_contents_delegate_->SetUIWebContents(ui_web_contents);
    ui_web_contents->SetDelegate(web_contents_delegate_.get());
    ui_web_contents->SetUserData(
-@@ -182,17 +204,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -182,17 +216,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
            base::BindRepeating(&WebUIBrowserWindow::OnContentsElementShown,
                                base::Unretained(this)));
  
@@ -8492,7 +8522,7 @@ index 3fabca0c2a..633688d669 100644
    widget_.reset();
  }
  
-@@ -262,6 +294,11 @@ void WebUIBrowserWindow::Show() {
+@@ -262,6 +306,11 @@ void WebUIBrowserWindow::Show() {
  // The code about Browser's activation state is copied from
  // BrowserView::PaintAsActiveChanged().
  void WebUIBrowserWindow::PaintAsActiveChanged() {
@@ -8504,7 +8534,7 @@ index 3fabca0c2a..633688d669 100644
    if (widget_->ShouldPaintAsActive()) {
      browser_->DidBecomeActive();
    } else {
-@@ -336,8 +373,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
+@@ -336,8 +385,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
  }
  
  bool WebUIBrowserWindow::IsOnCurrentWorkspace() const {
@@ -8518,7 +8548,7 @@ index 3fabca0c2a..633688d669 100644
  }
  
  bool WebUIBrowserWindow::IsVisibleOnScreen() const {
-@@ -584,6 +624,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
+@@ -584,6 +636,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
        continue;
      }
  
@@ -8529,7 +8559,7 @@ index 3fabca0c2a..633688d669 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -617,10 +661,85 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -617,10 +673,85 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -8615,7 +8645,7 @@ index 3fabca0c2a..633688d669 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -691,6 +810,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +822,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -8624,7 +8654,7 @@ index 3fabca0c2a..633688d669 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -753,9 +874,7 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
+@@ -753,9 +886,7 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
@@ -8635,7 +8665,7 @@ index 3fabca0c2a..633688d669 100644
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -865,7 +984,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
+@@ -865,7 +996,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
    return ShowTranslateBubbleResult::kBrowserWindowNotValid;
  }
  
@@ -8643,7 +8673,7 @@ index 3fabca0c2a..633688d669 100644
  DownloadBubbleUIController*
  WebUIBrowserWindow::GetDownloadBubbleUIController() {
    NOTIMPLEMENTED_LOG_ONCE();
-@@ -882,6 +1000,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -882,6 +1012,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -8656,7 +8686,7 @@ index 3fabca0c2a..633688d669 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -947,6 +1071,11 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,6 +1083,11 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -8668,7 +8698,64 @@ index 3fabca0c2a..633688d669 100644
    int command_id;
    if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
-@@ -1217,6 +1346,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1138,6 +1279,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+     views::Widget::ClosedReason close_reason) {
+   // TODO(webium): don't close a window during tab dragging.
+ 
++  widget_delegate_->SaveCurrentWindowPlacement();
++
+   // Give beforeunload handlers, the user, or policy the chance to cancel the
+   // close before we hide the window below.
+   if (!browser_->HandleBeforeClose()) {
+@@ -1181,6 +1324,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+       true /* include_app_name */);
+ }
+ 
++std::string WebUIBrowserWindow::WidgetDelegate::GetWindowName() const {
++  return chrome::GetWindowName(browser_window_->browser());
++}
++
++bool WebUIBrowserWindow::WidgetDelegate::ShouldSaveWindowPlacement() const {
++  return !browser_window_->IsFullscreen() &&
++         chrome::ShouldSaveWindowPlacement(browser_window_->browser());
++}
++
++void WebUIBrowserWindow::WidgetDelegate::SaveWindowPlacement(
++    const gfx::Rect& bounds,
++    ui::mojom::WindowShowState show_state) {
++  gfx::Rect saved_bounds = bounds;
++#if BUILDFLAG(IS_WIN)
++  saved_bounds = rail::StableSavedBounds(browser_window_->widget(), bounds);
++#endif
++  views::WidgetDelegate::SaveWindowPlacement(saved_bounds, show_state);
++  chrome::SaveWindowPlacement(browser_window_->browser(), saved_bounds,
++                              show_state);
++}
++
++bool WebUIBrowserWindow::WidgetDelegate::GetSavedWindowPlacement(
++    const views::Widget* widget,
++    gfx::Rect* bounds,
++    ui::mojom::WindowShowState* show_state) const {
++  chrome::GetSavedWindowBoundsAndShowState(browser_window_->browser(), bounds,
++                                           show_state);
++  return true;
++}
++
++void WebUIBrowserWindow::WidgetDelegate::SaveCurrentWindowPlacement() {
++  views::Widget* widget = browser_window_->widget();
++  if (!widget || !widget->IsVisible() || !ShouldSaveWindowPlacement()) {
++    return;
++  }
++  SaveWindowPlacement(widget->GetRestoredBounds(),
++                      widget->IsMaximized()
++                          ? ui::mojom::WindowShowState::kMaximized
++                          : ui::mojom::WindowShowState::kNormal);
++}
++
+ bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
+     gfx::NativeView child,
+     const gfx::Point& location) {
+@@ -1217,6 +1401,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  
@@ -9644,7 +9731,7 @@ index 4864368f4a..aacb838400 100644
      </messages>
    </release>
 diff --git a/components/guest_contents/browser/guest_contents_host_impl.cc b/components/guest_contents/browser/guest_contents_host_impl.cc
-index aa7791d044..01962b2b4f 100644
+index aa7791d044..c646bac361 100644
 --- a/components/guest_contents/browser/guest_contents_host_impl.cc
 +++ b/components/guest_contents/browser/guest_contents_host_impl.cc
 @@ -44,7 +44,7 @@ void GuestContentsHostImpl::Attach(
@@ -9656,10 +9743,11 @@ index aa7791d044..01962b2b4f 100644
      return;
    }
  
-@@ -61,6 +61,7 @@ void GuestContentsHostImpl::Attach(
+@@ -60,7 +60,7 @@ void GuestContentsHostImpl::Attach(
+               token_of_frame_to_swap));
  
    if (!frame_to_swap) {
-     mojo::ReportBadMessage("Outer delegate frame not found");
+-    mojo::ReportBadMessage("Outer delegate frame not found");
 +    std::move(callback).Run(/*success=*/false);
      return;
    }
