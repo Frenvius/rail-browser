@@ -106,9 +106,7 @@ webui-browser-tab.dragsource {
   width: 0;
 }
 
-#favoritesList,
 #newTabButton,
-#pinnedList,
 webui-browser-tab {
   -webkit-app-region: no-drag;
 }

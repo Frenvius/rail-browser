@@ -3,11 +3,14 @@
  * #scheme=relative
  * #css_wrapper_metadata_end */
 
-:host,
-#bar,
-#title,
+#glyph,
+#name,
+#nameInput,
+.dot,
+#add,
 cr-action-menu,
-.dropdown-item {
+.dropdown-item,
+cr-dialog {
   -webkit-app-region: no-drag;
 }
 
