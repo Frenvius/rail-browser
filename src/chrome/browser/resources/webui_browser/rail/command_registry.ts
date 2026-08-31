@@ -11,6 +11,7 @@ export interface CommandBarHost {
   selectTabAt(index: number): void;
   stepSpace(delta: number): void;
   stepTab(delta: number): void;
+  toggleSidebar(): void;
 }
 
 export interface Command {
@@ -184,6 +185,13 @@ export const COMMANDS: Command[] = [
     hint: 'Ctrl+Alt+Left',
     keywords: 'workspace switch',
     run: host => host.stepSpace(-1),
+  },
+  {
+    id: 'toggle-sidebar',
+    label: 'Toggle Sidebar',
+    hint: 'Ctrl+S',
+    keywords: 'hide show collapse expand rail',
+    run: host => host.toggleSidebar(),
   },
   page('Settings', 'preferences options config', 'chrome://settings'),
   page('History', 'visited recent', 'chrome://history'),

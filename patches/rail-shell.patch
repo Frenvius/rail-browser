@@ -4462,7 +4462,7 @@ index 8ebad94626..5f39f84978 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..ac8077b983 100644
+index caed98ffda..9897ee001c 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4499,7 +4499,7 @@ index caed98ffda..ac8077b983 100644
 +import {formatDisplayUrl} from './rail/format_url.js';
 +import {MENU_OPEN_EVENT} from './rail/menu_overlay.js';
 +import {runCommand} from './rail/command_registry.js';
-+import {initSidebarResize} from './rail/sidebar_resize.js';
++import {initSidebarResize, toggleSidebarCollapsed} from './rail/sidebar_resize.js';
 +import type {TabCommand, TabCommandDetail, TabMenuTarget} from './rail/tab_menu.js';
  import type {SidePanelElement} from './side_panel.js';
  import type {TabActivated, TabAdded, TabClosed, TabUpdated} from './tab_strip/events.js';
@@ -4706,7 +4706,7 @@ index caed98ffda..ac8077b983 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +396,82 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +396,83 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4774,6 +4774,7 @@ index caed98ffda..ac8077b983 100644
 +      selectTabAt: (index: number) => strip.selectTabAt(index),
 +      stepSpace: (delta: number) => strip.stepSpace(delta),
 +      stepTab: (delta: number) => strip.stepTab(delta),
++      toggleSidebar: () => toggleSidebarCollapsed(this),
 +    };
    }
  
@@ -4816,7 +4817,7 @@ index caed98ffda..ac8077b983 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +490,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +491,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -4833,7 +4834,7 @@ index caed98ffda..ac8077b983 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +529,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +530,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  

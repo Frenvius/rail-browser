@@ -2,7 +2,39 @@ const MIN_WIDTH = 160;
 const MAX_WIDTH = 420;
 const DEFAULT_WIDTH = 208;
 const STORAGE_KEY = 'rail.sidebarWidth';
+const COLLAPSED_KEY = 'rail.sidebarCollapsed';
+const COLLAPSED_ATTRIBUTE = 'sidebar-collapsed';
 const WIDTH_PROPERTY = '--rail-sidebar-width';
+const SLIDE_MS = 180;
+const SLIDE_EASING = 'cubic-bezier(.2, 0, 0, 1)';
+
+function slidingElements(host: HTMLElement): HTMLElement[] {
+  const root = host.shadowRoot;
+  const region = root?.getElementById('contentRegion');
+  const titlebar = root?.querySelector('.titlebarDiv');
+  return [
+    ...(region ? [region] : []),
+    ...(titlebar ? Array.from(titlebar.children) as HTMLElement[] : []),
+  ];
+}
+
+export function toggleSidebarCollapsed(host: HTMLElement) {
+  const sliding = slidingElements(host);
+  const before = sliding.map(element => element.getBoundingClientRect().left);
+
+  const collapsed = !host.hasAttribute(COLLAPSED_ATTRIBUTE);
+  host.toggleAttribute(COLLAPSED_ATTRIBUTE, collapsed);
+  localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+
+  sliding.forEach((element, index) => {
+    const shift = before[index]! - element.getBoundingClientRect().left;
+    if (shift) {
+      element.animate(
+          [{transform: `translateX(${shift}px)`}, {transform: 'none'}],
+          {duration: SLIDE_MS, easing: SLIDE_EASING});
+    }
+  });
+}
 
 function clampWidth(width: number): number {
   if (!Number.isFinite(width)) {
@@ -25,6 +57,10 @@ export function initSidebarResize(host: HTMLElement) {
   if (stored !== null) {
     applyWidth(host, clampWidth(Number(stored)));
   }
+
+  host.toggleAttribute(
+      COLLAPSED_ATTRIBUTE, localStorage.getItem(COLLAPSED_KEY) === '1');
+  requestAnimationFrame(() => host.setAttribute('sidebar-animate', ''));
 
   let width = 0;
 

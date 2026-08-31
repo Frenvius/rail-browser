@@ -266,6 +266,31 @@ webui-browser-tab-strip {
   cursor: ew-resize;
 }
 
+:host([sidebar-animate]:not([sidebar-resizing])) .tabstripDiv {
+  transition:
+      opacity 120ms ease,
+      transform 180ms cubic-bezier(.2, 0, 0, 1);
+}
+
+:host([sidebar-collapsed]) #main {
+  padding-left: 6px;
+}
+
+:host([sidebar-collapsed]) .titlebarDiv {
+  padding-left: 6px;
+}
+
+:host([sidebar-collapsed]) .tabstripDiv {
+  margin-right: calc(-1 * var(--rail-sidebar-width));
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+:host([sidebar-collapsed]) #sidebarResizer {
+  left: 0;
+  pointer-events: none;
+}
+
 content-region {
   background: var(--rail-surface);
   border-radius: 8px;
