@@ -22,6 +22,7 @@
 #include "content/public/common/referrer.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/page_transition_types.h"
+#include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/controls/webview/webview.h"
@@ -37,6 +38,7 @@ constexpr int kBubbleSideMargin = 24;
 constexpr int kBubbleMinHeight = 56;
 constexpr float kTopFraction = 0.12f;
 constexpr base::TimeDelta kFirstFrameTimeout = base::Milliseconds(250);
+constexpr gfx::Point kParkedOrigin(-20000, -20000);
 
 }
 
@@ -260,6 +262,9 @@ void RailCommandBubble::PositionWidget(const gfx::Size& contents_size) {
   gfx::Rect bounds(area.x() + (area.width() - width) / 2,
                    area.y() + static_cast<int>(area.height() * kTopFraction),
                    width, height);
+  if (!showing_) {
+    bounds.set_origin(kParkedOrigin);
+  }
   widget_->SetBounds(bounds);
   if (backdrop_) {
     backdrop_->UpdateClip();
