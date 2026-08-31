@@ -35,7 +35,8 @@ export function splitSections(
     return {item, dormant: spaces.isAsleep(item.id)};
   });
 
-  const favoriteRows = rowsFor(pinned.favorites());
+  const favoriteRows =
+      rowsFor(pinned.favorites(spaces.profileOf(spaces.activeId)));
   const pinnedRows = rowsFor(pinned.entriesIn(spaces.activeId));
 
   const looseItems: TabStripItem[] = [];

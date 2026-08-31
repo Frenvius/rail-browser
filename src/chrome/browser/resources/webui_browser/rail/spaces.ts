@@ -1,7 +1,7 @@
 import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 
 import type {PinnedTabs} from './pinned_tabs.js';
-import type {SidebarState, StoredSpace, StoredTab} from './sidebar_state.js';
+import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
 
 export const SPACE_COLORS = [
   '#331b47', '#591b1c', '#58341a', '#725919',
@@ -816,14 +816,19 @@ export function serializeSidebar(
               .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
               .map(({url, title, favicon}) => ({url, title, favicon})),
   }));
+  const favoritesByProfile: Record<string, StoredPin[]> = {};
+  for (const profileId of pinned.favoriteProfiles()) {
+    favoritesByProfile[profileId] =
+        pinned.favorites(profileId).map(({home, url, title, favicon}) => ({
+          home,
+          url,
+          title,
+          favicon,
+        }));
+  }
   return {
     activeSpace: spaces.activeId,
     spaces: stored,
-    favorites: pinned.favorites().map(({home, url, title, favicon}) => ({
-      home,
-      url,
-      title,
-      favicon,
-    })),
+    favoritesByProfile,
   };
 }

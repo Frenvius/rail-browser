@@ -5405,7 +5405,7 @@ index 65d7e76ce5..88057f6343 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..e00b0b35c2 100644
+index aa4e0fe69e..fffb4e8a8b 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -5422,7 +5422,7 @@ index aa4e0fe69e..e00b0b35c2 100644
  
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
-+import {FAVORITES, PinnedTabs} from '../rail/pinned_tabs.js';
++import {favoritesKey, isFavorites, PinnedTabs} from '../rail/pinned_tabs.js';
 +import type {PinnedRow} from '../rail/sections.js';
 +import {splitSections} from '../rail/sections.js';
 +import {readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
@@ -5675,7 +5675,7 @@ index aa4e0fe69e..e00b0b35c2 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,19 +390,677 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,19 +390,679 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6028,7 +6028,9 @@ index aa4e0fe69e..e00b0b35c2 100644
 +    }
 +    this.pinnedTabs_.moveTo(
 +        entry.key,
-+        entry.space === FAVORITES ? this.spaces_.activeId : FAVORITES);
++        isFavorites(entry.space) ?
++            this.spaces_.activeId :
++            favoritesKey(this.spaces_.profileOf(this.spaces_.activeId)));
 +    this.refreshSections_();
 +  }
 +
@@ -6354,7 +6356,7 @@ index aa4e0fe69e..e00b0b35c2 100644
      this.tabStripService_.activateTab(tabId);
      this.fire<TabActivated>('tab-activated', item.tabData);
    }
-@@ -288,6 +1078,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -288,6 +1080,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
@@ -6367,7 +6369,7 @@ index aa4e0fe69e..e00b0b35c2 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -303,6 +1099,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -303,6 +1101,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private removeItem(id: NodeId) {
@@ -6376,7 +6378,7 @@ index aa4e0fe69e..e00b0b35c2 100644
      const itemToRemove = this.findItem_<TabStripItem>(id);
      this.setItems_(this.items_.filter(item => item.id !== id));
  
-@@ -311,8 +1109,105 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,8 +1111,105 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6453,7 +6455,7 @@ index aa4e0fe69e..e00b0b35c2 100644
 +      tabId: item ? item.id : null,
 +      url: item ? item.tabData.url : (entry?.url ?? sleeping!.url),
 +      pinned: entry !== undefined,
-+      favorite: entry?.space === FAVORITES,
++      favorite: entry !== undefined && isFavorites(entry.space),
 +      dormant: sleeping !== undefined || (entry !== undefined && !entry.tabId),
 +      muted: item !== undefined &&
 +          item.tabData.alertStates.includes(TabAlertState.kAudioMuting),
@@ -6483,7 +6485,7 @@ index aa4e0fe69e..e00b0b35c2 100644
    }
  
    // Utility helpers:
-@@ -334,11 +1229,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -334,11 +1231,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private setActiveTab_(id: string) {
@@ -6500,7 +6502,7 @@ index aa4e0fe69e..e00b0b35c2 100644
    }
  
    private updateItemAt_(index: number, item: TabStripItem) {
-@@ -367,8 +1267,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -367,8 +1269,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // TabDragHost impl:
  
@@ -6512,7 +6514,7 @@ index aa4e0fe69e..e00b0b35c2 100644
    }
  
    getTabElementForDrag(id: string) {
-@@ -376,7 +1278,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -376,7 +1280,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    setItemsForDrag(items: TabStripItem[]) {
@@ -6524,7 +6526,7 @@ index aa4e0fe69e..e00b0b35c2 100644
    }
  
    activateTabForDrag(id: string) {
-@@ -391,16 +1296,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -391,16 +1298,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      this.$.tabstrip.classList.toggle('nodrag', noDrag);
    }
  

@@ -4,7 +4,19 @@ import {TabNetworkState} from '../tabs.mojom-webui.js';
 
 import type {SidebarState, StoredPin} from './sidebar_state.js';
 
-export const FAVORITES = '';
+const FAVORITES_PREFIX = 'fav:';
+
+export function favoritesKey(profileId: string): string {
+  return `${FAVORITES_PREFIX}${profileId}`;
+}
+
+export function isFavorites(spaceId: string): boolean {
+  return spaceId.startsWith(FAVORITES_PREFIX);
+}
+
+export function favoritesProfile(spaceId: string): string {
+  return spaceId.slice(FAVORITES_PREFIX.length);
+}
 
 export interface PinnedEntry {
   key: string;
@@ -32,14 +44,24 @@ export class PinnedTabs {
     return this.entries_.filter(entry => entry.space === spaceId);
   }
 
-  favorites(): PinnedEntry[] {
-    return this.entriesIn(FAVORITES);
+  favorites(profileId: string): PinnedEntry[] {
+    return this.entriesIn(favoritesKey(profileId));
+  }
+
+  favoriteProfiles(): string[] {
+    return [...new Set(
+        this.entries_.filter(entry => isFavorites(entry.space))
+            .map(entry => favoritesProfile(entry.space)))];
   }
 
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
     const groups: Array<[string, StoredPin[]]> =
         (state?.spaces ?? []).map(space => [space.id, space.pinned ?? []]);
-    groups.push([FAVORITES, state?.favorites ?? state?.essentials ?? []]);
+    const byProfile = state?.favoritesByProfile ??
+        {'': state?.favorites ?? state?.essentials ?? []};
+    for (const [profileId, stored] of Object.entries(byProfile)) {
+      groups.push([favoritesKey(profileId), stored]);
+    }
     for (const [spaceId, stored] of groups) {
       for (const pin of stored) {
         const tab = tabs.find(
