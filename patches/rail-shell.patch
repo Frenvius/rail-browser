@@ -4073,7 +4073,7 @@ index f4c33684da..2fc51e082b 100644
    // OCCLUDED. Will require checking that the tab reload correctly when it
    // becomes VISIBLE.
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..9c03273e9b 100644
+index a75d80b00c..56c49fa666 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,11 @@ assert(!is_android)
@@ -4089,7 +4089,7 @@ index a75d80b00c..9c03273e9b 100644
  
    ts_files = [
      "app.html.ts",
-@@ -23,6 +27,29 @@ build_webui("build") {
+@@ -23,6 +27,30 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4098,6 +4098,7 @@ index a75d80b00c..9c03273e9b 100644
 +    "rail/command.ts",
 +    "rail/command_registry.ts",
 +    "rail/docked_devtools.ts",
++    "rail/format_url.ts",
 +    "rail/menu_overlay.ts",
 +    "rail/native_menu.ts",
 +    "rail/pinned_tabs.ts",
@@ -4119,7 +4120,7 @@ index a75d80b00c..9c03273e9b 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +75,14 @@ build_webui("build") {
+@@ -48,6 +76,14 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4134,7 +4135,7 @@ index a75d80b00c..9c03273e9b 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -62,6 +97,8 @@ build_webui("build") {
+@@ -62,6 +98,8 @@ build_webui("build") {
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/browser.mojom-webui.ts",
@@ -4461,7 +4462,7 @@ index 8ebad94626..5f39f84978 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..89b6dc8407 100644
+index caed98ffda..ac8077b983 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4489,12 +4490,13 @@ index caed98ffda..89b6dc8407 100644
  import type {Tab as TabData} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
  import {TrackedElementManager} from 'chrome://resources/js/tracked_element/tracked_element_manager.js';
  import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
-@@ -26,20 +26,24 @@ import {getCss} from './app.css.js';
+@@ -26,20 +26,25 @@ import {getCss} from './app.css.js';
  import {getHtml} from './app.html.js';
  import {browserProxyFactory, FullscreenContext, SecurityIcon} from './browser.mojom-webui.js';
  import type {ContentRegionElement} from './content_region.js';
 +import {ActiveProfile} from './rail/active_profile.js';
 +import type {CommandBarHost} from './rail/command_registry.js';
++import {formatDisplayUrl} from './rail/format_url.js';
 +import {MENU_OPEN_EVENT} from './rail/menu_overlay.js';
 +import {runCommand} from './rail/command_registry.js';
 +import {initSidebarResize} from './rail/sidebar_resize.js';
@@ -4518,7 +4520,7 @@ index caed98ffda..89b6dc8407 100644
      sidePanel: SidePanelElement,
      tabstrip: TabStripElement,
    };
-@@ -61,9 +65,12 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -61,9 +66,12 @@ export class WebuiBrowserAppElement extends CrLitElement {
    static override get properties() {
      return {
        backButtonDisabled_: {state: true, type: Boolean},
@@ -4531,7 +4533,7 @@ index caed98ffda..89b6dc8407 100644
        showingSidePanel_: {state: true, type: Boolean},
        reloadOrStopIcon_: {state: true, type: String},
        showLocationIconButton_: {type: Boolean, reflect: true},
-@@ -74,9 +81,14 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -74,9 +82,14 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    private trackedElementManager_: TrackedElementManager;
    private longPressTimer_: number = 0;
@@ -4546,7 +4548,7 @@ index caed98ffda..89b6dc8407 100644
    protected accessor reloadOrStopIcon_: string = 'icon-refresh';
    protected accessor showingSidePanel_: boolean = false;
    protected accessor showLocationIconButton_: boolean = false;
-@@ -92,8 +104,18 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -92,8 +105,18 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const callbackRouter = browserProxyFactory.getInstance().callbackRouter;
      callbackRouter.showSidePanel.addListener(this.showSidePanel_.bind(this));
      callbackRouter.closeSidePanel.addListener(this.closeSidePanel_.bind(this));
@@ -4565,7 +4567,7 @@ index caed98ffda..89b6dc8407 100644
    }
  
    override async connectedCallback() {
-@@ -101,11 +123,9 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -101,11 +124,9 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // super.connectedCallback().
      super.connectedCallback();
      this.trackedElementManager_.startTracking(
@@ -4578,7 +4580,7 @@ index caed98ffda..89b6dc8407 100644
      this.trackedElementManager_.startTracking(
          this.$.backButton, 'kToolbarBackButtonElementId');
      this.trackedElementManager_.startTracking(
-@@ -147,10 +167,6 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -147,10 +168,6 @@ export class WebuiBrowserAppElement extends CrLitElement {
      browserProxyFactory.getInstance().handler.openAppMenu();
    }
  
@@ -4589,7 +4591,7 @@ index caed98ffda..89b6dc8407 100644
    protected onMinimizeClick_(_: Event) {
      browserProxyFactory.getInstance().handler.minimize();
    }
-@@ -232,15 +248,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,15 +249,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -4677,7 +4679,7 @@ index caed98ffda..89b6dc8407 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -252,6 +340,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -252,6 +341,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -4685,7 +4687,16 @@ index caed98ffda..89b6dc8407 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -287,7 +376,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -270,7 +360,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+     // is typing and the tab navigates.
+     const isNTP = activeTabUrl.startsWith('chrome://newtab');
+     if (!isNTP) {
+-      displayUrl = activeTabUrl;
++      displayUrl = formatDisplayUrl(activeTabUrl);
+ 
+       const tabWebView = this.$.contentRegion.activeWebview;
+       if (tabWebView) {
+@@ -287,7 +377,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -4695,7 +4706,7 @@ index caed98ffda..89b6dc8407 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +395,82 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +396,82 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4805,7 +4816,7 @@ index caed98ffda..89b6dc8407 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +489,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +490,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -4822,7 +4833,7 @@ index caed98ffda..89b6dc8407 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +528,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +529,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  

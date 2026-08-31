@@ -150,16 +150,19 @@ webui-browser-tab-strip {
 
 #addressBox {
   align-items: center;
-  background: var(--rail-elevated);
+  background: transparent;
   border-radius: 8px;
-  cursor: text;
+  cursor: default;
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   gap: 6px;
-  height: 30px;
-  margin: 0 8px;
-  padding: 0 10px;
+  height: 26px;
+  margin: 0 auto;
+  max-width: 60%;
+  min-width: 0;
+  padding: 0 8px;
   position: relative;
+  transition: background-color 100ms ease;
 }
 
 #addressBox:hover {
@@ -167,12 +170,16 @@ webui-browser-tab-strip {
 }
 
 #addressText {
-  color: var(--rail-text);
-  flex: 1;
-  font-size: 13px;
+  color: var(--rail-text-dim);
+  flex: 0 1 auto;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#addressBox:hover #addressText {
+  color: var(--rail-text);
 }
 
 #locationIconButton {
