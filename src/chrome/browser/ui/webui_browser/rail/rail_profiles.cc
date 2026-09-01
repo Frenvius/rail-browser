@@ -6,16 +6,19 @@
 
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/profiles/delete_profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
@@ -179,6 +182,21 @@ void CreateProfile(const std::string& name, ProfileCreatedCallback callback) {
       base::UTF8ToUTF16(name), profiles::GetPlaceholderAvatarIndex(),
       /*is_hidden=*/false,
       base::BindOnce(&OnProfileCreated, std::move(callback)));
+}
+
+void DeleteProfile(const std::string& profile_id) {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  if (!manager || profile_id.empty()) {
+    return;
+  }
+  const base::FilePath path = PathForId(profile_id);
+  if (path.empty() ||
+      !manager->GetProfileAttributesStorage().GetProfileAttributesWithPath(
+          path)) {
+    return;
+  }
+  manager->GetDeleteProfileHelper().MaybeScheduleProfileForDeletion(
+      path, base::DoNothing(), ProfileMetrics::DELETE_PROFILE_SETTINGS);
 }
 
 void ResolveProfile(Browser* browser,

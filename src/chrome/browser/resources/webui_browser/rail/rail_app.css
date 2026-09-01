@@ -57,6 +57,49 @@
   gap: 2px;
   height: var(--rail-titlebar-height);
   padding-left: var(--rail-sidebar-width);
+  position: relative;
+}
+
+#railLogoHit {
+  align-items: center;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  display: flex;
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 56px;
+}
+
+#railLogo {
+  align-items: center;
+  border-radius: 6px;
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  margin-left: 8px;
+  transition: background-color 80ms ease;
+  width: 28px;
+}
+
+#railLogo:hover {
+  background: var(--rail-hover);
+}
+
+#railLogo::before {
+  background-color: var(--rail-text-dim);
+  content: '';
+  height: 16px;
+  mask-image: url('/rail/rail_logo.svg');
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  width: 16px;
+}
+
+:host([sidebar-collapsed]) #railLogoHit {
+  display: none;
 }
 
 .titlebarDiv cr-icon-button,

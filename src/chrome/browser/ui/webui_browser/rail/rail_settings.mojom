@@ -1,0 +1,49 @@
+module rail_settings.mojom;
+
+struct SettingsProfile {
+  string id;
+  string name;
+};
+
+interface PageHandlerFactory {
+  CreatePageHandler(pending_remote<Page> page,
+                    pending_receiver<PageHandler> handler);
+};
+
+struct SearchEngine {
+  string id;
+  string name;
+};
+
+struct ProfileDetail {
+  string name;
+  array<SearchEngine> search_engines;
+  string search_engine_id;
+  bool search_suggestions;
+};
+
+interface PageHandler {
+  ListProfiles() => (array<SettingsProfile> profiles);
+
+  GetSidebarState() => (string value);
+
+  CreateProfile(string name) => (SettingsProfile? profile);
+
+  GetProfileDetail(string id) => (ProfileDetail? detail);
+
+  RenameProfile(string id, string name);
+
+  DeleteProfile(string id);
+
+  SetSearchEngine(string id, string engine_id);
+
+  SetSearchSuggestions(string id, bool enabled);
+
+  OpenSearchSettings(string id);
+
+  Close();
+};
+
+interface Page {
+  OnProfilesChanged();
+};

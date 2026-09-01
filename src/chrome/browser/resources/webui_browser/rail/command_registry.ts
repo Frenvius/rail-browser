@@ -1,3 +1,5 @@
+import {browserProxyFactory} from '../browser.mojom-webui.js';
+
 import type {TabCommand, TabMenuTarget} from './tab_menu.js';
 
 export interface CommandBarHost {
@@ -193,7 +195,13 @@ export const COMMANDS: Command[] = [
     keywords: 'hide show collapse expand rail',
     run: host => host.toggleSidebar(),
   },
-  page('Settings', 'preferences options config', 'chrome://settings'),
+  {
+    id: 'settings',
+    label: 'Settings',
+    hint: 'Ctrl+,',
+    keywords: 'preferences options config profiles',
+    run: () => browserProxyFactory.getInstance().handler.openRailSettings(),
+  },
   page('History', 'visited recent', 'chrome://history'),
   page('Downloads', 'files saved', 'chrome://downloads'),
   page('Extensions', 'addons plugins', 'chrome://extensions'),

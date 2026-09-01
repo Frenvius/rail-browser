@@ -4,6 +4,7 @@ import {browserProxyFactory} from '../browser.mojom-webui.js';
 export interface NativeMenuItem {
   command?: string;
   label?: string;
+  accelerator?: string;
   separator?: boolean;
   danger?: boolean;
   checked?: boolean;
@@ -19,6 +20,7 @@ function toMojo(item: NativeMenuItem): RailMenuItem {
   return {
     command: item.command ?? '',
     label: item.label ?? '',
+    accelerator: item.accelerator ?? '',
     separator: item.separator ?? false,
     danger: item.danger ?? false,
     checked: item.checked ?? false,

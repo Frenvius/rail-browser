@@ -31,6 +31,8 @@ using ProfileCreatedCallback =
 
 void CreateProfile(const std::string& name, ProfileCreatedCallback callback);
 
+void DeleteProfile(const std::string& profile_id);
+
 using ProfileResolvedCallback = base::OnceCallback<void(Profile*)>;
 
 void ResolveProfile(Browser* browser,

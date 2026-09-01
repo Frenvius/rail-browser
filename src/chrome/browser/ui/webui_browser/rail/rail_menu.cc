@@ -8,15 +8,19 @@
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "cc/paint/paint_flags.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_acrylic.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/accelerators/accelerator.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/mojom/menu_source_type.mojom.h"
 #include "ui/color/color_id.h"
 #include "ui/display/screen.h"
+#include "ui/events/event_constants.h"
+#include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point.h"
@@ -47,6 +51,48 @@ constexpr int kSwatchGap = 4;
 constexpr int kSwatchRowVerticalInset = 4;
 constexpr int kSwatchRowHorizontalInset = 8;
 constexpr int kSlideAnchorSlack = 4;
+
+bool ParseAccelerator(const std::string& value, ui::Accelerator* out) {
+  if (value.empty()) {
+    return false;
+  }
+  int modifiers = 0;
+  std::vector<std::string> parts = base::SplitString(
+      value, "+", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+  if (parts.empty()) {
+    return false;
+  }
+  const std::string key = parts.back();
+  parts.pop_back();
+  for (const std::string& part : parts) {
+    if (part == "Ctrl") {
+      modifiers |= ui::EF_CONTROL_DOWN;
+    } else if (part == "Alt") {
+      modifiers |= ui::EF_ALT_DOWN;
+    } else if (part == "Shift") {
+      modifiers |= ui::EF_SHIFT_DOWN;
+    } else {
+      return false;
+    }
+  }
+  ui::KeyboardCode code = ui::VKEY_UNKNOWN;
+  if (key.size() == 1 && key[0] >= 'A' && key[0] <= 'Z') {
+    code = static_cast<ui::KeyboardCode>(ui::VKEY_A + (key[0] - 'A'));
+  } else if (key == ",") {
+    code = ui::VKEY_OEM_COMMA;
+  } else if (key.size() >= 2 && key[0] == 'F') {
+    int number = 0;
+    if (!base::StringToInt(key.substr(1), &number) || number < 1 ||
+        number > 12) {
+      return false;
+    }
+    code = static_cast<ui::KeyboardCode>(ui::VKEY_F1 + (number - 1));
+  } else {
+    return false;
+  }
+  *out = ui::Accelerator(code, modifiers);
+  return true;
+}
 
 SkColor ParseColor(const std::string& value) {
   uint32_t rgb = 0;
@@ -146,6 +192,20 @@ class RailMenu::Delegate : public ui::SimpleMenuModel::Delegate {
     return id;
   }
 
+  void SetAccelerator(int command_id, const ui::Accelerator& accelerator) {
+    accelerators_[command_id] = accelerator;
+  }
+
+  bool GetAcceleratorForCommandId(int command_id,
+                                  ui::Accelerator* accelerator) const override {
+    const auto entry = accelerators_.find(command_id);
+    if (entry == accelerators_.end()) {
+      return false;
+    }
+    *accelerator = entry->second;
+    return true;
+  }
+
   bool IsCommandIdChecked(int command_id) const override {
     return checked_.count(command_id) > 0;
   }
@@ -166,6 +226,7 @@ class RailMenu::Delegate : public ui::SimpleMenuModel::Delegate {
  private:
   base::RepeatingCallback<void(const std::string&)> on_command_;
   std::map<int, std::string> commands_;
+  std::map<int, ui::Accelerator> accelerators_;
   std::set<int> checked_;
   std::set<int> disabled_;
   int next_id_ = kFirstCommandId;
@@ -349,6 +410,10 @@ void RailMenu::Fill(
       continue;
     }
     const int id = delegate_->Register(item->command, item->checked);
+    ui::Accelerator accelerator;
+    if (ParseAccelerator(item->accelerator, &accelerator)) {
+      delegate_->SetAccelerator(id, accelerator);
+    }
     if (item->danger) {
       danger_ids_.push_back(id);
     }
