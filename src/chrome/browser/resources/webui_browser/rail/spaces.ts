@@ -1,5 +1,8 @@
 import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 
+import type {SystemBackdropSettings} from '../browser.mojom-webui.js';
+import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
+
 import type {PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
 
@@ -71,6 +74,45 @@ export function tintStrength(color: string): number {
 export function withStrength(hex: string, strength: number): string {
   const alpha = Math.round(Math.min(1, Math.max(0, strength)) * 255);
   return spaceHex(hex) + alpha.toString(16).padStart(2, '0');
+}
+
+export const MIN_STRENGTH = 5;
+export const DEFAULT_MATERIAL = SystemBackdropMaterial.kAcrylic;
+
+const ACRYLIC_TINT_RANGE: readonly[number, number] = [0.06, 0.6];
+const ACRYLIC_LUMINOSITY_RANGE: readonly[number, number] = [0.95, 0.6];
+const MICA_TINT_RANGE: readonly[number, number] = [0, 0.85];
+const MICA_LUMINOSITY_RANGE: readonly[number, number] = [0, 0.9];
+
+function mix(range: readonly[number, number], t: number): number {
+  return range[0] + (range[1] - range[0]) * t;
+}
+
+function hexToArgb(hex: string): number {
+  const value = Number.parseInt(hex.slice(1, 7), 16);
+  return (0xff000000 | value) >>> 0;
+}
+
+export function isMicaMaterial(material: SystemBackdropMaterial): boolean {
+  return material === SystemBackdropMaterial.kMica ||
+      material === SystemBackdropMaterial.kMicaAlt;
+}
+
+export function backdropSettings(
+    hex: string, strength: number,
+    material: SystemBackdropMaterial): SystemBackdropSettings {
+  const color = hexToArgb(spaceHex(hex));
+  const t = (Math.max(MIN_STRENGTH, strength) - MIN_STRENGTH) /
+      (100 - MIN_STRENGTH);
+  const mica = isMicaMaterial(material);
+  return {
+    material,
+    tintColor: color,
+    fallbackColor: color,
+    tintOpacity: mix(mica ? MICA_TINT_RANGE : ACRYLIC_TINT_RANGE, t),
+    luminosityOpacity:
+        mix(mica ? MICA_LUMINOSITY_RANGE : ACRYLIC_LUMINOSITY_RANGE, t),
+  };
 }
 
 export const SPACE_ICONS: ReadonlyArray<readonly[string, string]> = [
@@ -185,6 +227,7 @@ export class Spaces {
   private claims_ = new Map<string, string>();
   private creating_ = 0;
   private profiles_: SpaceProfile[] = [];
+  private material_: SystemBackdropMaterial = DEFAULT_MATERIAL;
   private nextKey_ = 0;
 
   constructor(private onChange_: () => void) {}
@@ -203,6 +246,10 @@ export class Spaces {
 
   get profiles(): SpaceProfile[] {
     return this.profiles_;
+  }
+
+  get material(): SystemBackdropMaterial {
+    return this.material_;
   }
 
   byId(id: string): Space|undefined {
@@ -233,6 +280,7 @@ export class Spaces {
   }
 
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
+    this.material_ = state?.material ?? DEFAULT_MATERIAL;
     for (const stored of state?.spaces ?? []) {
       const space: Space = {
         id: stored.id || crypto.randomUUID(),
@@ -289,13 +337,18 @@ export class Spaces {
     this.onChange_();
   }
 
-  restyle(id: string, color: string, icon: string) {
+  restyle(
+      id: string, color: string, icon: string,
+      material?: SystemBackdropMaterial) {
     const space = this.byId(id);
     if (!space) {
       return;
     }
     space.color = color || space.color;
     space.icon = icon || space.icon;
+    if (material !== undefined) {
+      this.material_ = material;
+    }
     this.onChange_();
   }
 
@@ -828,6 +881,7 @@ export function serializeSidebar(
   }
   return {
     activeSpace: spaces.activeId,
+    material: spaces.material,
     spaces: stored,
     favoritesByProfile,
   };

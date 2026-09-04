@@ -10,8 +10,10 @@ import {browserProxyFactory} from '../rail_space_panel.mojom-webui.js';
 import {getCss} from './space_panel.css.js';
 import {getHtml} from './space_panel.html.js';
 import {
+  backdropSettings,
   hexToHsl,
   hslToHex,
+  MIN_STRENGTH,
   spaceHex,
   SPACE_COLORS,
   SPACE_ICONS,
@@ -29,26 +31,6 @@ const BACKDROP_MATERIALS: ReadonlyArray<readonly[SystemBackdropMaterial, string]
   [SystemBackdropMaterial.kAcrylic, 'Acrylic'],
   [SystemBackdropMaterial.kAcrylicThin, 'Thin'],
 ];
-
-const MIN_STRENGTH = 5;
-const ACRYLIC_TINT_RANGE: readonly[number, number] = [0.06, 0.6];
-const ACRYLIC_LUMINOSITY_RANGE: readonly[number, number] = [0.95, 0.6];
-const MICA_TINT_RANGE: readonly[number, number] = [0, 0.6];
-const MICA_LUMINOSITY_RANGE: readonly[number, number] = [0, 0.6];
-
-function isMica(material: SystemBackdropMaterial): boolean {
-  return material === SystemBackdropMaterial.kMica ||
-      material === SystemBackdropMaterial.kMicaAlt;
-}
-
-function mix(range: readonly[number, number], t: number): number {
-  return range[0] + (range[1] - range[0]) * t;
-}
-
-function hexToArgb(hex: string): number {
-  const value = Number.parseInt(hex.slice(1, 7), 16);
-  return (0xff000000 | value) >>> 0;
-}
 
 export class RailSpacePanelElement extends CrLitElement {
   static get is() {
@@ -104,6 +86,7 @@ export class RailSpacePanelElement extends CrLitElement {
     this.lightness_ = lightness;
     this.exactHex_ = spaceHex(color);
     this.strength_ = Math.max(MIN_STRENGTH, Math.round(tintStrength(color) * 100));
+    this.material_ = request.material;
     this.icon_ = request.icon;
     this.iconQuery_ = '';
     this.kind_ = request.kind;
@@ -218,8 +201,7 @@ export class RailSpacePanelElement extends CrLitElement {
   private commitColor_() {
     document.documentElement.style.setProperty(
         '--rail-space-color', this.pickedHex_());
-    browserProxyFactory.getInstance().handler.restyle(
-        withStrength(this.pickedHex_(), this.strength_ / 100), '');
+    this.restyle_(withStrength(this.pickedHex_(), this.strength_ / 100), '');
     this.commitBackdrop_();
   }
 
@@ -230,7 +212,13 @@ export class RailSpacePanelElement extends CrLitElement {
   protected onMaterialClick_(e: Event) {
     const value = (e.currentTarget as HTMLElement).dataset['material'] ?? '';
     this.material_ = Number(value) as SystemBackdropMaterial;
+    this.restyle_('', '');
     this.commitBackdrop_();
+  }
+
+  private restyle_(color: string, icon: string) {
+    browserProxyFactory.getInstance().handler.restyle(
+        color, icon, this.material_);
   }
 
   private commitBackdrop_() {
@@ -239,18 +227,9 @@ export class RailSpacePanelElement extends CrLitElement {
     }
     this.backdropFrame_ = requestAnimationFrame(() => {
       this.backdropFrame_ = 0;
-      const color = hexToArgb(this.pickedHex_());
-      const t = (this.strength_ - MIN_STRENGTH) / (100 - MIN_STRENGTH);
-      const mica = isMica(this.material_);
-      browserProxyFactory.getInstance().handler.setSystemBackdrop({
-        material: this.material_,
-        tintColor: color,
-        fallbackColor: color,
-        tintOpacity:
-            mix(mica ? MICA_TINT_RANGE : ACRYLIC_TINT_RANGE, t),
-        luminosityOpacity:
-            mix(mica ? MICA_LUMINOSITY_RANGE : ACRYLIC_LUMINOSITY_RANGE, t),
-      });
+      browserProxyFactory.getInstance().handler.setSystemBackdrop(
+          backdropSettings(
+              this.pickedHex_(), this.strength_, this.material_));
     });
   }
 
@@ -269,7 +248,7 @@ export class RailSpacePanelElement extends CrLitElement {
 
   protected onIconClick_(e: Event) {
     const icon = (e.currentTarget as HTMLElement).dataset['icon'] ?? '';
-    browserProxyFactory.getInstance().handler.restyle('', icon);
+    this.restyle_('', icon);
     browserProxyFactory.getInstance().handler.close();
   }
 

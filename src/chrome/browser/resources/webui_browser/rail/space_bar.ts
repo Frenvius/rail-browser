@@ -8,6 +8,7 @@ import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/c
 import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
+import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
 import {announceMenuOpen} from './menu_overlay.js';
@@ -16,7 +17,7 @@ import {getHtml} from './space_bar.html.js';
 import type {SpaceMenuDetail} from './space_menu.js';
 import {openSpaceMenu} from './space_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
-import {spaceHex} from './spaces.js';
+import {DEFAULT_MATERIAL, spaceHex} from './spaces.js';
 
 export type SpaceCommand = 'create'|'move'|'newprofile'|'remove'|'rename'|
     'restyle'|'select'|'setprofile';
@@ -57,6 +58,7 @@ export class SpaceBarElement extends CrLitElement {
       profiles: {type: Array},
       activeId: {type: String},
       tabCounts: {type: Object},
+      material: {type: Number},
       variant: {type: String},
       editing_: {type: Boolean, state: true},
       confirming_: {type: Boolean, state: true},
@@ -69,6 +71,7 @@ export class SpaceBarElement extends CrLitElement {
   accessor profiles: SpaceProfile[] = [];
   accessor activeId: string = '';
   accessor tabCounts: Record<string, number> = {};
+  accessor material: SystemBackdropMaterial = DEFAULT_MATERIAL;
   accessor variant: 'dots'|'title' = 'dots';
   protected accessor editing_ = false;
   protected accessor confirming_ = false;
@@ -175,7 +178,13 @@ export class SpaceBarElement extends CrLitElement {
       return;
     }
     browserProxyFactory.getInstance().handler.openRailSpacePanel(
-        {kind, spaceId: space.id, color: space.color, icon: space.icon},
+        {
+          kind,
+          spaceId: space.id,
+          color: space.color,
+          icon: space.icon,
+          material: this.material,
+        },
         {x: this.menuX_, y: this.menuY_});
   }
 

@@ -61,7 +61,9 @@ class RailSpacePanelUI : public TopChromeWebUIController,
       override;
 
   void Ready(int32_t height) override;
-  void Restyle(const std::string& color, const std::string& icon) override;
+  void Restyle(const std::string& color,
+               const std::string& icon,
+               webui_browser::mojom::SystemBackdropMaterial material) override;
   void SetSystemBackdrop(
       webui_browser::mojom::SystemBackdropSettingsPtr settings) override;
   void Close() override;

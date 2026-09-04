@@ -28,6 +28,7 @@ export interface StoredSpace {
 
 export interface SidebarState {
   activeSpace: string;
+  material?: number;
   spaces: StoredSpace[];
   favoritesByProfile?: Record<string, StoredPin[]>;
   favorites?: StoredPin[];
