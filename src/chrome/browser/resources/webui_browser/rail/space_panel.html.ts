@@ -51,6 +51,10 @@ ${this.isColor_() ? html`
       </button>
     </div>
     <div id="iconGrid">
+      <button class="glyph" data-icon="none" title="No icon"
+        ?selected="${this.icon_ === ''}" @click="${this.onIconClick_}">
+        <cr-icon icon="cr:close"></cr-icon>
+      </button>
       ${this.filteredIcons_().map(([icon, terms]) => html`
         <button class="glyph" data-icon="${icon}" title="${terms}"
           ?selected="${icon === this.icon_}"

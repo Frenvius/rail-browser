@@ -345,7 +345,7 @@ export class Spaces {
       return;
     }
     space.color = color || space.color;
-    space.icon = icon || space.icon;
+    space.icon = icon === 'none' ? '' : (icon || space.icon);
     if (material !== undefined) {
       this.material_ = material;
     }

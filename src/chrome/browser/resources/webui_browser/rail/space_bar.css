@@ -25,9 +25,10 @@ cr-dialog {
 #title {
   align-items: center;
   display: flex;
-  gap: 2px;
+  gap: 4px;
   height: 24px;
-  margin: 0 8px 2px;
+  margin: 0 6px 2px;
+  padding-inline-start: 6px;
 }
 
 #name,
@@ -40,6 +41,7 @@ cr-dialog {
   font: inherit;
   font-size: 12px;
   font-weight: 600;
+  margin-inline-start: -6px;
   min-width: 0;
   overflow: hidden;
   padding: 0 6px;
