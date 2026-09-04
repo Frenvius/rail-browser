@@ -28,6 +28,7 @@ export interface PinnedEntry {
   title: string;
   favicon: string;
   tabId: string;
+  folder: string;
 }
 
 // A pinned row is not a tab. It owns the URL it was pinned at and may or may
@@ -82,6 +83,7 @@ export class PinnedTabs {
           title: pin.title,
           favicon: pin.favicon,
           tabId: tab ? tab.id : '',
+          folder: pin.folder ?? '',
         });
       }
     }
@@ -97,6 +99,7 @@ export class PinnedTabs {
       title: tab.title,
       favicon: tab.favicon.dataUrl,
       tabId: tab.id,
+      folder: '',
     });
   }
 
@@ -110,6 +113,7 @@ export class PinnedTabs {
       title: row.title,
       favicon: row.favicon,
       tabId: '',
+      folder: '',
     });
   }
 
@@ -153,6 +157,25 @@ export class PinnedTabs {
       return;
     }
     entry.space = spaceId;
+    entry.folder = '';
+    this.onChange_();
+  }
+
+  setFolder(key: string, folderId: string) {
+    const entry = this.byKey(key);
+    if (!entry) {
+      return;
+    }
+    entry.folder = folderId;
+    this.onChange_();
+  }
+
+  clearFolder(folderId: string) {
+    for (const entry of this.entries_) {
+      if (entry.folder === folderId) {
+        entry.folder = '';
+      }
+    }
     this.onChange_();
   }
 

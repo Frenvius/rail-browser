@@ -1,5 +1,6 @@
 import type {TabItem, TabStripItem} from '../tab_strip/items.js';
 
+import type {Folder, Folders} from './folders.js';
 import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 import {dormantTabData} from './pinned_tabs.js';
 import type {Spaces} from './spaces.js';
@@ -9,14 +10,21 @@ export interface PinnedRow {
   dormant: boolean;
 }
 
+export interface FolderSection {
+  folder: Folder;
+  rows: PinnedRow[];
+}
+
 export interface Sections {
   favoriteRows: PinnedRow[];
+  folderSections: FolderSection[];
   pinnedRows: PinnedRow[];
   looseItems: TabStripItem[];
 }
 
 export function splitSections(
-    items: TabStripItem[], pinned: PinnedTabs, spaces: Spaces): Sections {
+    items: TabStripItem[], pinned: PinnedTabs, spaces: Spaces,
+    folders: Folders): Sections {
   const claimed = new Set<string>();
 
   const rowsFor = (entries: PinnedEntry[]): PinnedRow[] => entries.map(entry => {
@@ -37,7 +45,15 @@ export function splitSections(
 
   const favoriteRows =
       rowsFor(pinned.favorites(spaces.profileOf(spaces.activeId)));
-  const pinnedRows = rowsFor(pinned.entriesIn(spaces.activeId));
+  const spaceEntries = pinned.entriesIn(spaces.activeId);
+  const folderSections = folders.in(spaces.activeId)
+                             .map(folder => ({
+                                    folder,
+                                    rows: rowsFor(spaceEntries.filter(
+                                        entry => entry.folder === folder.id)),
+                                  }));
+  const pinnedRows = rowsFor(spaceEntries.filter(
+      entry => !entry.folder || !folders.byId(entry.folder)));
 
   const looseItems: TabStripItem[] = [];
   for (const row of spaces.rowsIn(spaces.activeId)) {
@@ -60,5 +76,5 @@ export function splitSections(
   looseItems.push(...items.filter(
       item => item.type === 'group' && spaces.owns(item.id)));
 
-  return {favoriteRows, pinnedRows, looseItems};
+  return {favoriteRows, folderSections, pinnedRows, looseItems};
 }

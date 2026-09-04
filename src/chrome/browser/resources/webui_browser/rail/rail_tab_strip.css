@@ -145,3 +145,113 @@ webui-browser-tab {
   outline: 2px solid var(--rail-accent, #7c5cfc);
   outline-offset: 1px;
 }
+
+.folder {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.folder-row {
+  align-items: center;
+  border-radius: 8px;
+  color: var(--rail-text-muted, #cfcfcf);
+  cursor: default;
+  display: flex;
+  font-size: 13px;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px 0 2px;
+  transition: background-color 100ms ease;
+  user-select: none;
+}
+
+.folder-row:hover {
+  background: var(--rail-hover, rgb(255 255 255 / 10%));
+}
+
+.folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  color: var(--rail-text-label, #8a8a8a);
+  font-size: 11px;
+}
+
+.folder-name-input {
+  background: var(--rail-elevated, rgb(255 255 255 / 6%));
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  flex: 1;
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 2px 4px;
+}
+
+.folder-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline-start: 12px;
+}
+
+.folder-icon {
+  --folder-stroke: color-mix(in srgb, var(--rail-accent, #7c5cfc) 45%,
+      var(--rail-text-dim, #b4b4b4));
+  --folder-back: color-mix(in srgb, var(--rail-accent, #7c5cfc) 16%,
+      transparent);
+  --folder-front: color-mix(in srgb, var(--rail-accent, #7c5cfc) 34%,
+      transparent);
+  flex: none;
+  height: 28px;
+  width: 28px;
+}
+
+.folder-icon .back,
+.folder-icon .front,
+.folder-icon .dots {
+  transform-box: view-box;
+  transform-origin: center;
+  transition: transform 300ms cubic-bezier(0.42, 0, 0, 1),
+      opacity 300ms cubic-bezier(0.42, 0, 0, 1);
+}
+
+.folder-icon .back {
+  fill: var(--folder-back);
+  stroke: var(--folder-stroke);
+  stroke-width: 1.5;
+}
+
+.folder-icon .front {
+  fill: var(--folder-front);
+  stroke: var(--folder-stroke);
+  stroke-width: 1.5;
+}
+
+.folder-icon .surface {
+  fill: var(--rail-chrome-strong, #232334);
+  stroke: none;
+}
+
+.folder-icon .dots {
+  fill: var(--folder-stroke);
+  opacity: 0;
+}
+
+.folder-icon[dotted] .dots {
+  opacity: 1;
+}
+
+.folder-icon[state='open'] .back {
+  transform: skewX(16deg) translate(-3px, 1px) scale(0.85);
+}
+
+.folder-icon[state='open'] :is(.front, .dots) {
+  transform: skewX(-16deg) translate(3px, 1px) scale(0.85);
+}

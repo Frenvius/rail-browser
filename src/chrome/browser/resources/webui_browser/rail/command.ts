@@ -79,6 +79,7 @@ export class RailCommandElement extends CrLitElement {
       url: '',
       pinned: context.pinned,
       favorite: context.favorite,
+      folder: '',
       dormant: false,
       muted: false,
       hasOthers: context.hasOthers,

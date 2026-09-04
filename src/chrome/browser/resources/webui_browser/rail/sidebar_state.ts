@@ -9,6 +9,13 @@ export interface StoredPin {
   url: string;
   title: string;
   favicon: string;
+  folder?: string;
+}
+
+export interface StoredFolder {
+  id: string;
+  name: string;
+  expanded: boolean;
 }
 
 export interface StoredTab {
@@ -25,6 +32,7 @@ export interface StoredSpace {
   profile?: string;
   activeUrl: string;
   pinned: StoredPin[];
+  folders?: StoredFolder[];
   tabs: Array<StoredTab|string>;
 }
 

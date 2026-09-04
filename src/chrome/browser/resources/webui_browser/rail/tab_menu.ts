@@ -1,3 +1,4 @@
+import type {Folder} from './folders.js';
 import type {NativeMenuItem} from './native_menu.js';
 import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import type {Space} from './spaces.js';
@@ -8,6 +9,7 @@ export interface TabMenuTarget {
   url: string;
   pinned: boolean;
   favorite: boolean;
+  folder: string;
   dormant: boolean;
   muted: boolean;
   hasOthers: boolean;
@@ -15,10 +17,12 @@ export interface TabMenuTarget {
   count: number;
 }
 
-export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
-    'duplicate'|'favorite'|'move-to-space'|'move-to-window'|'mute'|
-    'new-tab-below'|'new-window'|'pin'|'reload'|'replace-pinned-url'|'sleep'|
-    'unpin';
+export type TabCommand = 'add-to-folder'|'close'|'close-others'|'close-right'|
+    'copy-link'|'duplicate'|'favorite'|'move-to-space'|'move-to-window'|'mute'|
+    'new-folder'|'new-tab-below'|'new-window'|'pin'|'reload'|
+    'remove-from-folder'|'replace-pinned-url'|'sleep'|'unpin';
+
+export type FolderCommand = 'delete-folder'|'rename-folder';
 
 export interface WindowRow {
   id: number;
@@ -30,6 +34,7 @@ export interface TabCommandDetail {
   target: TabMenuTarget;
   spaceId: string;
   windowId: number;
+  folderId: string;
 }
 
 export interface TabMenuContext {
@@ -37,6 +42,7 @@ export interface TabMenuContext {
   spaces: Space[];
   activeSpace: string;
   windows: WindowRow[];
+  folders: Folder[];
 }
 
 function noun(target: TabMenuTarget): string {
@@ -44,8 +50,10 @@ function noun(target: TabMenuTarget): string {
 }
 
 function buildItems(context: TabMenuContext): NativeMenuItem[] {
-  const {target, spaces, activeSpace, windows} = context;
+  const {target, spaces, activeSpace, windows, folders} = context;
   const single = target.count <= 1;
+  const filing = target.pinned && !target.favorite;
+  const available = folders.filter(folder => folder.id !== target.folder);
   const others = spaces.filter(space => space.id !== activeSpace);
   const destinations = menuItems([
     ...others.map(space => ({
@@ -84,6 +92,17 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
       command: 'favorite',
       label: target.favorite ? 'Remove from Favorites' : 'Add to Favorites',
     },
+    filing && {command: 'new-folder', label: 'New Folder'},
+    filing && available.length > 0 && {
+      command: 'add-to',
+      label: 'Add to Folder',
+      children: menuItems(available.map(folder => ({
+                                          command: `add-to-folder:${folder.id}`,
+                                          label: folder.name,
+                                        }))),
+    },
+    filing && !!target.folder &&
+        {command: 'remove-from-folder', label: 'Remove from Folder'},
     target.pinned && single && !target.dormant && {
       command: 'edit-pinned',
       label: 'Edit Pinned Page',
@@ -113,6 +132,19 @@ export function openTabMenu(
       target: context.target,
       spaceId: command === 'move-to-space' ? argument ?? '' : '',
       windowId: command === 'move-to-window' ? Number(argument ?? 0) : 0,
+      folderId: command === 'add-to-folder' ? argument ?? '' : '',
     });
   });
+}
+
+export function openFolderMenu(
+    name: string, run: (command: FolderCommand) => void) {
+  showNativeMenu(
+      menuItems([
+        {label: name},
+        {command: 'rename-folder', label: 'Rename'},
+        separator(),
+        {command: 'delete-folder', label: 'Delete Folder'},
+      ]),
+      raw => run(raw as FolderCommand));
 }

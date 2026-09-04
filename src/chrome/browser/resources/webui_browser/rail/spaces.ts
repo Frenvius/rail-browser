@@ -3,6 +3,7 @@ import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 import type {SystemBackdropSettings} from '../browser.mojom-webui.js';
 import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 
+import type {Folders} from './folders.js';
 import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
 
@@ -851,12 +852,12 @@ export class Spaces {
 }
 
 function storePin(entry: PinnedEntry): StoredPin {
-  const {home, homeTitle, homeFavicon, url, title, favicon} = entry;
-  return {home, homeTitle, homeFavicon, url, title, favicon};
+  const {home, homeTitle, homeFavicon, url, title, favicon, folder} = entry;
+  return {home, homeTitle, homeFavicon, url, title, favicon, folder};
 }
 
 export function serializeSidebar(
-    spaces: Spaces, pinned: PinnedTabs): SidebarState {
+    spaces: Spaces, pinned: PinnedTabs, folders: Folders): SidebarState {
   const stored: StoredSpace[] = spaces.all.map(space => ({
     id: space.id,
     name: space.name,
@@ -865,6 +866,7 @@ export function serializeSidebar(
     profile: space.profile,
     activeUrl: spaces.activeUrlIn(space.id),
     pinned: pinned.entriesIn(space.id).map(storePin),
+    folders: folders.storedIn(space.id),
     tabs: spaces.rowsIn(space.id)
               .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
               .map(({url, title, favicon}) => ({url, title, favicon})),
