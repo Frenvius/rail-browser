@@ -12,6 +12,7 @@ import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
 import {announceMenuOpen} from './menu_overlay.js';
+import {INCOGNITO} from './sidebar_state.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
 import type {SpaceMenuDetail} from './space_menu.js';
@@ -121,7 +122,7 @@ export class SpaceBarElement extends CrLitElement {
     this.menuX_ = x;
     this.menuY_ = y;
     const space = this.targetSpace_();
-    if (!space) {
+    if (INCOGNITO || !space) {
       return;
     }
     openSpaceMenu(
@@ -288,6 +289,9 @@ export class SpaceBarElement extends CrLitElement {
   }
 
   private async startEditing_() {
+    if (INCOGNITO) {
+      return;
+    }
     this.editing_ = true;
     document.addEventListener('pointerdown', this.onOutsidePointerdown_, true);
     window.addEventListener('blur', this.onWindowBlur_);

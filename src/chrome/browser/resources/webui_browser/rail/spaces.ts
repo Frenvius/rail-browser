@@ -6,6 +6,7 @@ import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import type {Folders} from './folders.js';
 import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
+import {INCOGNITO} from './sidebar_state.js';
 
 export const SPACE_COLORS = [
   '#331b47', '#591b1c', '#58341a', '#725919',
@@ -76,6 +77,10 @@ export function withStrength(hex: string, strength: number): string {
   const alpha = Math.round(Math.min(1, Math.max(0, strength)) * 255);
   return spaceHex(hex) + alpha.toString(16).padStart(2, '0');
 }
+
+export const INCOGNITO_NAME = 'Incognito';
+export const INCOGNITO_ICON = '🔒';
+export const INCOGNITO_COLOR = withStrength('#3c3c43', 0.8);
 
 export const MIN_STRENGTH = 5;
 export const DEFAULT_MATERIAL = SystemBackdropMaterial.kAcrylic;
@@ -275,7 +280,7 @@ export class Spaces {
 
   setProfile(spaceId: string, profileId: string): boolean {
     const space = this.byId(spaceId);
-    if (!space || space.profile === profileId) {
+    if (INCOGNITO || !space || space.profile === profileId) {
       return false;
     }
     space.profile = profileId;
@@ -331,6 +336,9 @@ export class Spaces {
   }
 
   create(): Space {
+    if (INCOGNITO) {
+      return this.active;
+    }
     const space = this.mint_();
     this.spaces_.push(space);
     this.activeId_ = space.id;
@@ -340,7 +348,7 @@ export class Spaces {
 
   rename(id: string, name: string) {
     const space = this.byId(id);
-    if (!space || !name || space.name === name) {
+    if (INCOGNITO || !space || !name || space.name === name) {
       return;
     }
     space.name = name;
@@ -351,7 +359,7 @@ export class Spaces {
       id: string, color: string, icon: string,
       material?: SystemBackdropMaterial) {
     const space = this.byId(id);
-    if (!space) {
+    if (INCOGNITO || !space) {
       return;
     }
     space.color = color || space.color;
@@ -882,6 +890,16 @@ export class Spaces {
   private mint_(): Space {
     const index = this.spaces_.length;
     const id = crypto.randomUUID();
+    if (INCOGNITO) {
+      return {
+        id,
+        name: INCOGNITO_NAME,
+        color: INCOGNITO_COLOR,
+        icon: INCOGNITO_ICON,
+        profile: '',
+        activeKey: '',
+      };
+    }
     return {
       id,
       name: `Space ${index + 1}`,

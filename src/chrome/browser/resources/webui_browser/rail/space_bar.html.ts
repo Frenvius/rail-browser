@@ -1,5 +1,6 @@
 import {html} from '//resources/lit/v3_0/lit.rollup.js';
 
+import {INCOGNITO} from './sidebar_state.js';
 import type {SpaceBarElement} from './space_bar.js';
 
 export function getHtml(this: SpaceBarElement) {
@@ -23,7 +24,7 @@ ${this.variant === 'title' ? html`
       </button>
     `}
   </div>
-` : html`
+` : INCOGNITO ? '' : html`
   <div id="bar">
     <div id="dots">
       ${this.spaces.map(space => html`

@@ -1,4 +1,9 @@
+import {loadTimeData} from '//resources/js/load_time_data.js';
+
 import {browserProxyFactory} from '../browser.mojom-webui.js';
+
+export const INCOGNITO = loadTimeData.valueExists('incognito') &&
+    loadTimeData.getBoolean('incognito');
 
 const SAVE_DELAY_MS = 500;
 
@@ -52,10 +57,15 @@ export async function readSidebarState(): Promise<SidebarState|null> {
       await browserProxyFactory.getInstance().handler.getSidebarState();
   try {
     const parsed = JSON.parse(value || 'null');
-    return parsed && Array.isArray(parsed.spaces) ? parsed as SidebarState :
-                                                    null;
+    const state = parsed && Array.isArray(parsed.spaces) ?
+        parsed as SidebarState :
+        null;
+    if (!INCOGNITO) {
+      return state;
+    }
+    return {activeSpace: '', material: state?.material, spaces: []};
   } catch (e) {
-    return null;
+    return INCOGNITO ? {activeSpace: '', spaces: []} : null;
   }
 }
 
@@ -65,6 +75,9 @@ export class SidebarStore {
   constructor(private serialize_: () => SidebarState) {}
 
   save() {
+    if (INCOGNITO) {
+      return;
+    }
     clearTimeout(this.timer_);
     this.timer_ = setTimeout(() => {
       browserProxyFactory.getInstance().handler.setSidebarState(
