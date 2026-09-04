@@ -28,6 +28,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
+  margin-top: 8px;
   mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
   min-height: 0;
   overflow-x: hidden;
