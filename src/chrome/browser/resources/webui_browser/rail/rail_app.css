@@ -225,6 +225,42 @@ webui-browser-tab-strip {
   color: var(--rail-text);
 }
 
+#copyLinkButton[hidden] {
+  display: none;
+}
+
+#copyLinkButton {
+  --cr-button-background-color: transparent;
+  --cr-button-border-color: transparent;
+  align-items: center;
+  border-radius: 6px;
+  display: flex;
+  flex: 0 0 auto;
+  height: 20px;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0;
+}
+
+#copyLinkButton::before {
+  background-color: var(--rail-text-dim);
+  content: '';
+  height: 14px;
+  mask-image: url('/rail/rail_link.svg');
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  width: 14px;
+}
+
+#copyLinkButton:hover {
+  --cr-button-background-color: var(--rail-hover-strong);
+}
+
+#copyLinkButton:hover::before {
+  background-color: var(--rail-text);
+}
+
 #locationIconButton {
   height: 20px;
   min-width: 20px;
@@ -332,6 +368,102 @@ webui-browser-tab-strip {
 :host([sidebar-collapsed]) #sidebarResizer {
   left: 0;
   pointer-events: none;
+}
+
+#miniProfile,
+#miniMove {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  font-size: 11px;
+  height: 24px;
+  letter-spacing: .2px;
+}
+
+#miniMove[hidden],
+#miniProfile[hidden] {
+  display: none;
+}
+
+#miniMove {
+  display: flex;
+  gap: 1px;
+}
+
+#miniProfile {
+  align-items: center;
+  border: 1px solid var(--rail-border);
+  border-radius: 999px;
+  color: var(--rail-text-dim);
+  display: flex;
+  font-weight: 600;
+  padding: 0 9px;
+}
+
+#miniAdopt,
+#miniAdoptPick {
+  --cr-button-background-color: color-mix(in srgb,
+      var(--rail-space-color, #7c5cfc) 34%, transparent);
+  --cr-button-border-color: color-mix(in srgb,
+      var(--rail-space-color, #7c5cfc) 55%, transparent);
+  color: var(--rail-text);
+  font-weight: 600;
+  height: 24px;
+  min-width: 0;
+}
+
+#miniAdopt {
+  border-radius: 999px 4px 4px 999px;
+  padding: 0 10px;
+}
+
+#miniAdoptPick {
+  --cr-icon-size: 14px;
+  border-radius: 4px 999px 999px 4px;
+  padding: 0 2px;
+}
+
+#miniAdopt:hover,
+#miniAdoptPick:hover {
+  --cr-button-background-color: color-mix(in srgb,
+      var(--rail-space-color, #7c5cfc) 52%, transparent);
+}
+
+#miniAdopt .miniSpace {
+  margin-inline-start: 4px;
+}
+
+#miniAdopt .miniKey {
+  color: var(--rail-text-dim);
+  margin-inline-start: 8px;
+  opacity: .8;
+}
+
+:host([mini]) .tabstripDiv,
+:host([mini]) #sidebarResizer,
+:host([mini]) #railLogoHit,
+:host([mini]) #extensionsBar,
+:host([mini]) #appMenuButton {
+  display: none;
+}
+
+:host([mini]) .titlebarDiv {
+  gap: 4px;
+  padding-left: 6px;
+}
+
+:host([mini]) #main {
+  padding: 0 6px 6px 6px;
+}
+
+:host([mini]) #addressBox {
+  font-weight: 500;
+  margin: 0 auto;
+  max-width: 50%;
+}
+
+:host([mini]) #addressText {
+  color: var(--rail-text);
+  font-size: 12px;
 }
 
 content-region {

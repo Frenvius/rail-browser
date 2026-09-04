@@ -4078,10 +4078,10 @@ index f4c33684da..2fc51e082b 100644
    // OCCLUDED. Will require checking that the tab reload correctly when it
    // becomes VISIBLE.
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..0a2c355518 100644
+index a75d80b00c..82d72d9da8 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
-@@ -9,7 +9,14 @@ assert(!is_android)
+@@ -9,7 +9,15 @@ assert(!is_android)
  build_webui("build") {
    grd_prefix = "webui_browser"
  
@@ -4089,6 +4089,7 @@ index a75d80b00c..0a2c355518 100644
 +  static_files = [
 +    "rail/command.html",
 +    "rail/credits.html",
++    "rail/rail_link.svg",
 +    "rail/rail_logo.svg",
 +    "rail/settings.html",
 +    "rail/space_panel.html",
@@ -4097,7 +4098,7 @@ index a75d80b00c..0a2c355518 100644
  
    ts_files = [
      "app.html.ts",
-@@ -23,6 +30,36 @@ build_webui("build") {
+@@ -23,6 +31,37 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4111,6 +4112,7 @@ index a75d80b00c..0a2c355518 100644
 +    "rail/format_url.ts",
 +    "rail/logo_menu.ts",
 +    "rail/menu_overlay.ts",
++    "rail/mini_window.ts",
 +    "rail/native_menu.ts",
 +    "rail/pinned_tabs.ts",
 +    "rail/sections.ts",
@@ -4134,7 +4136,7 @@ index a75d80b00c..0a2c355518 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +85,15 @@ build_webui("build") {
+@@ -48,6 +87,15 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4150,7 +4152,7 @@ index a75d80b00c..0a2c355518 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -62,6 +108,9 @@ build_webui("build") {
+@@ -62,6 +110,9 @@ build_webui("build") {
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/browser.mojom-webui.ts",
@@ -4363,7 +4365,7 @@ index 08978c8e14..4c3672a256 100644
 -  border-radius: 0 16px 0 0;
 -}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 8ebad94626..9d00d13d54 100644
+index 8ebad94626..1c26e628dd 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
 @@ -11,33 +11,10 @@ export function getHtml(this: WebuiBrowserAppElement) {
@@ -4403,21 +4405,37 @@ index 8ebad94626..9d00d13d54 100644
        <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
          ?disabled="${this.backButtonDisabled_}"
          @click="${this.onBackClick_}"
-@@ -49,34 +26,68 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -49,8 +26,11 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button class="${this.reloadOrStopIcon_}"
          title="${this.reloadOrStopTooltip_()}"
          @click="${this.onReloadOrStopClick_}"></cr-icon-button>
 -      <div id="addressBox">
 -        <webui-browser-searchbox id="address"></webui-browser-searchbox>
 +      <div id="addressBox" @click="${this.onAddressClick_}">
++        <cr-button id="copyLinkButton" type="button" title="Copy link"
++          ?hidden="${!this.showLocationIconButton_}"
++          @click="${this.onCopyLinkClick_}"></cr-button>
++        <span id="addressText">${this.displayUrl_}</span>
          <cr-button id="locationIconButton" type="button"
            ?hidden="${!this.showLocationIconButton_}"
            @click="${this.onLocationIconClick_}">
-           <cr-icon id="locationIcon"
+@@ -58,25 +38,72 @@ export function getHtml(this: WebuiBrowserAppElement) {
              icon="webui-browser:${this.locationIcon_}Icon"></cr-icon>
          </cr-button>
-+        <span id="addressText">${this.displayUrl_}</span>
        </div>
++      <div id="miniProfile" ?hidden="${!this.miniProfile_}">${this.miniProfile_}</div>
++      <div id="miniMove" ?hidden="${!this.mini_}">
++        <cr-button id="miniAdopt" type="button"
++          @click="${this.onMiniAdoptClick_}">
++          <span class="miniAdoptLabel">Move into</span>
++          <span class="miniSpace">${this.miniSpace_}</span>
++          <span class="miniKey">Ctrl+O</span>
++        </cr-button>
++        <cr-button id="miniAdoptPick" type="button" title="Choose space"
++          @click="${this.onMiniPickSpaceClick_}">
++          <cr-icon icon="cr:arrow-drop-down"></cr-icon>
++        </cr-button>
++      </div>
        <webui-browser-extensions-bar id="extensionsBar">
        </webui-browser-extensions-bar>
 -      <cr-icon-button id="avatarButton" iron-icon="cr:person"
@@ -4480,7 +4498,7 @@ index 8ebad94626..9d00d13d54 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..bf4254cf7b 100644
+index caed98ffda..ac12f89e64 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4491,7 +4509,7 @@ index caed98ffda..bf4254cf7b 100644
  import './content_region.js';
  import './extensions_bar.js';
  import './icons.html.js';
-@@ -10,36 +9,44 @@ import './side_panel.js';
+@@ -10,36 +9,46 @@ import './side_panel.js';
  import '/strings.m.js';
  import './tab_strip/tab_strip.js';
  import './webview.js';
@@ -4519,6 +4537,8 @@ index caed98ffda..bf4254cf7b 100644
 +import {formatDisplayUrl} from './rail/format_url.js';
 +import {openLogoMenu} from './rail/logo_menu.js';
 +import {MENU_OPEN_EVENT} from './rail/menu_overlay.js';
++import {adoptMiniWindow, MINI, miniProfileName, miniSetTargetSpace, miniSpaces, miniTargetSpace} from './rail/mini_window.js';
++import {showNativeMenu} from './rail/native_menu.js';
 +import {runCommand} from './rail/command_registry.js';
 +import {initSidebarResize, toggleSidebarCollapsed} from './rail/sidebar_resize.js';
 +import type {TabCommand, TabCommandDetail, TabMenuTarget} from './rail/tab_menu.js';
@@ -4541,7 +4561,7 @@ index caed98ffda..bf4254cf7b 100644
      sidePanel: SidePanelElement,
      tabstrip: TabStripElement,
    };
-@@ -61,9 +68,12 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -61,9 +70,15 @@ export class WebuiBrowserAppElement extends CrLitElement {
    static override get properties() {
      return {
        backButtonDisabled_: {state: true, type: Boolean},
@@ -4551,10 +4571,13 @@ index caed98ffda..bf4254cf7b 100644
        fullscreenMode_:
            {type: String, reflect: true, attribute: 'fullscreen-mode'},
 +      menuOpen_: {type: Boolean, reflect: true, attribute: 'menu-open'},
++      mini_: {type: Boolean, reflect: true, attribute: 'mini'},
++      miniProfile_: {state: true, type: String},
++      miniSpace_: {state: true, type: String},
        showingSidePanel_: {state: true, type: Boolean},
        reloadOrStopIcon_: {state: true, type: String},
        showLocationIconButton_: {type: Boolean, reflect: true},
-@@ -74,9 +84,14 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -74,9 +89,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    private trackedElementManager_: TrackedElementManager;
    private longPressTimer_: number = 0;
@@ -4566,10 +4589,13 @@ index caed98ffda..bf4254cf7b 100644
    protected accessor forwardButtonDisabled_: boolean = true;
    protected accessor fullscreenMode_: string = '';
 +  protected accessor menuOpen_: boolean = false;
++  protected accessor mini_: boolean = MINI;
++  protected accessor miniProfile_: string = '';
++  protected accessor miniSpace_: string = '';
    protected accessor reloadOrStopIcon_: string = 'icon-refresh';
    protected accessor showingSidePanel_: boolean = false;
    protected accessor showLocationIconButton_: boolean = false;
-@@ -92,8 +107,18 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -92,8 +115,18 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const callbackRouter = browserProxyFactory.getInstance().callbackRouter;
      callbackRouter.showSidePanel.addListener(this.showSidePanel_.bind(this));
      callbackRouter.closeSidePanel.addListener(this.closeSidePanel_.bind(this));
@@ -4588,7 +4614,7 @@ index caed98ffda..bf4254cf7b 100644
    }
  
    override async connectedCallback() {
-@@ -101,11 +126,9 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -101,11 +134,9 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // super.connectedCallback().
      super.connectedCallback();
      this.trackedElementManager_.startTracking(
@@ -4601,7 +4627,42 @@ index caed98ffda..bf4254cf7b 100644
      this.trackedElementManager_.startTracking(
          this.$.backButton, 'kToolbarBackButtonElementId');
      this.trackedElementManager_.startTracking(
-@@ -147,8 +170,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -119,6 +150,34 @@ export class WebuiBrowserAppElement extends CrLitElement {
+     const {width} =
+         await browserProxyFactory.getInstance().handler.getTabStripInset();
+     this.tabStripInset_ = width;
++    if (MINI) {
++      this.miniSpace_ = await miniTargetSpace();
++    }
++  }
++
++  protected onMiniAdoptClick_(_: Event) {
++    adoptMiniWindow();
++  }
++
++  protected async onMiniPickSpaceClick_(e: Event) {
++    e.stopPropagation();
++    const spaces = await miniSpaces();
++    if (!spaces.length) {
++      return;
++    }
++    showNativeMenu(
++        spaces.map(space => ({command: space.id, label: space.name})),
++        (command: string) => {
++          const picked = spaces.find(space => space.id === command);
++          if (picked) {
++            this.miniSpace_ = miniSetTargetSpace(picked);
++          }
++        });
++  }
++
++  protected onCopyLinkClick_(e: Event) {
++    e.stopPropagation();
++    runCommand('copy-link', this.commandBarHost_());
+   }
+ 
+   // TabStripControllerDelegate:
+@@ -147,8 +206,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
      browserProxyFactory.getInstance().handler.openAppMenu();
    }
  
@@ -4615,7 +4676,7 @@ index caed98ffda..bf4254cf7b 100644
    }
  
    protected onMinimizeClick_(_: Event) {
-@@ -232,15 +258,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,15 +294,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -4703,7 +4764,7 @@ index caed98ffda..bf4254cf7b 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -252,6 +350,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -252,6 +386,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -4711,7 +4772,7 @@ index caed98ffda..bf4254cf7b 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -270,7 +369,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -270,7 +405,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // is typing and the tab navigates.
      const isNTP = activeTabUrl.startsWith('chrome://newtab');
      if (!isNTP) {
@@ -4720,17 +4781,20 @@ index caed98ffda..bf4254cf7b 100644
  
        const tabWebView = this.$.contentRegion.activeWebview;
        if (tabWebView) {
-@@ -287,7 +386,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +422,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
 -    this.$.address.setInputText(displayUrl);
 +    this.displayUrl_ = displayUrl;
++    if (MINI) {
++      miniProfileName(active.id).then(name => this.miniProfile_ = name);
++    }
 +    this.pushCommandContext_();
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +405,84 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +444,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4759,6 +4823,9 @@ index caed98ffda..bf4254cf7b 100644
 +            (id: string, color: string, icon: string,
 +             material: SystemBackdropMaterial) =>
 +                this.$.tabstrip.restyleSpace(id, color, icon, material));
++    browserProxyFactory.getInstance().callbackRouter.onRailAdoptTab.addListener(
++        (id: string, spaceId: string) =>
++            this.$.tabstrip.adoptTab(id, spaceId));
 +    browserProxyFactory.getInstance().callbackRouter.onTabDragMoved.addListener(
 +        (point: Point) => this.$.tabstrip.onTabDragMoved(point.x, point.y));
 +    browserProxyFactory.getInstance().callbackRouter.onTabDragEnded.addListener(
@@ -4842,7 +4909,7 @@ index caed98ffda..bf4254cf7b 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +501,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +543,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -4859,7 +4926,7 @@ index caed98ffda..bf4254cf7b 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +540,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +582,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -5567,7 +5634,7 @@ index 65d7e76ce5..d0aa651160 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..3a250f7b81 100644
+index aa4e0fe69e..4ac1eabffe 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -5590,7 +5657,7 @@ index aa4e0fe69e..3a250f7b81 100644
 +import {favoritesKey, isFavorites, PinnedTabs} from '../rail/pinned_tabs.js';
 +import type {FolderSection, LooseEntry, PinnedRow} from '../rail/sections.js';
 +import {splitSections} from '../rail/sections.js';
-+import {readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
++import {MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
 +import {slideDirection, slideIn, slideOut} from '../rail/space_slide.js';
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
@@ -5764,10 +5831,19 @@ index aa4e0fe69e..3a250f7b81 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +258,34 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +258,43 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
++
++    if (MINI) {
++      const active = items.find(
++          (item): item is TabItem =>
++              item.type === 'tab' && item.tabData.isActive);
++      if (active) {
++        this.fire('tab-activated', active.tabData);
++      }
++    }
 +
 +    this.openStartupTab_(restoredRow);
 +    this.syncSleepingTabs_();
@@ -5799,7 +5875,7 @@ index aa4e0fe69e..3a250f7b81 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +307,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +316,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -5828,7 +5904,7 @@ index aa4e0fe69e..3a250f7b81 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +343,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +352,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -5843,7 +5919,7 @@ index aa4e0fe69e..3a250f7b81 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -240,15 +403,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -240,15 +412,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // End TabStripObserver impl:
  
@@ -5879,7 +5955,7 @@ index aa4e0fe69e..3a250f7b81 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,19 +432,990 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,19 +441,1025 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6098,6 +6174,10 @@ index aa4e0fe69e..3a250f7b81 100644
 +      this.moveToNewWindow_(targets);
 +      return;
 +    }
++    if (command === 'mini-window') {
++      this.moveToMiniWindow_(targets);
++      return;
++    }
 +    if (command === 'move-to-window') {
 +      this.moveToWindow_(targets, windowId);
 +      return;
@@ -6126,6 +6206,17 @@ index aa4e0fe69e..3a250f7b81 100644
 +    this.collapseSelection_(this.activeTab_);
 +    this.fire('tab-closing', {ids});
 +    await browserProxyFactory.getInstance().handler.moveTabsToNewWindow(ids);
++  }
++
++  private async moveToMiniWindow_(targets: TabMenuTarget[]) {
++    const ids = targets.map(one => one.tabId)
++                    .filter((id): id is string => id !== null);
++    if (!ids.length) {
++      return;
++    }
++    this.collapseSelection_(this.activeTab_);
++    this.fire('tab-closing', {ids});
++    await browserProxyFactory.getInstance().handler.moveTabsToMiniWindow(ids);
 +  }
 +
 +  private async moveToWindow_(targets: TabMenuTarget[], windowId: number) {
@@ -6169,6 +6260,9 @@ index aa4e0fe69e..3a250f7b81 100644
 +        break;
 +      case 'new-window':
 +        this.moveToNewWindow_([target]);
++        break;
++      case 'mini-window':
++        this.moveToMiniWindow_([target]);
 +        break;
 +      case 'sleep':
 +        if (target.tabId) {
@@ -6568,6 +6662,20 @@ index aa4e0fe69e..3a250f7b81 100644
 +    this.refreshSections_();
 +  }
 +
++  adoptTab(tabId: NodeId, spaceId: string) {
++    this.spaces_.claim(tabId, spaceId);
++    if (!this.findItem_<TabItem>(tabId, 'tab')) {
++      this.refreshSections_();
++      return;
++    }
++    this.ensureProfile_(tabId);
++    if (this.activeTab_ === tabId && this.spaces_.activeId !== spaceId) {
++      this.selectSpace_(spaceId);
++      return;
++    }
++    this.refreshSections_();
++  }
++
 +  restyleSpace(
 +      id: string, color: string, icon: string,
 +      material: SystemBackdropMaterial) {
@@ -6660,6 +6768,9 @@ index aa4e0fe69e..3a250f7b81 100644
 +  }
 +
 +  private async openStartupTab_(row: TabRow|undefined) {
++    if (MINI) {
++      return;
++    }
 +    const spaceId = this.spaces_.activeId;
 +    const strays = this.spaces_.tabsIn(spaceId).filter(
 +        tabId => this.isNewTabPage_(tabId));
@@ -6871,7 +6982,7 @@ index aa4e0fe69e..3a250f7b81 100644
      this.tabStripService_.activateTab(tabId);
      this.fire<TabActivated>('tab-activated', item.tabData);
    }
-@@ -288,6 +1433,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -288,6 +1477,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
@@ -6884,7 +6995,7 @@ index aa4e0fe69e..3a250f7b81 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -303,6 +1454,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -303,6 +1498,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private removeItem(id: NodeId) {
@@ -6893,7 +7004,7 @@ index aa4e0fe69e..3a250f7b81 100644
      const itemToRemove = this.findItem_<TabStripItem>(id);
      this.setItems_(this.items_.filter(item => item.id !== id));
  
-@@ -311,8 +1464,107 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,8 +1508,107 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -7002,7 +7113,7 @@ index aa4e0fe69e..3a250f7b81 100644
    }
  
    // Utility helpers:
-@@ -334,11 +1586,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -334,11 +1630,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private setActiveTab_(id: string) {
@@ -7019,7 +7130,7 @@ index aa4e0fe69e..3a250f7b81 100644
    }
  
    private updateItemAt_(index: number, item: TabStripItem) {
-@@ -367,8 +1624,11 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -367,8 +1668,11 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // TabDragHost impl:
  
@@ -7032,7 +7143,7 @@ index aa4e0fe69e..3a250f7b81 100644
    }
  
    getTabElementForDrag(id: string) {
-@@ -376,7 +1636,93 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -376,7 +1680,93 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    setItemsForDrag(items: TabStripItem[]) {
@@ -7127,7 +7238,7 @@ index aa4e0fe69e..3a250f7b81 100644
    }
  
    activateTabForDrag(id: string) {
-@@ -391,16 +1737,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -391,16 +1781,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      this.$.tabstrip.classList.toggle('nodrag', noDrag);
    }
  
@@ -7143,24 +7254,24 @@ index aa4e0fe69e..3a250f7b81 100644
 +          height: Math.round(drag.row.height),
 +        },
 +        {x: Math.round(drag.grabX), y: Math.round(drag.grabY)}, ids);
-   }
- 
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
++  }
++
 +  private dragRowIds_(id: string): string[] {
 +    return this.selectedIds_.length > 1 && this.selection_.has(id) ?
 +        [...this.selectedIds_] :
 +        [id];
    }
  
--  closeDragElement() {
--    this.dragDelegate_.onMouseUp();
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  private dragTabIds_(id: string): string[] {
 +    return this.dragRowIds_(id)
 +        .map(rowId => this.targetFor(rowId)?.tabId)
 +        .filter((tabId): tabId is string => !!tabId);
-+  }
-+
+   }
+ 
+-  closeDragElement() {
+-    this.dragDelegate_.onMouseUp();
 +  onTabDragMoved(x: number, y: number) {
 +    this.dragDelegate_.onDragMoved(x, y);
 +  }
@@ -7563,16 +7674,25 @@ index b6bcac3e84..df62c9ca0c 100644
    switch (result) {
      case WarnBeforeClosingResult::kOkToClose:
 diff --git a/chrome/browser/ui/browser_window/internal/browser_window_features.cc b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
-index 77f5a0e8f4..3764ce07e1 100644
+index 77f5a0e8f4..2a69635f34 100644
 --- a/chrome/browser/ui/browser_window/internal/browser_window_features.cc
 +++ b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
-@@ -283,7 +283,8 @@ void BrowserWindowFeatures::Init(BrowserWindowInterface* browser) {
+@@ -164,6 +164,7 @@
+ #include "chrome/browser/ui/web_modal/browser_window_modal_dialog_delegate.h"
+ #include "chrome/browser/ui/webui_browser/browser_elements_webui_browser.h"
+ #include "chrome/browser/ui/webui_browser/find_bar_owner_webui_browser.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser_exclusive_access_context.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
+@@ -283,7 +284,9 @@ void BrowserWindowFeatures::Init(BrowserWindowInterface* browser) {
  
    browser_actions_->InitializeBrowserActions();
  
 -  if (webui_browser::IsWebUIBrowserEnabled()) {
 +  if (webui_browser::IsWebUIBrowserEnabled() &&
-+      browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
++      (browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL ||
++       rail::IsMiniWindow(browser->GetBrowserForMigrationOnly()))) {
      browser_elements_ =
          GetUserDataFactory().CreateInstance<BrowserElementsWebUiBrowser>(
              *browser, *browser);
@@ -7735,18 +7855,34 @@ index dd6a523d45..bbb4c2257f 100644
      "//components/captive_portal/core:buildflags",
      "//components/no_state_prefetch/browser",
 diff --git a/chrome/browser/ui/navigator/browser_navigator.cc b/chrome/browser/ui/navigator/browser_navigator.cc
-index debd48b34d..2efa5e4218 100644
+index debd48b34d..473269ef85 100644
 --- a/chrome/browser/ui/navigator/browser_navigator.cc
 +++ b/chrome/browser/ui/navigator/browser_navigator.cc
-@@ -44,6 +44,7 @@
+@@ -44,6 +44,8 @@
  #include "chrome/browser/ui/web_applications/app_browser_controller.h"
  #include "chrome/browser/ui/web_applications/web_app_launch_navigation_handle_user_data.h"
  #include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
  #include "chrome/browser/web_applications/web_app_helpers.h"
  #include "chrome/browser/web_applications/web_app_tab_helper.h"
  #include "chrome/common/webui_url_constants.h"
-@@ -492,13 +493,15 @@ std::unique_ptr<content::WebContents> CreateTargetContents(
+@@ -326,6 +328,14 @@ std::tuple<BrowserWindowInterface*, int> GetBrowserAndTabForDisposition(
+     case WindowOpenDisposition::NEW_WINDOW: {
+       // Make a new normal browser window.
+       Browser* browser = nullptr;
++      Browser* const source = params.browser
++                                  ? params.browser->GetBrowserForMigrationOnly()
++                                  : nullptr;
++      if (rail::ShouldOpenLinkInMiniWindow(source)) {
++        return {rail::CreateMiniWindow(profile,
++                                       rail::MiniWindowBoundsNear(source)),
++                -1};
++      }
+       if (Browser::GetCreationStatusForProfile(profile) ==
+           Browser::CreationStatus::kOk) {
+         browser = Browser::Create(
+@@ -492,13 +502,15 @@ std::unique_ptr<content::WebContents> CreateTargetContents(
    // subsequent navigation is cross-process (i.e. cross-SiteInstance), then it
    // will stay in the same BrowsingInstance (creating frame proxies as needed)
    // preserving the requested opener relationship along the way.
@@ -7806,6 +7942,49 @@ index ed7dfb5b89..1d24498b97 100644
        continue;
      }
  
+diff --git a/chrome/browser/ui/startup/BUILD.gn b/chrome/browser/ui/startup/BUILD.gn
+index 7279eb41c9..ce1e1f3484 100644
+--- a/chrome/browser/ui/startup/BUILD.gn
++++ b/chrome/browser/ui/startup/BUILD.gn
+@@ -246,6 +246,7 @@ source_set("impl") {
+       "//chrome/browser/ui/toasts/api:toasts",
+       "//chrome/browser/ui/waap:manager",
+       "//chrome/browser/ui/webui/whats_new",
++      "//chrome/browser/ui/webui_browser",
+       "//chrome/browser/web_applications",
+       "//chrome/common",
+       "//chrome/common:buildflags",
+diff --git a/chrome/browser/ui/startup/startup_browser_creator_impl.cc b/chrome/browser/ui/startup/startup_browser_creator_impl.cc
+index a93e7d7e7b..d904b5b63a 100644
+--- a/chrome/browser/ui/startup/startup_browser_creator_impl.cc
++++ b/chrome/browser/ui/startup/startup_browser_creator_impl.cc
+@@ -54,6 +54,7 @@
+ #include "chrome/browser/ui/toasts/toast_controller.h"
+ #include "chrome/browser/ui/ui_features.h"
+ #include "chrome/browser/ui/webui/whats_new/whats_new_util.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
+ #include "chrome/common/chrome_switches.h"
+ #include "chrome/common/chrome_version.h"
+ #include "chrome/common/pref_names.h"
+@@ -302,6 +303,18 @@ Browser* StartupBrowserCreatorImpl::OpenTabsInBrowser(
+     profile_ = browser->profile();
+   }
+ 
++  if (process_startup == chrome::startup::IsProcessStartup::kNo) {
++    std::vector<GURL> urls;
++    urls.reserve(tabs.size());
++    for (const StartupTab& tab : tabs) {
++      urls.push_back(tab.url);
++    }
++    if (Browser* mini =
++            rail::OpenExternalUrlsInMiniWindows(profile_, urls)) {
++      return mini;
++    }
++  }
++
+   if (!browser || !browser->is_type_normal()) {
+     CHECK(profile_);
+     // In some conditions a new browser object cannot be created. The most
 diff --git a/chrome/browser/ui/tabs/tab_strip_api/tab_strip_model_impl/converters/tab_converters.cc b/chrome/browser/ui/tabs/tab_strip_api/tab_strip_model_impl/converters/tab_converters.cc
 index 7ee833cbbb..fa1c29e709 100644
 --- a/chrome/browser/ui/tabs/tab_strip_api/tab_strip_model_impl/converters/tab_converters.cc
@@ -7840,6 +8019,28 @@ index e17b41f80f..e7fddbb661 100644
    // Set is_attempting_to_close_browser_ here, so that extensions, etc, do not
    // attempt to add tabs to the browser before it closes.
    is_attempting_to_close_browser_ = true;
+diff --git a/chrome/browser/ui/views/frame/browser_window_factory.cc b/chrome/browser/ui/views/frame/browser_window_factory.cc
+index 7a0111c300..5c73765231 100644
+--- a/chrome/browser/ui/views/frame/browser_window_factory.cc
++++ b/chrome/browser/ui/views/frame/browser_window_factory.cc
+@@ -10,6 +10,7 @@
+ #include "chrome/browser/ui/views/frame/browser_native_widget_factory.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/frame/browser_widget.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
+ #include "chrome/browser/ui/window_feature_controller/window_feature_controller.h"
+@@ -33,7 +34,8 @@ std::unique_ptr<BrowserWindow, BrowserWindowDeleter>
+ BrowserWindow::CreateBrowserWindow(Browser* browser,
+                                    bool user_gesture,
+                                    bool in_tab_dragging) {
+-  if (webui_browser::IsWebUIBrowserEnabled() && browser->is_type_normal()) {
++  if (webui_browser::IsWebUIBrowserEnabled() &&
++      (browser->is_type_normal() || rail::IsMiniWindow(browser))) {
+     return std::unique_ptr<BrowserWindow, BrowserWindowDeleter>(
+         new WebUIBrowserWindow(browser));
+   }
 diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
 index bced2aebb3..6f46b98a02 100644
 --- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
@@ -8001,10 +8202,10 @@ index 806ff8ed9e..739ef0e7ad 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..d4f136649a 100644
+index 3d4fe27f4f..daec21c058 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,19 @@ source_set("headers") {
+@@ -13,6 +13,20 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
@@ -8020,11 +8221,12 @@ index 3d4fe27f4f..d4f136649a 100644
 +    "rail/rail_sidebar_state.h",
 +    "rail/rail_favicon_source.h",
 +    "rail/rail_profiles.h",
++    "rail/rail_mini_window.h",
 +    "rail/rail_tab_transfer.h",
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -25,6 +38,8 @@ source_set("webui_browser") {
+@@ -25,6 +39,8 @@ source_set("webui_browser") {
      ":browser_mojo_bindings",
      ":headers",
      "//base",
@@ -8033,7 +8235,7 @@ index 3d4fe27f4f..d4f136649a 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -34,6 +49,7 @@ source_set("webui_browser") {
+@@ -34,6 +50,7 @@ source_set("webui_browser") {
      "//chrome/browser/ui/views/side_panel",
      "//chrome/browser/ui/webui/cr_components/searchbox",
      "//chrome/browser/ui/webui/metrics_reporter",
@@ -8041,7 +8243,7 @@ index 3d4fe27f4f..d4f136649a 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/tab_drag:mojom",
      "//components/browser_apis/tab_strip:mojom_experiment",
-@@ -52,6 +68,39 @@ source_set("impl") {
+@@ -52,6 +69,40 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -8063,6 +8265,7 @@ index 3d4fe27f4f..d4f136649a 100644
 +    "rail/rail_app_menu_model.h",
 +    "rail/rail_menu.cc",
 +    "rail/rail_menu.h",
++    "rail/rail_mini_window.cc",
 +    "rail/rail_empty_window.cc",
 +    "rail/rail_drag_ghost.cc",
 +    "rail/rail_extension_dialog.cc",
@@ -8081,7 +8284,7 @@ index 3d4fe27f4f..d4f136649a 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -75,6 +124,15 @@ source_set("impl") {
+@@ -75,6 +126,15 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -8097,7 +8300,7 @@ index 3d4fe27f4f..d4f136649a 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -86,6 +144,7 @@ source_set("impl") {
+@@ -86,6 +146,7 @@ source_set("impl") {
      "//chrome/browser/devtools",
      "//chrome/browser/extensions",
      "//chrome/browser/profiles",
@@ -8105,7 +8308,7 @@ index 3d4fe27f4f..d4f136649a 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/themes",
      "//chrome/browser/ui/bookmarks",
-@@ -106,7 +165,9 @@ source_set("impl") {
+@@ -106,7 +167,9 @@ source_set("impl") {
      "//chrome/browser/ui/views/toolbar",
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
@@ -8115,7 +8318,7 @@ index 3d4fe27f4f..d4f136649a 100644
      "//chrome/browser/ui/webui/util",
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/zoom:browser_window_zoom_observer",
-@@ -119,6 +180,10 @@ source_set("impl") {
+@@ -119,6 +182,10 @@ source_set("impl") {
      "//components/sharing_message",
      "//components/surface_embed/common",
      "//content/public/browser",
@@ -8126,7 +8329,7 @@ index 3d4fe27f4f..d4f136649a 100644
      "//services/network/public/mojom",
      "//ui/base",
      "//ui/content_accelerators",
-@@ -140,6 +205,14 @@ source_set("impl") {
+@@ -140,6 +207,14 @@ source_set("impl") {
      ]
    }
  
@@ -8141,7 +8344,7 @@ index 3d4fe27f4f..d4f136649a 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -149,11 +222,15 @@ mojom("browser_mojo_bindings") {
+@@ -149,11 +224,15 @@ mojom("browser_mojo_bindings") {
    sources = [
      "bookmark_bar.mojom",
      "browser.mojom",
@@ -8158,7 +8361,7 @@ index 3d4fe27f4f..d4f136649a 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..82e620a9b8 100644
+index 15a65f7152..ac0b5f8c87 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -8237,7 +8440,7 @@ index 15a65f7152..82e620a9b8 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,27 @@ interface Page {
+@@ -44,6 +91,29 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -8256,6 +8459,8 @@ index 15a65f7152..82e620a9b8 100644
 +  OnRailSpaceRestyle(string space_id, string color, string icon,
 +                     SystemBackdropMaterial material);
 +
++  OnRailAdoptTab(tabs_api.mojom.NodeId id, string space_id);
++
 +  OnSidebarContextMenu(gfx.mojom.Point point);
 +
 +  OnTabDragMoved(gfx.mojom.Point point);
@@ -8265,7 +8470,7 @@ index 15a65f7152..82e620a9b8 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -55,7 +123,7 @@ interface PageHandler {
+@@ -55,7 +125,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -8274,7 +8479,7 @@ index 15a65f7152..82e620a9b8 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +158,65 @@ interface PageHandler {
+@@ -90,6 +160,69 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -8310,6 +8515,10 @@ index 15a65f7152..82e620a9b8 100644
 +  GetTabMuted(tabs_api.mojom.NodeId id) => (bool muted);
 +
 +  MoveTabsToNewWindow(array<tabs_api.mojom.NodeId> ids) => (bool moved);
++
++  MoveTabsToMiniWindow(array<tabs_api.mojom.NodeId> ids) => (bool moved);
++
++  AdoptMiniWindow(string space_id) => (bool moved);
 +
 +  ListWindows() => (array<RailWindow> windows);
 +
@@ -8471,7 +8680,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..97aa30b83c 100644
+index 3ba14e7289..f612788449 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -8482,7 +8691,7 @@ index 3ba14e7289..97aa30b83c 100644
  #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
-@@ -26,10 +27,22 @@
+@@ -26,10 +27,23 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
@@ -8496,6 +8705,7 @@ index 3ba14e7289..97aa30b83c 100644
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_audio.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_opener.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_sleep.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_transfer.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
@@ -8505,7 +8715,7 @@ index 3ba14e7289..97aa30b83c 100644
  #include "components/omnibox/browser/location_bar_model.h"
  #include "components/omnibox/browser/vector_icons.h"
  #include "components/vector_icons/vector_icons.h"
-@@ -198,12 +211,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -198,12 +212,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
    }
  
    if (!tab) {
@@ -8520,7 +8730,7 @@ index 3ba14e7289..97aa30b83c 100644
      return;
    }
  
-@@ -244,8 +257,8 @@ void WebUIBrowserPageHandler::OpenAppMenu() {
+@@ -244,8 +258,8 @@ void WebUIBrowserPageHandler::OpenAppMenu() {
        BrowserElements::From(GetBrowser())
            ->GetElement(kToolbarAppMenuButtonElementId);
    CHECK(app_menu_button) << "App menu button not found";
@@ -8531,7 +8741,7 @@ index 3ba14e7289..97aa30b83c 100644
    menu_model_->Init();
    menu_ = std::make_unique<AppMenu>(
        GetBrowser(), menu_model_.get(), views::MenuRunner::NO_FLAGS,
-@@ -288,6 +301,71 @@ void WebUIBrowserPageHandler::Close() {
+@@ -288,6 +302,71 @@ void WebUIBrowserPageHandler::Close() {
    GetBrowserWindow()->Close();
  }
  
@@ -8603,7 +8813,7 @@ index 3ba14e7289..97aa30b83c 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +410,188 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +411,200 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -8747,6 +8957,18 @@ index 3ba14e7289..97aa30b83c 100644
 +  std::move(callback).Run(rail::MoveTabsToNewWindow(GetBrowser(), ids));
 +}
 +
++void WebUIBrowserPageHandler::MoveTabsToMiniWindow(
++    const std::vector<tabs_api::NodeId>& ids,
++    MoveTabsToMiniWindowCallback callback) {
++  std::move(callback).Run(rail::MoveTabsToMiniWindow(GetBrowser(), ids));
++}
++
++void WebUIBrowserPageHandler::AdoptMiniWindow(
++    const std::string& space_id,
++    AdoptMiniWindowCallback callback) {
++  std::move(callback).Run(rail::AdoptMiniWindow(GetBrowser(), space_id));
++}
++
 +void WebUIBrowserPageHandler::ListWindows(ListWindowsCallback callback) {
 +  std::vector<webui_browser::mojom::RailWindowPtr> windows;
 +  for (const rail::WindowEntry& entry : rail::OtherWindows(GetBrowser())) {
@@ -8793,7 +9015,7 @@ index 3ba14e7289..97aa30b83c 100644
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..de23fc6b8a 100644
+index 859da4ef00..10ab25883f 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -9,6 +9,7 @@
@@ -8815,7 +9037,7 @@ index 859da4ef00..de23fc6b8a 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +61,61 @@ class WebUIBrowserPageHandler
+@@ -56,8 +61,65 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -8846,6 +9068,10 @@ index 859da4ef00..de23fc6b8a 100644
 +                   GetTabMutedCallback callback) override;
 +  void MoveTabsToNewWindow(const std::vector<tabs_api::NodeId>& ids,
 +                           MoveTabsToNewWindowCallback callback) override;
++  void MoveTabsToMiniWindow(const std::vector<tabs_api::NodeId>& ids,
++                            MoveTabsToMiniWindowCallback callback) override;
++  void AdoptMiniWindow(const std::string& space_id,
++                       AdoptMiniWindowCallback callback) override;
 +  void ListWindows(ListWindowsCallback callback) override;
 +  void MoveTabsToWindow(int32_t window_id,
 +                        const std::vector<tabs_api::NodeId>& ids,
@@ -8877,7 +9103,7 @@ index 859da4ef00..de23fc6b8a 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +127,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +131,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -8886,7 +9112,7 @@ index 859da4ef00..de23fc6b8a 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -77,11 +137,14 @@ class WebUIBrowserPageHandler
+@@ -77,11 +141,14 @@ class WebUIBrowserPageHandler
    std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
  
    std::unique_ptr<content::WebContents> glic_contents_;
@@ -9098,7 +9324,7 @@ index e242711595..ba27170c35 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..39fd284b25 100644
+index 3fabca0c2a..e39fb89ab7 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -9118,18 +9344,19 @@ index 3fabca0c2a..39fd284b25 100644
  #include "chrome/browser/ui/browser_window_theme_observer.h"
  #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
  #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
-@@ -27,6 +30,10 @@
+@@ -27,6 +30,11 @@
  #include "chrome/browser/ui/views/zoom/zoom_view_controller.h"
  #include "chrome/browser/ui/web_applications/app_browser_controller.h"
  #include "chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_accelerators.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_command_bubble.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_settings_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_space_panel.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_client_view.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_exclusive_access_context.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_modal_dialog_host.h"
-@@ -53,6 +60,11 @@
+@@ -53,6 +61,11 @@
  #include "ui/views/widget/widget.h"
  #include "ui/views/widget/widget_delegate.h"
  
@@ -9141,7 +9368,7 @@ index 3fabca0c2a..39fd284b25 100644
  #if BUILDFLAG(IS_CHROMEOS)
  #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
  #endif  // BUILDFLAG(IS_CHROMEOS)
-@@ -104,6 +116,15 @@ class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
+@@ -104,6 +117,15 @@ class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
  
    views::ClientView* CreateClientView(views::Widget* widget) override;
    std::u16string GetWindowTitle() const override;
@@ -9157,7 +9384,7 @@ index 3fabca0c2a..39fd284b25 100644
    bool ShouldDescendIntoChildForEventHandling(
        gfx::NativeView child,
        const gfx::Point& location) override;
-@@ -124,19 +145,33 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -124,19 +146,33 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
    views::Widget::InitParams params(
        views::Widget::InitParams::CLIENT_OWNS_WIDGET);
    params.name = "WebUIBrowserWindow";
@@ -9193,7 +9420,18 @@ index 3fabca0c2a..39fd284b25 100644
    web_contents_delegate_->SetUIWebContents(ui_web_contents);
    ui_web_contents->SetDelegate(web_contents_delegate_.get());
    ui_web_contents->SetUserData(
-@@ -182,17 +217,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -150,7 +186,9 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+       std::make_unique<ui::ScopedUnownedUserData<ExtensionsContainer>>(
+           browser_->GetUnownedUserDataHost(), *extensions_container_);
+ 
+-  web_view->LoadInitialURL(GURL(chrome::kChromeUIWebuiBrowserURL));
++  web_view->LoadInitialURL(GURL(rail::IsMiniWindow(browser_)
++                                    ? rail::kRailMiniShellURL
++                                    : chrome::kChromeUIWebuiBrowserURL));
+   web_view_ = widget_->SetClientContentsView(std::move(web_view));
+   // Set the ColorProviderSource after attaching to the WebView otherwise
+   // attaching overwrites it.
+@@ -182,17 +220,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
            base::BindRepeating(&WebUIBrowserWindow::OnContentsElementShown,
                                base::Unretained(this)));
  
@@ -9221,7 +9459,7 @@ index 3fabca0c2a..39fd284b25 100644
    widget_.reset();
  }
  
-@@ -262,6 +307,11 @@ void WebUIBrowserWindow::Show() {
+@@ -262,6 +310,11 @@ void WebUIBrowserWindow::Show() {
  // The code about Browser's activation state is copied from
  // BrowserView::PaintAsActiveChanged().
  void WebUIBrowserWindow::PaintAsActiveChanged() {
@@ -9233,7 +9471,7 @@ index 3fabca0c2a..39fd284b25 100644
    if (widget_->ShouldPaintAsActive()) {
      browser_->DidBecomeActive();
    } else {
-@@ -336,8 +386,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
+@@ -336,8 +389,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
  }
  
  bool WebUIBrowserWindow::IsOnCurrentWorkspace() const {
@@ -9247,7 +9485,7 @@ index 3fabca0c2a..39fd284b25 100644
  }
  
  bool WebUIBrowserWindow::IsVisibleOnScreen() const {
-@@ -584,6 +637,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
+@@ -584,6 +640,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
        continue;
      }
  
@@ -9258,7 +9496,7 @@ index 3fabca0c2a..39fd284b25 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -617,10 +674,92 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -617,10 +677,92 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -9351,7 +9589,7 @@ index 3fabca0c2a..39fd284b25 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -691,6 +830,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +833,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -9360,7 +9598,7 @@ index 3fabca0c2a..39fd284b25 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -753,9 +894,7 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
+@@ -753,9 +897,7 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
@@ -9371,7 +9609,7 @@ index 3fabca0c2a..39fd284b25 100644
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -865,7 +1004,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
+@@ -865,7 +1007,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
    return ShowTranslateBubbleResult::kBrowserWindowNotValid;
  }
  
@@ -9379,7 +9617,7 @@ index 3fabca0c2a..39fd284b25 100644
  DownloadBubbleUIController*
  WebUIBrowserWindow::GetDownloadBubbleUIController() {
    NOTIMPLEMENTED_LOG_ONCE();
-@@ -882,6 +1020,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -882,6 +1023,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -9392,19 +9630,20 @@ index 3fabca0c2a..39fd284b25 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -947,6 +1091,11 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,6 +1094,12 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
 +  if (event.GetType() == blink::WebInputEvent::Type::kRawKeyDown &&
-+      rail::HandleRailAccelerator(accelerator, GetWebUIBrowserUI()->page())) {
++      rail::HandleRailAccelerator(accelerator, GetWebUIBrowserUI()->page(),
++                                  rail::IsMiniWindow(browser_))) {
 +    return content::KeyboardEventProcessingResult::HANDLED;
 +  }
 +
    int command_id;
    if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
-@@ -1138,6 +1287,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1138,6 +1291,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
      views::Widget::ClosedReason close_reason) {
    // TODO(webium): don't close a window during tab dragging.
  
@@ -9413,7 +9652,7 @@ index 3fabca0c2a..39fd284b25 100644
    // Give beforeunload handlers, the user, or policy the chance to cancel the
    // close before we hide the window below.
    if (!browser_->HandleBeforeClose()) {
-@@ -1181,6 +1332,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+@@ -1181,6 +1336,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
        true /* include_app_name */);
  }
  
@@ -9461,7 +9700,7 @@ index 3fabca0c2a..39fd284b25 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
      gfx::NativeView child,
      const gfx::Point& location) {
-@@ -1217,6 +1409,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1413,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  

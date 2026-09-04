@@ -19,7 +19,7 @@ export interface TabMenuTarget {
 
 export type TabCommand = 'add-to-folder'|'close'|'close-others'|'close-right'|
     'copy-link'|'duplicate'|'favorite'|'move-to-space'|'move-to-window'|'mute'|
-    'new-folder'|'new-tab-below'|'new-window'|'pin'|'reload'|
+    'mini-window'|'new-folder'|'new-tab-below'|'new-window'|'pin'|'reload'|
     'remove-from-folder'|'replace-pinned-url'|'sleep'|'unpin';
 
 export type FolderCommand = 'delete-folder'|'rename-folder';
@@ -71,6 +71,7 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
                        []),
     !!target.tabId && target.hasOthers &&
         {command: 'new-window', label: 'New Window'},
+    !!target.tabId && {command: 'mini-window', label: 'Mini Window'},
   ]);
   return menuItems([
     {label: 'Tab Context Menu'},

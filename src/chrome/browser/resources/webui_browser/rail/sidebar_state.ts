@@ -5,6 +5,8 @@ import {browserProxyFactory} from '../browser.mojom-webui.js';
 export const INCOGNITO = loadTimeData.valueExists('incognito') &&
     loadTimeData.getBoolean('incognito');
 
+export const MINI = new URLSearchParams(location.search).has('mini');
+
 const SAVE_DELAY_MS = 500;
 
 export interface StoredPin {
@@ -75,7 +77,7 @@ export class SidebarStore {
   constructor(private serialize_: () => SidebarState) {}
 
   save() {
-    if (INCOGNITO) {
+    if (INCOGNITO || MINI) {
       return;
     }
     clearTimeout(this.timer_);

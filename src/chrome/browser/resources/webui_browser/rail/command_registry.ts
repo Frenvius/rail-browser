@@ -1,5 +1,6 @@
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
+import {adoptMiniWindow} from './mini_window.js';
 import type {TabCommand, TabMenuTarget} from './tab_menu.js';
 
 export interface CommandBarHost {
@@ -80,6 +81,21 @@ export const COMMANDS: Command[] = [
     keywords: 'detach split out',
     enabled: tab => tab?.hasOthers === true,
     run: onActiveTab('new-window'),
+  },
+  {
+    id: 'mini-window',
+    label: 'Move Tab to Mini Window',
+    hint: 'Ctrl+Alt+M',
+    keywords: 'little small popup float',
+    enabled: hasTab,
+    run: onActiveTab('mini-window'),
+  },
+  {
+    id: 'adopt-mini-window',
+    label: 'Move Tab Back to Rail',
+    hint: 'Ctrl+O',
+    keywords: 'adopt promote mini little restore',
+    run: () => adoptMiniWindow(),
   },
   {
     id: 'pin-tab',

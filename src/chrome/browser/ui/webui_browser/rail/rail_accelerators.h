@@ -14,7 +14,8 @@ namespace rail {
 // window's accelerator table; they are matched here and forwarded to the WebUI
 // by name. Returns whether the accelerator was consumed.
 bool HandleRailAccelerator(const ui::Accelerator& accelerator,
-                           webui_browser::mojom::Page* page);
+                           webui_browser::mojom::Page* page,
+                           bool mini);
 
 bool IsCommandDisabledInShell(int command_id);
 

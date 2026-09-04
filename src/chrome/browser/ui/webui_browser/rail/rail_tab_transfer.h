@@ -30,6 +30,9 @@ void DropTabsAtScreenPoint(Browser* source,
 bool MoveTabsToNewWindow(Browser* source,
                          const std::vector<tabs_api::NodeId>& ids);
 
+bool MoveTabsToMiniWindow(Browser* source,
+                          const std::vector<tabs_api::NodeId>& ids);
+
 std::vector<WindowEntry> OtherWindows(Browser* source);
 
 bool MoveTabsToWindow(Browser* source,

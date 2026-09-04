@@ -21,6 +21,11 @@ constexpr Binding kBindings[] = {
     {ui::VKEY_N, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "new-space"},
     {ui::VKEY_S, ui::EF_CONTROL_DOWN, "toggle-sidebar"},
     {ui::VKEY_OEM_COMMA, ui::EF_CONTROL_DOWN, "settings"},
+    {ui::VKEY_M, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "mini-window"},
+};
+
+constexpr Binding kMiniBindings[] = {
+    {ui::VKEY_O, ui::EF_CONTROL_DOWN, "adopt-mini-window"},
 };
 
 }
@@ -69,8 +74,18 @@ const char* RailCommandForBrowserCommand(int command_id) {
 }
 
 bool HandleRailAccelerator(const ui::Accelerator& accelerator,
-                           webui_browser::mojom::Page* page) {
+                           webui_browser::mojom::Page* page,
+                           bool mini) {
   if (!page) {
+    return false;
+  }
+  if (mini) {
+    for (const Binding& binding : kMiniBindings) {
+      if (accelerator == ui::Accelerator(binding.keycode, binding.modifiers)) {
+        page->RunRailCommand(binding.command);
+        return true;
+      }
+    }
     return false;
   }
   for (const Binding& binding : kBindings) {

@@ -11,6 +11,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 #include "components/sessions/core/session_id.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/web_contents.h"
@@ -54,6 +55,9 @@ BrowserWindowInterface* WindowUnderPoint(Browser* source,
             if (browser == source) {
               return true;
             }
+            if (IsMiniWindow(browser->GetBrowserForMigrationOnly())) {
+              return true;
+            }
             ui::BaseWindow* window = browser->GetWindow();
             if (window && window->IsVisible() && !window->IsMinimized() &&
                 window->GetBounds().Contains(screen_point)) {
@@ -86,16 +90,14 @@ void DropTabsAtScreenPoint(Browser* source,
     return;
   }
 
-  const gfx::Rect from = source->GetWindow()->GetBounds();
-  chrome::MoveTabsToNewWindow(source, indices);
-
-  BrowserWindowInterface* created =
-      ProfileBrowserCollection::GetForProfile(source->profile())
-          ->GetLastActiveBrowser();
-  if (created && created != source) {
-    created->GetWindow()->SetBounds(
-        gfx::Rect(screen_point, from.size()));
+  gfx::Rect bounds = MiniWindowBoundsNear(source);
+  bounds.set_origin(screen_point);
+  Browser* mini = CreateMiniWindow(source->profile(), bounds);
+  if (!mini) {
+    return;
   }
+  chrome::MoveTabsToExistingWindow(source, mini, indices);
+  mini->GetWindow()->Show();
 }
 
 bool MoveTabsToNewWindow(Browser* source,
@@ -113,6 +115,25 @@ bool MoveTabsToNewWindow(Browser* source,
   return true;
 }
 
+bool MoveTabsToMiniWindow(Browser* source,
+                          const std::vector<tabs_api::NodeId>& ids) {
+  if (!source) {
+    return false;
+  }
+  const std::vector<int> indices = IndicesForIds(source->tab_strip_model(), ids);
+  if (indices.empty()) {
+    return false;
+  }
+  Browser* mini =
+      CreateMiniWindow(source->profile(), MiniWindowBoundsNear(source));
+  if (!mini) {
+    return false;
+  }
+  chrome::MoveTabsToExistingWindow(source, mini, indices);
+  mini->GetWindow()->Show();
+  return true;
+}
+
 std::vector<WindowEntry> OtherWindows(Browser* source) {
   std::vector<WindowEntry> entries;
   if (!source) {
@@ -121,7 +142,8 @@ std::vector<WindowEntry> OtherWindows(Browser* source) {
   ProfileBrowserCollection::GetForProfile(source->profile())
       ->ForEach(
           [&](BrowserWindowInterface* browser) {
-            if (browser != source) {
+            if (browser != source &&
+                !IsMiniWindow(browser->GetBrowserForMigrationOnly())) {
               entries.push_back({browser->GetSessionID().id(),
                                  base::UTF16ToUTF8(TitleOf(browser))});
             }
