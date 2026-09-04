@@ -5338,10 +5338,10 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..c2e8c6dfe0 100644
+index 65d7e76ce5..2a771f01f5 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -9,22 +9,77 @@ import type {TabStripElement} from './tab_strip.js';
+@@ -9,22 +9,79 @@ import type {TabStripElement} from './tab_strip.js';
  export function getHtml(this: TabStripElement) {
    // clang-format off
    return html`<!--_html_template_start_-->
@@ -5371,6 +5371,7 @@ index 65d7e76ce5..c2e8c6dfe0 100644
 +      .material="${this.backdropMaterial_}"
 +      @rail-space-command="${this.onRailSpaceCommand_}">
 +  </rail-space-bar>
++  <div id="scrollArea">
 +  <div id="pinnedList">
 +    ${this.pinnedRows_.map(row => html`
 +          <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
@@ -5409,6 +5410,7 @@ index 65d7e76ce5..c2e8c6dfe0 100644
          `)}
 -  <cr-icon-button id="newTabButton" iron-icon="cr:add"
 -      title="$i18n{tooltipNewTab}"
++  </div>
 +  </div>
 +  <button id="newTabButton" title="$i18n{tooltipNewTab}"
        @click="${this.onNewTabButtonClick_}">

@@ -24,20 +24,31 @@
   -webkit-app-region: no-drag;
 }
 
+#scrollArea {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+#scrollArea::-webkit-scrollbar {
+  width: 0;
+}
+
+#scrollArea:has(#tabList.droptarget) {
+  mask-image: none;
+}
+
 #pinnedList {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
   gap: 2px;
-  max-height: 40%;
   min-height: 8px;
-  overflow-x: hidden;
-  overflow-y: auto;
   padding: 0 6px;
-}
-
-#pinnedList::-webkit-scrollbar {
-  width: 0;
 }
 
 #favoritesList {
@@ -72,6 +83,9 @@
   flex: 0 0 auto;
   height: 1px;
   margin: 6px 6px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 webui-browser-tab.dragsource {
@@ -85,25 +99,16 @@ webui-browser-tab.dragsource {
 
 #tabList {
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 2px;
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
   padding: 0 6px 24px;
 }
 
 #tabList.droptarget {
-  mask-image: none;
   outline: 1px solid var(--rail-accent, #7c5cfc);
   outline-offset: -4px;
   border-radius: 8px;
-}
-
-#tabList::-webkit-scrollbar {
-  width: 0;
 }
 
 #newTabButton,

@@ -182,8 +182,8 @@ export class TabDrag {
 
   private edgeScroll_() {
     const list =
-        this.host_.shadowRoot?.querySelector<HTMLElement>('#tabList');
-    if (!list || this.pinned_) {
+        this.host_.shadowRoot?.querySelector<HTMLElement>('#scrollArea');
+    if (!list) {
       return;
     }
     const rect = list.getBoundingClientRect();

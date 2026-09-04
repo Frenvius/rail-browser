@@ -5,7 +5,7 @@ const IN_MS = 190;
 const OUT_EASING = 'cubic-bezier(0.4, 0, 1, 1)';
 const IN_EASING = 'cubic-bezier(0, 0, 0.2, 1)';
 const FALLBACK_WIDTH = 208;
-const PANE = ['#spaceTitle', '#pinnedList', '#tabList'];
+const PANE = ['#spaceTitle', '#scrollArea'];
 
 function panes(root: ShadowRoot): HTMLElement[] {
   return PANE.map(selector => root.querySelector<HTMLElement>(selector))
