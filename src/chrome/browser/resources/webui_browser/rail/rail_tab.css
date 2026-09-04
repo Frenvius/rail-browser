@@ -242,9 +242,10 @@
 }
 
 :host([pinned]:not([dormant])) .close {
-    --iron-icon-fill-color: transparent;
-    --iron-icon-stroke-color: var(--rail-text-dim, #b0b0c8);
+    --cr-icon-button-fill-color: transparent;
+    --cr-icon-button-stroke-color: var(--rail-text-dim, #b0b0c8);
     stroke-width: 2px;
+    stroke-linecap: round;
 }
 
 .close:focus-visible {
