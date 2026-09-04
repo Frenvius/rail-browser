@@ -22,6 +22,7 @@ export interface StoredTab {
   url: string;
   title: string;
   favicon: string;
+  group?: string;
 }
 
 export interface StoredSpace {
@@ -33,6 +34,7 @@ export interface StoredSpace {
   activeUrl: string;
   pinned: StoredPin[];
   folders?: StoredFolder[];
+  tidyGroups?: StoredFolder[];
   tabs: Array<StoredTab|string>;
 }
 

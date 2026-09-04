@@ -1,4 +1,4 @@
-import type {SidebarState, StoredFolder} from './sidebar_state.js';
+import type {SidebarState, StoredFolder, StoredSpace} from './sidebar_state.js';
 
 export interface Folder {
   id: string;
@@ -20,9 +20,12 @@ export class Folders {
     return this.folders_.find(folder => folder.id === id);
   }
 
-  restore(state: SidebarState|null) {
+  restore(
+      state: SidebarState|null,
+      pick: (space: StoredSpace) => StoredFolder[] |
+      undefined = space => space.folders) {
     for (const space of state?.spaces ?? []) {
-      for (const stored of space.folders ?? []) {
+      for (const stored of pick(space) ?? []) {
         this.folders_.push({
           id: stored.id,
           space: space.id,

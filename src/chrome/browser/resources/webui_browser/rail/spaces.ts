@@ -198,6 +198,7 @@ export interface TabRow {
   pending: boolean;
   asleep: boolean;
   opener: string;
+  group: string;
   url: string;
   title: string;
   favicon: string;
@@ -210,6 +211,7 @@ interface RowFields {
   title: string;
   favicon: string;
   opener?: string;
+  group?: string;
 }
 
 export function isNewTabUrl(url: string): boolean {
@@ -217,8 +219,9 @@ export function isNewTabUrl(url: string): boolean {
 }
 
 function storedTab(entry: StoredTab|string): StoredTab {
-  return typeof entry === 'string' ? {url: entry, title: '', favicon: ''} :
-                                     entry;
+  return typeof entry === 'string' ?
+      {url: entry, title: '', favicon: '', group: ''} :
+      entry;
 }
 
 export class Spaces {
@@ -294,14 +297,20 @@ export class Spaces {
       };
       this.spaces_.push(space);
       for (const entry of stored.tabs ?? []) {
-        const {url, title, favicon} = storedTab(entry);
+        const {url, title, favicon, group} = storedTab(entry);
         const tab = tabs.find(
             candidate => candidate.url === url && !claimed.has(candidate.id));
         if (tab) {
           claimed.add(tab.id);
         }
-        const row = this.push_(
-            {space: space.id, tabId: tab ? tab.id : '', url, title, favicon});
+        const row = this.push_({
+          space: space.id,
+          tabId: tab ? tab.id : '',
+          url,
+          title,
+          favicon,
+          group,
+        });
         if (url === stored.activeUrl && !space.activeKey) {
           space.activeKey = row.key;
         }
@@ -592,6 +601,38 @@ export class Spaces {
     this.onChange_();
   }
 
+  setGroup(key: string, groupId: string) {
+    const row = this.rows_.find(
+        other => other.key === key || other.tabId === key);
+    if (!row || row.group === groupId) {
+      return;
+    }
+    row.group = groupId;
+    this.onChange_();
+  }
+
+  clearGroup(groupId: string) {
+    let changed = false;
+    for (const row of this.rows_) {
+      if (row.group === groupId) {
+        row.group = '';
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.onChange_();
+    }
+  }
+
+  rowFor(id: string): TabRow|undefined {
+    return this.rows_.find(row => row.key === id || row.tabId === id);
+  }
+
+  keysInGroup(groupId: string): string[] {
+    return this.rows_.filter(row => row.group === groupId)
+        .map(row => row.tabId || row.key);
+  }
+
   drop(key: string): boolean {
     const row = this.dormantByKey(key);
     if (!row) {
@@ -823,6 +864,7 @@ export class Spaces {
       pending: false,
       asleep: false,
       opener: fields.opener ?? '',
+      group: fields.group ?? '',
       space: fields.space,
       tabId: fields.tabId,
       url: fields.url,
@@ -857,7 +899,8 @@ function storePin(entry: PinnedEntry): StoredPin {
 }
 
 export function serializeSidebar(
-    spaces: Spaces, pinned: PinnedTabs, folders: Folders): SidebarState {
+    spaces: Spaces, pinned: PinnedTabs, folders: Folders,
+    tidyGroups: Folders): SidebarState {
   const stored: StoredSpace[] = spaces.all.map(space => ({
     id: space.id,
     name: space.name,
@@ -867,9 +910,11 @@ export function serializeSidebar(
     activeUrl: spaces.activeUrlIn(space.id),
     pinned: pinned.entriesIn(space.id).map(storePin),
     folders: folders.storedIn(space.id),
+    tidyGroups: tidyGroups.storedIn(space.id),
     tabs: spaces.rowsIn(space.id)
               .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
-              .map(({url, title, favicon}) => ({url, title, favicon})),
+              .map(({url, title, favicon, group}) =>
+                       ({url, title, favicon, group})),
   }));
   const favoritesByProfile: Record<string, StoredPin[]> = {};
   for (const profileId of pinned.favoriteProfiles()) {

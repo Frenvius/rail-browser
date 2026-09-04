@@ -4000,18 +4000,19 @@ index 8eca87e4b9..9417381718 100644
  #if BUILDFLAG(ENABLE_EXTENSIONS)
    // Creates a new ExtensionHost with its associated view, grouping it in the
 diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
-index e2f470d579..a99306eed7 100644
+index e2f470d579..997c065b35 100644
 --- a/chrome/browser/prefs/browser_prefs.cc
 +++ b/chrome/browser/prefs/browser_prefs.cc
-@@ -91,6 +91,7 @@
+@@ -91,6 +91,8 @@
  #include "chrome/browser/ui/safety_hub/safety_hub_prefs.h"
  #include "chrome/browser/ui/tabs/projects/projects_prefs.h"
  #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
  #include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_prefs.h"
  #include "chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h"
  #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
-@@ -177,7 +178,6 @@
+@@ -177,7 +179,6 @@
  #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
  #include "components/regional_capabilities/regional_capabilities_prefs.h"
  #include "components/safe_browsing/buildflags.h"
@@ -4019,7 +4020,7 @@ index e2f470d579..a99306eed7 100644
  #include "components/safety_check/safety_check_prefs.h"
  #include "components/saved_tab_groups/public/pref_names.h"
  #include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
-@@ -189,7 +189,6 @@
+@@ -189,7 +190,6 @@
  #include "components/sessions/core/session_id_generator.h"
  #include "components/sharing_message/sharing_sync_preference.h"
  #include "components/signin/core/browser/active_primary_accounts_metrics_recorder.h"
@@ -4027,7 +4028,7 @@ index e2f470d579..a99306eed7 100644
  #include "components/signin/public/base/signin_prefs.h"
  #include "components/signin/public/identity_manager/identity_manager.h"
  #include "components/site_engagement/content/site_engagement_service.h"
-@@ -1371,7 +1370,6 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+@@ -1371,7 +1371,6 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
    PushMessagingServiceImpl::RegisterPrefs(registry);
  #endif
    RegisterScreenshotPrefs(registry);
@@ -4035,7 +4036,7 @@ index e2f470d579..a99306eed7 100644
    search_engines::SearchEngineChoiceService::RegisterLocalStatePrefs(registry);
    secure_origin_allowlist::RegisterPrefs(registry);
    segmentation_platform::SegmentationPlatformService::RegisterLocalStatePrefs(
-@@ -1573,9 +1571,6 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+@@ -1573,9 +1572,6 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
    DeviceOAuth2TokenStoreDesktop::RegisterPrefs(registry);
  #endif
  
@@ -4045,15 +4046,16 @@ index e2f470d579..a99306eed7 100644
  
  #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
    PlatformAuthPolicyObserver::RegisterPrefs(registry);
-@@ -1654,6 +1649,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+@@ -1654,6 +1650,8 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
    ChromeLocationBarModelDelegate::RegisterProfilePrefs(registry);
    content_settings::CookieSettings::RegisterProfilePrefs(registry);
    ChromeVersionService::RegisterProfilePrefs(registry);
 +  rail::RegisterSidebarStateProfilePrefs(registry);
++  rail::RegisterTabOrganizerProfilePrefs(registry);
    chrome_browser_net::NetErrorTabHelper::RegisterProfilePrefs(registry);
    chrome_prefs::RegisterProfilePrefs(registry);
    collaboration::prefs::RegisterProfilePrefs(registry);
-@@ -1735,7 +1731,6 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+@@ -1735,7 +1733,6 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
  #if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
    safe_browsing::file_type::RegisterProfilePrefs(registry);
  #endif
@@ -4076,16 +4078,17 @@ index f4c33684da..2fc51e082b 100644
    // OCCLUDED. Will require checking that the tab reload correctly when it
    // becomes VISIBLE.
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..6d6ecdab11 100644
+index a75d80b00c..0a2c355518 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
-@@ -9,7 +9,13 @@ assert(!is_android)
+@@ -9,7 +9,14 @@ assert(!is_android)
  build_webui("build") {
    grd_prefix = "webui_browser"
  
 -  static_files = [ "webui_browser.html" ]
 +  static_files = [
 +    "rail/command.html",
++    "rail/credits.html",
 +    "rail/rail_logo.svg",
 +    "rail/settings.html",
 +    "rail/space_panel.html",
@@ -4094,7 +4097,7 @@ index a75d80b00c..6d6ecdab11 100644
  
    ts_files = [
      "app.html.ts",
-@@ -23,6 +29,35 @@ build_webui("build") {
+@@ -23,6 +30,36 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4127,10 +4130,11 @@ index a75d80b00c..6d6ecdab11 100644
 +    "rail/tab_menu.ts",
 +    "rail/tab_selection.ts",
 +    "rail/tab_sleep.ts",
++    "rail/tidy_tabs.ts",
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +83,15 @@ build_webui("build") {
+@@ -48,6 +85,15 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4146,7 +4150,7 @@ index a75d80b00c..6d6ecdab11 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -62,6 +106,9 @@ build_webui("build") {
+@@ -62,6 +108,9 @@ build_webui("build") {
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/browser.mojom-webui.ts",
@@ -4959,6 +4963,23 @@ index 8ee44235b6..fc2b5e5e49 100644
  cr-icon-button {
    --cr-icon-button-icon-size: 20px;
    --cr-icon-button-margin-end: 0;
+diff --git a/chrome/browser/resources/webui_browser/icons.html.ts b/chrome/browser/resources/webui_browser/icons.html.ts
+index 0c8c126729..3eeb0c2049 100644
+--- a/chrome/browser/resources/webui_browser/icons.html.ts
++++ b/chrome/browser/resources/webui_browser/icons.html.ts
+@@ -12,6 +12,12 @@ div.innerHTML = getTrustedHTML`
+   <svg>
+     <defs>
+       <g id="folder"><path d="M4 20c-.55 0-1.02-.195-1.414-.586A1.935 1.935 0 0 1 2 18V6c0-.55.195-1.02.586-1.414C2.98 4.196 3.449 4 4 4h6l2 2h8c.55 0 1.02.195 1.414.586.39.394.586.863.586 1.414v10c0 .55-.195 1.02-.586 1.414-.394.39-.863.586-1.414.586Zm0-2h16V8h-8.824l-2-2H4Zm0 0V6Zm0 0"/></g>
++      <g id="tidy">
++        <path d="M13.5 10.5 22 2"/>
++        <path d="M14.734 13.841a2 2 0 0 0-.314-2.42L12.58 9.58a2 2 0 0 0-2.421-.314l-7.657 4.461A1 1 0 0 0 2.3 15.3l6.403 6.403a1 1 0 0 0 1.571-.204z"/>
++        <path d="m5 18 2-2"/>
++        <path d="m7.699 10.7 5.602 5.601"/>
++      </g>
+       <g id="minimize"><path d="M 5 12 L 19 12" /></g>
+       <g id="maximize"><rect x="5" y="5" width="14" height="14" /></g>
+       <g id="restore">
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.css b/chrome/browser/resources/webui_browser/tab_strip/tab.css
 index 4f1c700024..0ded2eee38 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.css
@@ -5340,10 +5361,10 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..d9ccea0f65 100644
+index 65d7e76ce5..d0aa651160 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -4,27 +4,124 @@
+@@ -4,27 +4,191 @@
  
  import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
  
@@ -5356,6 +5377,8 @@ index 65d7e76ce5..d9ccea0f65 100644
    return html`<!--_html_template_start_-->
 -<div id="tabstrip">
 -    ${this.items_.map(item => item.type === 'tab' ? html`
+-          <webui-browser-tab id="${this.tabIdToDomId(item.id)}"
+-              .tabData="${item.tabData}"
 +<div id="tabstrip" @contextmenu="${this.onStripContextmenu_}">
 +  <div id="favoritesList" ?hidden="${!this.favoriteRows_.length}">
 +    ${this.favoriteRows_.map(row => html`
@@ -5435,15 +5458,30 @@ index 65d7e76ce5..d9ccea0f65 100644
 +          </webui-browser-tab>
 +        `)}
 +  </div>
-+  <div id="pinnedDivider"></div>
++  <div id="pinnedDivider" ?data-busy="${this.tidyBusy_}"
++      ?data-error="${this.tidyError_}">
++    ${this.looseTabCount_() ? html`
++      <button class="divider-action" id="tidyTabs" title="Group tabs"
++          @click="${this.onTidyTabsClick_}">
++        <cr-icon icon="webui-browser:tidy"></cr-icon>
++        <span>Tidy</span>
++      </button>
++      <button class="divider-action" id="clearTabs" title="Close all tabs"
++          @click="${this.onClearTabsClick_}">
++        <cr-icon icon="cr:expand-more"></cr-icon>
++        <span>Clear</span>
++      </button>
++    ` : ''}
++  </div>
 +  <div id="tabList" class="${this.dropTarget_ ? 'droptarget' : ''}">
-+    ${this.looseItems_.map(item => item.type === 'tab' ? html`
-           <webui-browser-tab id="${this.tabIdToDomId(item.id)}"
-               .tabData="${item.tabData}"
++    ${this.looseEntries_.map(entry => entry.kind === 'item' ?
++        (entry.item.type === 'tab' ? html`
++          <webui-browser-tab id="${this.tabIdToDomId(entry.item.id)}"
++              .tabData="${entry.item.tabData}"
                .dragInProgress="${this.dragInProgress_}"
 -              @tab-close-click="${this.onTabCloseClick}">
-+              .dormant="${this.isDormant_(item.id)}"
-+              .selected="${this.isSelected_(item.id)}"
++              .dormant="${this.isDormant_(entry.item.id)}"
++              .selected="${this.isSelected_(entry.item.id)}"
 +              @mousedown="${this.onTabMousedown_}"
 +              @tab-audio-click="${this.onTabAudioClick_}"
 +              @tab-close-click="${this.onTabCloseClick}"
@@ -5451,9 +5489,63 @@ index 65d7e76ce5..d9ccea0f65 100644
 +              @tab-select="${this.onTabSelect_}">
            </webui-browser-tab>
          ` : html`
-           <webui-browser-tab-group .collectionId="${item.id}"
-               .groupData="${item.groupData}">
+-          <webui-browser-tab-group .collectionId="${item.id}"
+-              .groupData="${item.groupData}">
++          <webui-browser-tab-group .collectionId="${entry.item.id}"
++              .groupData="${entry.item.groupData}">
            </webui-browser-tab-group>
++        `) : html`
++          <div class="tidygroup" data-id="${entry.section.group.id}"
++              ?data-expanded="${entry.section.group.expanded}">
++            <div class="tidygroup-row" data-group="${entry.section.group.id}"
++                @mousedown="${this.onTabMousedown_}"
++                @contextmenu="${this.onTidyGroupContextmenu_}"
++                @click="${this.onTidyGroupClick_}">
++              ${this.editingGroup_ === entry.section.group.id ? html`
++                <input class="folder-name-input" spellcheck="false"
++                    .value="${entry.section.group.name}"
++                    @click="${this.onTidyGroupNameClick_}"
++                    @keydown="${this.onTidyGroupNameKeydown_}"
++                    @blur="${this.onTidyGroupNameBlur_}">
++              ` : html`
++                <span class="tidygroup-name">${entry.section.group.name}</span>
++                <span class="tidygroup-count">${
++                    entry.section.items.length}</span>
++              `}
++              <div class="tidygroup-actions">
++                <button class="tidygroup-action"
++                    data-group="${entry.section.group.id}" title="Save as folder"
++                    @click="${this.onTidyGroupSaveClick_}">
++                  ${folderIcon(false, false)}
++                </button>
++                <button class="tidygroup-action"
++                    data-group="${entry.section.group.id}" title="Ungroup"
++                    @click="${this.onTidyGroupUngroupClick_}">
++                  <cr-icon icon="cr:group"></cr-icon>
++                </button>
++                <button class="tidygroup-action"
++                    data-group="${entry.section.group.id}" title="Close group"
++                    @click="${this.onTidyGroupCloseClick_}">
++                  <cr-icon icon="cr:close"></cr-icon>
++                </button>
++              </div>
++            </div>
++            <div class="tidygroup-children">
++                ${entry.section.items.map(item => item.type === 'tab' ? html`
++                  <webui-browser-tab id="${this.tabIdToDomId(item.id)}"
++                      .tabData="${item.tabData}"
++                      .dragInProgress="${this.dragInProgress_}"
++                      .dormant="${this.isDormant_(item.id)}"
++                      .selected="${this.isSelected_(item.id)}"
++                      @mousedown="${this.onTabMousedown_}"
++                      @tab-audio-click="${this.onTabAudioClick_}"
++                      @tab-close-click="${this.onTabCloseClick}"
++                      @tab-context-menu="${this.onTabContextMenu_}"
++                      @tab-select="${this.onTabSelect_}">
++                  </webui-browser-tab>
++                ` : '')}
++            </div>
++          </div>
          `)}
 -  <cr-icon-button id="newTabButton" iron-icon="cr:add"
 -      title="$i18n{tooltipNewTab}"
@@ -5475,18 +5567,19 @@ index 65d7e76ce5..d9ccea0f65 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..79bd6b934d 100644
+index aa4e0fe69e..3a250f7b81 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,8 @@
  
  import './tab.js';
  import './tab_group.js';
 +import '../rail/space_bar.js';
++import '../icons.html.js';
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -20,11 +21,30 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
+@@ -20,11 +22,32 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
  import {TabStripObservation} from '/tab_strip_api/tab_strip_observation.js';
  import type {TabStripObserver} from '/tab_strip_api/tab_strip_observer.js';
  
@@ -5495,7 +5588,7 @@ index aa4e0fe69e..79bd6b934d 100644
 +import {Folders} from '../rail/folders.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
 +import {favoritesKey, isFavorites, PinnedTabs} from '../rail/pinned_tabs.js';
-+import type {FolderSection, PinnedRow} from '../rail/sections.js';
++import type {FolderSection, LooseEntry, PinnedRow} from '../rail/sections.js';
 +import {splitSections} from '../rail/sections.js';
 +import {readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
@@ -5503,12 +5596,14 @@ index aa4e0fe69e..79bd6b934d 100644
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
 +import {backdropSettings, DEFAULT_MATERIAL, isNewTabUrl, serializeSidebar,
 +        spaceHex, Spaces, tintStrength} from '../rail/spaces.js';
-+import type {DragHandOff, RailDragHost} from '../rail/tab_drag.js';
++import type {DragHandOff, DragSlot, RailDragHost} from '../rail/tab_drag.js';
 +import {TabDrag} from '../rail/tab_drag.js';
-+import type {FolderCommand, TabCommand, TabCommandDetail, TabMenuTarget} from '../rail/tab_menu.js';
-+import {openFolderMenu, openTabMenu} from '../rail/tab_menu.js';
++import type {FolderCommand, GroupCommand, TabCommand, TabCommandDetail, TabMenuTarget} from '../rail/tab_menu.js';
++import {openFolderMenu, openGroupMenu, openTabMenu} from '../rail/tab_menu.js';
 +import {actsOnSelection, TabSelection} from '../rail/tab_selection.js';
 +import {TabSleep} from '../rail/tab_sleep.js';
++import type {TidyGroupPlan, TidyTab} from '../rail/tidy_tabs.js';
++import {buildPrompt, isOtherGroup, parsePlan} from '../rail/tidy_tabs.js';
 +import {TabAlertState} from '../tabs.mojom-webui.js';
 +
  import type {TabActivated, TabAdded, TabClosed, TabUpdated} from './events.js';
@@ -5519,7 +5614,7 @@ index aa4e0fe69e..79bd6b934d 100644
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-@@ -36,6 +56,8 @@ export interface TabStripElement {
+@@ -36,6 +59,8 @@ export interface TabStripElement {
    };
  }
  
@@ -5528,7 +5623,7 @@ index aa4e0fe69e..79bd6b934d 100644
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -64,7 +86,7 @@ class TabStripItemFactory {
+@@ -64,7 +89,7 @@ class TabStripItemFactory {
  }
  
  export class TabStripElement extends CrLitElement implements TabStripObserver,
@@ -5537,7 +5632,7 @@ index aa4e0fe69e..79bd6b934d 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -82,6 +104,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -82,6 +107,38 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        items_: {
          type: Array,
        },
@@ -5557,14 +5652,26 @@ index aa4e0fe69e..79bd6b934d 100644
 +        type: Array,
 +        state: true,
 +      },
-+      looseItems_: {
++      looseEntries_: {
 +        type: Array,
++        state: true,
++      },
++      tidyBusy_: {
++        type: Boolean,
++        state: true,
++      },
++      tidyError_: {
++        type: Boolean,
++        state: true,
++      },
++      editingGroup_: {
++        type: String,
 +        state: true,
 +      },
        activeTab_: {
          type: String,
          state: true,
-@@ -90,16 +132,69 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,16 +147,74 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -5604,7 +5711,10 @@ index aa4e0fe69e..79bd6b934d 100644
 +  protected accessor folderSections_: FolderSection[] = [];
 +  protected accessor editingFolder_: string = '';
 +  protected accessor pinnedRows_: PinnedRow[] = [];
-+  protected accessor looseItems_: TabStripItem[] = [];
++  protected accessor looseEntries_: LooseEntry[] = [];
++  protected accessor tidyBusy_ = false;
++  protected accessor tidyError_ = false;
++  protected accessor editingGroup_: string = '';
    protected accessor activeTab_: string = '';
    protected accessor dragInProgress_ = false;
 +  protected accessor dropTarget_ = false;
@@ -5618,10 +5728,12 @@ index aa4e0fe69e..79bd6b934d 100644
 +  private readonly selection_ = new TabSelection();
 +  private pendingBelow_ = '';
 +  private readonly store_ = new SidebarStore(
-+      () => serializeSidebar(this.spaces_, this.pinnedTabs_, this.folders_));
++      () => serializeSidebar(
++          this.spaces_, this.pinnedTabs_, this.folders_, this.tidyGroups_));
 +  private readonly pinnedTabs_ = new PinnedTabs(() => this.store_.save());
 +  private readonly spaces_ = new Spaces(() => this.store_.save());
 +  private readonly folders_ = new Folders(() => this.store_.save());
++  private readonly tidyGroups_ = new Folders(() => this.store_.save());
 +
 +  private slidingSpace_ = false;
 +  private backdropKey_ = '';
@@ -5635,7 +5747,7 @@ index aa4e0fe69e..79bd6b934d 100644
  
    constructor() {
      super();
-@@ -112,11 +207,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -112,11 +227,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -5652,7 +5764,7 @@ index aa4e0fe69e..79bd6b934d 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +238,33 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +258,34 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -5678,6 +5790,7 @@ index aa4e0fe69e..79bd6b934d 100644
 +    this.pinnedTabs_.restore(state, tabs, claimed);
 +    this.spaces_.restore(state, tabs, claimed);
 +    this.folders_.restore(state);
++    this.tidyGroups_.restore(state, space => space.tidyGroups);
 +    for (const entry of this.pinnedTabs_.entries) {
 +      if (entry.tabId) {
 +        this.spaces_.assign(entry.tabId, entry.space, entry.url);
@@ -5686,7 +5799,7 @@ index aa4e0fe69e..79bd6b934d 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +286,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +307,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -5715,7 +5828,7 @@ index aa4e0fe69e..79bd6b934d 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +322,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +343,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -5730,7 +5843,7 @@ index aa4e0fe69e..79bd6b934d 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -240,15 +382,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -240,15 +403,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // End TabStripObserver impl:
  
@@ -5766,7 +5879,7 @@ index aa4e0fe69e..79bd6b934d 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,19 +411,798 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,19 +432,990 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6108,7 +6221,198 @@ index aa4e0fe69e..79bd6b934d 100644
 +    const live = ids.filter(id => !this.spaces_.drop(id));
 +    if (live.length) {
 +      this.closeTabs_(live);
++      return;
 +    }
++    if (ids.length) {
++      this.refreshSections_();
++    }
++  }
++
++  protected looseTabCount_(): number {
++    return this.looseTabIds_().length;
++  }
++
++  protected onClearTabsClick_() {
++    this.closeMany_(this.looseTabIds_());
++  }
++
++  private groupIdFrom_(e: Event): string {
++    return (e.currentTarget as HTMLElement).dataset['group'] ?? '';
++  }
++
++  protected onTidyGroupClick_(e: Event) {
++    if (this.dragDelegate_.consumeSuppressedClick()) {
++      return;
++    }
++    this.tidyGroups_.toggle(this.groupIdFrom_(e));
++    this.refreshSections_();
++  }
++
++  protected onTidyGroupSaveClick_(e: Event) {
++    e.stopPropagation();
++    this.saveGroupAsFolder_(this.groupIdFrom_(e));
++  }
++
++  protected onTidyGroupCloseClick_(e: Event) {
++    e.stopPropagation();
++    this.closeGroup_(this.groupIdFrom_(e));
++  }
++
++  protected onTidyGroupUngroupClick_(e: Event) {
++    e.stopPropagation();
++    this.ungroupGroup_(this.groupIdFrom_(e));
++  }
++
++  protected onTidyGroupContextmenu_(e: MouseEvent) {
++    e.preventDefault();
++    const id = this.groupIdFrom_(e);
++    const group = this.tidyGroups_.byId(id);
++    if (!group) {
++      return;
++    }
++    openGroupMenu(group.name, (command: GroupCommand) => {
++      if (command === 'rename-group') {
++        this.startGroupRename_(id);
++      } else if (command === 'save-group') {
++        this.saveGroupAsFolder_(id);
++      } else if (command === 'ungroup-group') {
++        this.ungroupGroup_(id);
++      } else {
++        this.closeGroup_(id);
++      }
++    });
++  }
++
++  protected onTidyGroupNameClick_(e: Event) {
++    e.stopPropagation();
++  }
++
++  protected onTidyGroupNameKeydown_(e: KeyboardEvent) {
++    if (e.key === 'Enter') {
++      (e.target as HTMLInputElement).blur();
++    } else if (e.key === 'Escape') {
++      this.editingGroup_ = '';
++    }
++  }
++
++  protected onTidyGroupNameBlur_(e: Event) {
++    const input = e.target as HTMLInputElement;
++    this.tidyGroups_.rename(this.editingGroup_, input.value.trim());
++    this.editingGroup_ = '';
++    this.refreshSections_();
++  }
++
++  private async startGroupRename_(id: string) {
++    this.editingGroup_ = id;
++    await this.updateComplete;
++    const input = this.shadowRoot.querySelector<HTMLInputElement>(
++        '.tidygroup-row .folder-name-input');
++    input?.focus();
++    input?.select();
++  }
++
++  private saveGroupAsFolder_(id: string) {
++    const group = this.tidyGroups_.byId(id);
++    if (!group) {
++      return;
++    }
++    const folder = this.folders_.create(group.space, group.name);
++    for (const key of this.spaces_.keysInGroup(group.id)) {
++      const entry = this.entryFor_(key) ?? this.pinTab_(key);
++      if (entry) {
++        this.pinnedTabs_.setFolder(entry.key, folder.id);
++      }
++    }
++    this.tidyGroups_.remove(group.id);
++    this.refreshSections_();
++  }
++
++  private closeGroup_(id: string) {
++    const keys = this.spaces_.keysInGroup(id);
++    this.tidyGroups_.remove(id);
++    this.closeMany_(keys);
++  }
++
++  private ungroupGroup_(id: string) {
++    this.spaces_.clearGroup(id);
++    this.tidyGroups_.remove(id);
++    this.refreshSections_();
++  }
++
++  private async flashTidyError_() {
++    this.tidyError_ = true;
++    await new Promise(resolve => setTimeout(resolve, 1600));
++    this.tidyError_ = false;
++  }
++
++  protected async onTidyTabsClick_() {
++    if (this.tidyBusy_) {
++      return;
++    }
++    const spaceId = this.activeSpace_;
++    const tabs: TidyTab[] = [];
++    for (const id of this.looseTabIds_()) {
++      const row = this.spaces_.rowFor(id);
++      if (row && !isNewTabUrl(row.url)) {
++        tabs.push({id, title: row.title, url: row.url});
++      }
++    }
++    if (tabs.length < 2) {
++      return;
++    }
++    const groups = this.tidyGroups_.in(spaceId).map(
++        group => ({id: group.id, name: group.name}));
++    this.tidyBusy_ = true;
++    this.tidyError_ = false;
++    let response: string|null = null;
++    try {
++      ({response} =
++           await browserProxyFactory.getInstance().handler.organizeTabs(
++               buildPrompt(tabs, groups)));
++    } catch (e) {
++      response = null;
++    } finally {
++      this.tidyBusy_ = false;
++    }
++    const plans = response ? parsePlan(response, tabs, groups) : [];
++    if (!plans.length) {
++      this.flashTidyError_();
++      return;
++    }
++    this.applyTidyPlan_(spaceId, plans);
++  }
++
++  private applyTidyPlan_(spaceId: string, plans: TidyGroupPlan[]) {
++    const grouped = new Set<string>();
++    const kept = new Set<string>();
++    const ordered: string[] = [];
++    plans.sort(
++        (one, other) => Number(isOtherGroup(one)) - Number(isOtherGroup(other)));
++    for (const plan of plans) {
++      const group = plan.id ? this.tidyGroups_.byId(plan.id) :
++                              this.tidyGroups_.create(spaceId, plan.name);
++      if (!group) {
++        continue;
++      }
++      kept.add(group.id);
++      for (const key of plan.keys) {
++        this.spaces_.setGroup(key, group.id);
++        grouped.add(key);
++        ordered.push(key);
++      }
++    }
++    this.spaces_.reorder(spaceId, ordered);
++    for (const id of this.looseTabIds_()) {
++      if (!grouped.has(id)) {
++        this.spaces_.setGroup(id, '');
++      }
++    }
++    for (const group of this.tidyGroups_.in(spaceId)) {
++      if (!kept.has(group.id)) {
++        this.tidyGroups_.remove(group.id);
++      }
++    }
++    this.refreshSections_();
 +  }
 +
 +  private pinTab_(tabId: string): PinnedEntry|undefined {
@@ -6401,6 +6705,7 @@ index aa4e0fe69e..79bd6b934d 100644
 +    }
 +    this.pinnedTabs_.dropSpace(id);
 +    this.folders_.dropSpace(id);
++    this.tidyGroups_.dropSpace(id);
 +    this.closeMany_(orphans);
 +    this.focusSpace_();
 +    this.refreshSections_();
@@ -6491,11 +6796,12 @@ index aa4e0fe69e..79bd6b934d 100644
 +
 +  private refreshSections_() {
 +    const sections = splitSections(
-+        this.items_, this.pinnedTabs_, this.spaces_, this.folders_);
++        this.items_, this.pinnedTabs_, this.spaces_, this.folders_,
++        this.tidyGroups_);
 +    this.favoriteRows_ = sections.favoriteRows;
 +    this.folderSections_ = sections.folderSections;
 +    this.pinnedRows_ = sections.pinnedRows;
-+    this.looseItems_ = sections.looseItems;
++    this.looseEntries_ = sections.looseEntries;
 +    this.spaceRows_ = [...this.spaces_.all];
 +    this.activeSpace_ = this.spaces_.activeId;
 +    this.spaceCounts_ = Object.fromEntries(this.spaces_.all.map(
@@ -6533,8 +6839,7 @@ index aa4e0fe69e..79bd6b934d 100644
 +  }
 +
 +  get hasActiveContent(): boolean {
-+    return this.looseItems_.some(
-+               item => item.type === 'tab' && !this.isDormant_(item.id)) ||
++    return this.looseTabIds_().some(id => !this.isDormant_(id)) ||
 +        this.pinnedRows_.some(row => !row.dormant) ||
 +        this.favoriteRows_.some(row => !row.dormant);
    }
@@ -6566,7 +6871,7 @@ index aa4e0fe69e..79bd6b934d 100644
      this.tabStripService_.activateTab(tabId);
      this.fire<TabActivated>('tab-activated', item.tabData);
    }
-@@ -288,6 +1220,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -288,6 +1433,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
@@ -6579,7 +6884,7 @@ index aa4e0fe69e..79bd6b934d 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -303,6 +1241,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -303,6 +1454,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private removeItem(id: NodeId) {
@@ -6588,7 +6893,7 @@ index aa4e0fe69e..79bd6b934d 100644
      const itemToRemove = this.findItem_<TabStripItem>(id);
      this.setItems_(this.items_.filter(item => item.id !== id));
  
-@@ -311,8 +1251,106 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,8 +1464,107 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6677,8 +6982,9 @@ index aa4e0fe69e..79bd6b934d 100644
 +  }
 +
 +  private looseTabIds_(): string[] {
-+    return this.looseItems_.filter(item => item.type === 'tab')
-+        .map(item => item.id);
++    return this.spaces_.rowsIn(this.spaces_.activeId)
++        .filter(row => !row.tabId || !this.pinnedTabs_.byTab(row.tabId))
++        .map(row => row.tabId || row.key);
 +  }
 +
 +  get openTabs(): Tab[] {
@@ -6696,7 +7002,7 @@ index aa4e0fe69e..79bd6b934d 100644
    }
  
    // Utility helpers:
-@@ -334,11 +1372,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -334,11 +1586,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private setActiveTab_(id: string) {
@@ -6713,7 +7019,7 @@ index aa4e0fe69e..79bd6b934d 100644
    }
  
    private updateItemAt_(index: number, item: TabStripItem) {
-@@ -367,8 +1410,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -367,8 +1624,11 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // TabDragHost impl:
  
@@ -6721,11 +7027,12 @@ index aa4e0fe69e..79bd6b934d 100644
 +  // for the drag delegate to measure against.
    get itemsForDrag() {
 -    return this.items_;
-+    return this.looseItems_;
++    return this.looseEntries_.filter(entry => entry.kind === 'item')
++        .map(entry => entry.item);
    }
  
    getTabElementForDrag(id: string) {
-@@ -376,7 +1421,20 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -376,7 +1636,93 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    setItemsForDrag(items: TabStripItem[]) {
@@ -6744,10 +7051,83 @@ index aa4e0fe69e..79bd6b934d 100644
 +    this.pinnedTabs_.reorder(
 +        this.spaces_.activeId, items.map(item => item.id));
 +    this.refreshSections_();
++  }
++
++  dragSlots(pinned: boolean, groupDrag: boolean): DragSlot[] {
++    if (pinned) {
++      return this.pinnedRows_.map(
++          row => ({id: row.item.id, kind: 'tab' as const, group: ''}));
++    }
++    const slots: DragSlot[] = [];
++    for (const entry of this.looseEntries_) {
++      if (entry.kind === 'item') {
++        slots.push({id: entry.item.id, kind: 'tab', group: ''});
++        continue;
++      }
++      const id = entry.section.group.id;
++      if (groupDrag) {
++        slots.push({id, kind: 'group', group: ''});
++        continue;
++      }
++      slots.push({id, kind: 'header', group: ''});
++      if (entry.section.group.expanded) {
++        for (const item of entry.section.items) {
++          slots.push({id: item.id, kind: 'tab', group: id});
++        }
++      }
++    }
++    return slots;
++  }
++
++  applyDragSlots(slots: DragSlot[], pinned: boolean) {
++    if (pinned) {
++      this.pinnedTabs_.reorder(
++          this.spaces_.activeId, slots.map(slot => slot.id));
++      this.refreshSections_();
++      return;
++    }
++    for (const slot of slots) {
++      if (slot.kind !== 'tab') {
++        continue;
++      }
++      this.spaces_.setGroup(slot.id, slot.group);
++      const group = slot.group ? this.tidyGroups_.byId(slot.group) : undefined;
++      if (group && !group.expanded) {
++        this.tidyGroups_.toggle(group.id);
++      }
++    }
++    const placed =
++        new Set(slots.filter(slot => slot.kind === 'tab').map(slot => slot.id));
++    const ids: string[] = [];
++    for (const slot of slots) {
++      if (slot.kind === 'tab') {
++        ids.push(slot.id);
++        continue;
++      }
++      ids.push(...this.spaces_.keysInGroup(slot.id).filter(
++          key => !placed.has(key)));
++    }
++    this.spaces_.reorder(this.spaces_.activeId, ids);
++    for (const group of this.tidyGroups_.in(this.spaces_.activeId)) {
++      if (!this.spaces_.keysInGroup(group.id).length) {
++        this.tidyGroups_.remove(group.id);
++      }
++    }
++    this.refreshSections_();
++  }
++
++  dragElementFor(slot: DragSlot): HTMLElement|null {
++    if (slot.kind === 'tab') {
++      return this.getTabElement_(slot.id);
++    }
++    const selector = slot.kind === 'group' ?
++        `.tidygroup[data-id="${slot.id}"]` :
++        `.tidygroup-row[data-group="${slot.id}"]`;
++    return this.shadowRoot.querySelector<HTMLElement>(selector);
    }
  
    activateTabForDrag(id: string) {
-@@ -391,16 +1449,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -391,16 +1737,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      this.$.tabstrip.classList.toggle('nodrag', noDrag);
    }
  
@@ -6763,14 +7143,18 @@ index aa4e0fe69e..79bd6b934d 100644
 +          height: Math.round(drag.row.height),
 +        },
 +        {x: Math.round(drag.grabX), y: Math.round(drag.grabY)}, ids);
-+  }
-+
+   }
+ 
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  private dragRowIds_(id: string): string[] {
 +    return this.selectedIds_.length > 1 && this.selection_.has(id) ?
 +        [...this.selectedIds_] :
 +        [id];
-+  }
-+
+   }
+ 
+-  closeDragElement() {
+-    this.dragDelegate_.onMouseUp();
 +  private dragTabIds_(id: string): string[] {
 +    return this.dragRowIds_(id)
 +        .map(rowId => this.targetFor(rowId)?.tabId)
@@ -6779,16 +7163,12 @@ index aa4e0fe69e..79bd6b934d 100644
 +
 +  onTabDragMoved(x: number, y: number) {
 +    this.dragDelegate_.onDragMoved(x, y);
-   }
- 
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
++  }
++
 +  onTabDragEnded(inside: boolean) {
 +    this.dragDelegate_.onDragEnded(inside);
-   }
- 
--  closeDragElement() {
--    this.dragDelegate_.onMouseUp();
++  }
++
 +  onTabDropTarget(visible: boolean) {
 +    this.dropTarget_ = visible;
 +  }
@@ -7621,7 +8001,7 @@ index 806ff8ed9e..739ef0e7ad 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..4530b5fe24 100644
+index 3d4fe27f4f..d4f136649a 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,19 @@ source_set("headers") {
@@ -7661,7 +8041,7 @@ index 3d4fe27f4f..4530b5fe24 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/tab_drag:mojom",
      "//components/browser_apis/tab_strip:mojom_experiment",
-@@ -52,6 +68,37 @@ source_set("impl") {
+@@ -52,6 +68,39 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -7691,6 +8071,8 @@ index 3d4fe27f4f..4530b5fe24 100644
 +    "rail/rail_profiles.cc",
 +    "rail/rail_tab_audio.cc",
 +    "rail/rail_tab_audio.h",
++    "rail/rail_tab_organizer.cc",
++    "rail/rail_tab_organizer.h",
 +    "rail/rail_tab_opener.cc",
 +    "rail/rail_tab_opener.h",
 +    "rail/rail_tab_sleep.cc",
@@ -7699,7 +8081,7 @@ index 3d4fe27f4f..4530b5fe24 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -75,6 +122,15 @@ source_set("impl") {
+@@ -75,6 +124,15 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -7715,7 +8097,7 @@ index 3d4fe27f4f..4530b5fe24 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -86,6 +142,7 @@ source_set("impl") {
+@@ -86,6 +144,7 @@ source_set("impl") {
      "//chrome/browser/devtools",
      "//chrome/browser/extensions",
      "//chrome/browser/profiles",
@@ -7723,7 +8105,7 @@ index 3d4fe27f4f..4530b5fe24 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/themes",
      "//chrome/browser/ui/bookmarks",
-@@ -106,7 +163,9 @@ source_set("impl") {
+@@ -106,7 +165,9 @@ source_set("impl") {
      "//chrome/browser/ui/views/toolbar",
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
@@ -7733,7 +8115,18 @@ index 3d4fe27f4f..4530b5fe24 100644
      "//chrome/browser/ui/webui/util",
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/zoom:browser_window_zoom_observer",
-@@ -140,6 +199,14 @@ source_set("impl") {
+@@ -119,6 +180,10 @@ source_set("impl") {
+     "//components/sharing_message",
+     "//components/surface_embed/common",
+     "//content/public/browser",
++    "//components/os_crypt/async/browser:browser",
++    "//components/os_crypt/async/common",
++    "//net/traffic_annotation",
++    "//services/network/public/cpp",
+     "//services/network/public/mojom",
+     "//ui/base",
+     "//ui/content_accelerators",
+@@ -140,6 +205,14 @@ source_set("impl") {
      ]
    }
  
@@ -7748,7 +8141,7 @@ index 3d4fe27f4f..4530b5fe24 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -149,11 +216,15 @@ mojom("browser_mojo_bindings") {
+@@ -149,11 +222,15 @@ mojom("browser_mojo_bindings") {
    sources = [
      "bookmark_bar.mojom",
      "browser.mojom",
@@ -7765,7 +8158,7 @@ index 3d4fe27f4f..4530b5fe24 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..6962a6d85f 100644
+index 15a65f7152..82e620a9b8 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -7881,7 +8274,7 @@ index 15a65f7152..6962a6d85f 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +158,63 @@ interface PageHandler {
+@@ -90,6 +158,65 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -7940,6 +8333,8 @@ index 15a65f7152..6962a6d85f 100644
 +  OpenRailSpacePanel(SpacePanelRequest request, gfx.mojom.Point anchor);
 +
 +  OpenRailSettings();
++
++  OrganizeTabs(string prompt) => (string? response);
 +
 +  SetSystemBackdrop(SystemBackdropSettings settings);
  };
@@ -8076,7 +8471,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..677b79812a 100644
+index 3ba14e7289..97aa30b83c 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -8087,7 +8482,7 @@ index 3ba14e7289..677b79812a 100644
  #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
-@@ -26,10 +27,21 @@
+@@ -26,10 +27,22 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
@@ -8096,6 +8491,7 @@ index 3ba14e7289..677b79812a 100644
 +#include "chrome/browser/ui/webui_browser/rail/rail_drag_ghost.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_menu.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_audio.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_opener.h"
@@ -8109,7 +8505,7 @@ index 3ba14e7289..677b79812a 100644
  #include "components/omnibox/browser/location_bar_model.h"
  #include "components/omnibox/browser/vector_icons.h"
  #include "components/vector_icons/vector_icons.h"
-@@ -198,12 +210,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -198,12 +211,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
    }
  
    if (!tab) {
@@ -8124,7 +8520,7 @@ index 3ba14e7289..677b79812a 100644
      return;
    }
  
-@@ -244,8 +256,8 @@ void WebUIBrowserPageHandler::OpenAppMenu() {
+@@ -244,8 +257,8 @@ void WebUIBrowserPageHandler::OpenAppMenu() {
        BrowserElements::From(GetBrowser())
            ->GetElement(kToolbarAppMenuButtonElementId);
    CHECK(app_menu_button) << "App menu button not found";
@@ -8135,7 +8531,7 @@ index 3ba14e7289..677b79812a 100644
    menu_model_->Init();
    menu_ = std::make_unique<AppMenu>(
        GetBrowser(), menu_model_.get(), views::MenuRunner::NO_FLAGS,
-@@ -288,6 +300,64 @@ void WebUIBrowserPageHandler::Close() {
+@@ -288,6 +301,71 @@ void WebUIBrowserPageHandler::Close() {
    GetBrowserWindow()->Close();
  }
  
@@ -8178,6 +8574,13 @@ index 3ba14e7289..677b79812a 100644
 +  GetBrowserWindow()->OpenRailSettings();
 +}
 +
++void WebUIBrowserPageHandler::OrganizeTabs(const std::string& prompt,
++                                           OrganizeTabsCallback callback) {
++  Browser* browser = GetBrowser();
++  tab_organizer_.Organize(browser ? browser->profile() : nullptr, prompt,
++                          std::move(callback));
++}
++
 +void WebUIBrowserPageHandler::SetSystemBackdrop(
 +    webui_browser::mojom::SystemBackdropSettingsPtr settings) {
 +  GetBrowserWindow()->SetSystemBackdrop(std::move(settings));
@@ -8200,7 +8603,7 @@ index 3ba14e7289..677b79812a 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +402,188 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +410,188 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -8390,10 +8793,18 @@ index 3ba14e7289..677b79812a 100644
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..257f7e1e73 100644
+index 859da4ef00..de23fc6b8a 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-@@ -25,6 +25,10 @@ class MenuModelAdapter;
+@@ -9,6 +9,7 @@
+ #include "base/values.h"
+ #include "chrome/browser/ui/views/tab_search_bubble_host.h"
+ #include "chrome/browser/ui/webui_browser/browser.mojom.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
+ #include "components/browser_apis/tab_strip/types/node_id.h"
+ #include "content/public/browser/document_service.h"
+@@ -25,6 +26,10 @@ class MenuModelAdapter;
  class MenuRunner;
  }  // namespace views
  
@@ -8404,7 +8815,7 @@ index 859da4ef00..257f7e1e73 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +60,59 @@ class WebUIBrowserPageHandler
+@@ -56,8 +61,61 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -8449,6 +8860,8 @@ index 859da4ef00..257f7e1e73 100644
 +      rail_command::mojom::CommandContextPtr context) override;
 +  void OpenRailCommandBar(bool new_tab_mode, bool select_all) override;
 +  void OpenRailSettings() override;
++  void OrganizeTabs(const std::string& prompt,
++                    OrganizeTabsCallback callback) override;
 +  void OpenRailSpacePanel(webui_browser::mojom::SpacePanelRequestPtr request,
 +                          const gfx::Point& anchor) override;
 +  void SetSystemBackdrop(
@@ -8464,7 +8877,7 @@ index 859da4ef00..257f7e1e73 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +124,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +127,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -8473,7 +8886,13 @@ index 859da4ef00..257f7e1e73 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -82,6 +139,8 @@ class WebUIBrowserPageHandler
+@@ -77,11 +137,14 @@ class WebUIBrowserPageHandler
+   std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
+ 
+   std::unique_ptr<content::WebContents> glic_contents_;
++  rail::TabOrganizer tab_organizer_;
+ 
+   // During WebContents destroy, the WebUI object is destroyed before document
    // services, causing a raw_ptr of BrowserUI dangling here, so use a weak ptr
    // instead.
    base::WeakPtr<WebUIBrowserUI> controller_;

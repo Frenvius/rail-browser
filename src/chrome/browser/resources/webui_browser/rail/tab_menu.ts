@@ -24,6 +24,9 @@ export type TabCommand = 'add-to-folder'|'close'|'close-others'|'close-right'|
 
 export type FolderCommand = 'delete-folder'|'rename-folder';
 
+export type GroupCommand =
+    'close-group'|'rename-group'|'save-group'|'ungroup-group';
+
 export interface WindowRow {
   id: number;
   title: string;
@@ -147,4 +150,18 @@ export function openFolderMenu(
         {command: 'delete-folder', label: 'Delete Folder'},
       ]),
       raw => run(raw as FolderCommand));
+}
+
+export function openGroupMenu(
+    name: string, run: (command: GroupCommand) => void) {
+  showNativeMenu(
+      menuItems([
+        {label: name},
+        {command: 'rename-group', label: 'Rename'},
+        {command: 'save-group', label: 'Save as Folder'},
+        separator(),
+        {command: 'ungroup-group', label: 'Ungroup'},
+        {command: 'close-group', label: 'Close Group'},
+      ]),
+      raw => run(raw as GroupCommand));
 }

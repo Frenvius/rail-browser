@@ -80,6 +80,37 @@ ${this.openRow_ ? html`
       <cr-icon class="chevron" icon="cr:chevron-right"></cr-icon>
     </div>
   `)}
+  <h2 class="section">Tab Organizer</h2>
+  <p class="sectionhint">
+    Tidy sends the titles and hostnames of the open tabs in a Space to
+    OpenRouter and groups them from the reply. Nothing is sent until a key is
+    stored, and the key never leaves this device except as the request
+    authorization.
+  </p>
+  <div class="card">
+    <span class="cardtitle">OpenRouter API key</span>
+    <div class="control">
+      <span class="cardhint">${this.hasKey_ ? 'Stored' : 'Not set'}</span>
+      <input id="apikey" type="password" placeholder="sk-or-..."
+          @change="${this.onApiKeyChange_}">
+      <button id="clearkey" ?disabled="${!this.hasKey_}"
+          @click="${this.onClearKeyClick_}">Remove</button>
+    </div>
+  </div>
+  <div class="card">
+    <span class="cardtitle">Model</span>
+    <input id="model" .value="${this.model_}" @change="${this.onModelChange_}">
+  </div>
+  <h2 class="section">About</h2>
+  <div class="card row" @click="${this.onCreditsClick_}">
+    <div class="rowtext">
+      <span class="cardtitle">Credits</span>
+      <span class="cardhint">
+        Third-party software Rail ships, and its license terms
+      </span>
+    </div>
+    <cr-icon class="chevron" icon="cr:open-in-new"></cr-icon>
+  </div>
 </div>
 `}
 <!--_html_template_end_-->`;

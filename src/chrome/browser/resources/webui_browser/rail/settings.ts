@@ -61,6 +61,8 @@ export class RailSettingsElement extends CrLitElement {
       detail_: {type: Object, state: true},
       renaming_: {type: Boolean, state: true},
       confirmingDelete_: {type: Boolean, state: true},
+      hasKey_: {type: Boolean, state: true},
+      model_: {type: String, state: true},
     };
   }
 
@@ -70,6 +72,8 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor detail_: ProfileDetail|null = null;
   protected accessor renaming_ = false;
   protected accessor confirmingDelete_ = false;
+  protected accessor hasKey_ = false;
+  protected accessor model_ = '';
 
   override connectedCallback() {
     super.connectedCallback();
@@ -81,6 +85,9 @@ export class RailSettingsElement extends CrLitElement {
     const handler = browserProxyFactory.getInstance().handler;
     const [{profiles}, {value}] =
         await Promise.all([handler.listProfiles(), handler.getSidebarState()]);
+    const organize = await handler.getOrganizeSettings();
+    this.hasKey_ = organize.hasKey;
+    this.model_ = organize.model;
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -90,6 +97,29 @@ export class RailSettingsElement extends CrLitElement {
                         spaces: names.get(profile.id) ?? [],
                       })),
     ];
+  }
+
+  protected onApiKeyChange_(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const key = input.value.trim();
+    browserProxyFactory.getInstance().handler.setOpenRouterKey(key);
+    this.hasKey_ = !!key;
+    input.value = '';
+  }
+
+  protected onModelChange_(e: Event) {
+    const model = (e.target as HTMLInputElement).value.trim();
+    browserProxyFactory.getInstance().handler.setOrganizeModel(model);
+    this.model_ = model;
+  }
+
+  protected onCreditsClick_() {
+    browserProxyFactory.getInstance().handler.openCredits();
+  }
+
+  protected onClearKeyClick_() {
+    browserProxyFactory.getInstance().handler.setOpenRouterKey('');
+    this.hasKey_ = false;
   }
 
   private onKeydown_(e: KeyboardEvent) {

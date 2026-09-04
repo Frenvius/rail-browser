@@ -41,6 +41,14 @@ interface PageHandler {
 
   OpenSearchSettings(string id);
 
+  GetOrganizeSettings() => (bool has_key, string model);
+
+  SetOpenRouterKey(string key);
+
+  SetOrganizeModel(string model);
+
+  OpenCredits();
+
   Close();
 };
 

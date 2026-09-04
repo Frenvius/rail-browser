@@ -28,6 +28,8 @@ class RailSettingsUI;
 
 inline constexpr char kRailSettingsHost[] = "rail-settings";
 inline constexpr char kRailSettingsURL[] = "chrome://rail-settings/";
+inline constexpr char kRailCreditsPath[] = "credits";
+inline constexpr char kRailCreditsURL[] = "chrome://rail-settings/credits";
 
 class RailSettingsUIConfig
     : public DefaultTopChromeWebUIConfig<RailSettingsUI> {
@@ -67,6 +69,10 @@ class RailSettingsUI : public TopChromeWebUIController,
                        const std::string& engine_id) override;
   void SetSearchSuggestions(const std::string& id, bool enabled) override;
   void OpenSearchSettings(const std::string& id) override;
+  void GetOrganizeSettings(GetOrganizeSettingsCallback callback) override;
+  void SetOpenRouterKey(const std::string& key) override;
+  void SetOrganizeModel(const std::string& model) override;
+  void OpenCredits() override;
   void Close() override;
 
   void OnProfileCreated(CreateProfileCallback callback,

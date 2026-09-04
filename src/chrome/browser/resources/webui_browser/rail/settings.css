@@ -205,6 +205,40 @@ h2.section {
   gap: 10px;
 }
 
+.sectionhint {
+  color: var(--rail-text-label);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+#apikey,
+#model {
+  background: rgb(255 255 255 / 8%);
+  border: 0;
+  border-radius: 6px;
+  color: var(--rail-text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  padding: 6px 8px;
+  width: 220px;
+}
+
+#clearkey {
+  background: rgb(255 255 255 / 8%);
+  border: 0;
+  border-radius: 6px;
+  color: var(--rail-text);
+  cursor: default;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+#clearkey:disabled {
+  color: var(--rail-text-label);
+}
+
 #danger {
   align-items: flex-end;
   display: flex;

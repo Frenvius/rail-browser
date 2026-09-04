@@ -20,6 +20,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 #include "chrome/grit/webui_browser_resources.h"
 #include "chrome/grit/webui_browser_resources_map.h"
@@ -39,6 +40,11 @@ Browser* BrowserFor(content::WebUI* web_ui) {
   WebUIBrowserWindow* browser_window =
       window ? WebUIBrowserWindow::FromBrowser(window) : nullptr;
   return browser_window ? browser_window->browser() : nullptr;
+}
+
+PrefService* PrefsFor(content::WebUI* web_ui) {
+  Browser* browser = BrowserFor(web_ui);
+  return browser ? browser->profile()->GetPrefs() : nullptr;
 }
 
 std::string ProfileName(Profile* profile) {
@@ -67,6 +73,8 @@ RailSettingsUI::RailSettingsUI(content::WebUI* web_ui)
       web_ui->GetWebContents()->GetBrowserContext(), kRailSettingsHost);
   webui::SetupWebUIDataSource(source, kWebuiBrowserResources,
                               IDR_WEBUI_BROWSER_RAIL_SETTINGS_HTML);
+  source->AddResourcePath(kRailCreditsPath,
+                          IDR_WEBUI_BROWSER_RAIL_CREDITS_HTML);
 }
 
 RailSettingsUI::~RailSettingsUI() = default;
@@ -245,6 +253,28 @@ void RailSettingsUI::SetSearchSuggestions(const std::string& id, bool enabled) {
 void RailSettingsUI::OpenSearchSettings(const std::string& id) {
   rail::CreateTabInProfile(BrowserFor(web_ui()), id,
                            GURL("chrome://settings/search"), base::DoNothing());
+  Close();
+}
+
+void RailSettingsUI::GetOrganizeSettings(
+    GetOrganizeSettingsCallback callback) {
+  PrefService* prefs = PrefsFor(web_ui());
+  std::move(callback).Run(rail::HasOpenRouterKey(prefs),
+                          rail::GetOrganizeModel(prefs));
+}
+
+void RailSettingsUI::SetOpenRouterKey(const std::string& key) {
+  Browser* browser = BrowserFor(web_ui());
+  rail::SetOpenRouterKey(browser ? browser->profile() : nullptr, key);
+}
+
+void RailSettingsUI::SetOrganizeModel(const std::string& model) {
+  rail::SetOrganizeModel(PrefsFor(web_ui()), model);
+}
+
+void RailSettingsUI::OpenCredits() {
+  rail::CreateTabInProfile(BrowserFor(web_ui()), std::string(),
+                           GURL(kRailCreditsURL), base::DoNothing());
   Close();
 }
 

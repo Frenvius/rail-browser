@@ -6,6 +6,7 @@
 :host {
   display: flex;
   flex-direction: column;
+  interpolate-size: allow-keywords;
   min-height: 0;
   overflow: hidden;
 }
@@ -80,22 +81,112 @@
 }
 
 #pinnedDivider {
-  background: rgb(255 255 255 / 14%);
+  align-items: center;
+  display: flex;
   flex: 0 0 auto;
-  height: 1px;
-  margin: 6px 6px 4px;
+  height: 22px;
+  margin: 1px 6px 0;
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
-webui-browser-tab.dragsource {
+#pinnedDivider::before {
+  background: rgb(255 255 255 / 14%);
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+}
+
+webui-browser-tab.dragsource,
+.tidygroup.dragsource {
   opacity: 0.3;
 }
 
-#pinnedDivider.droptarget {
+#pinnedDivider.droptarget::before {
   background: var(--rail-accent, #7c5cfc);
   height: 2px;
+}
+
+#pinnedDivider[data-busy]::before {
+  animation: dividerbusy 1200ms ease-in-out infinite;
+}
+
+#pinnedDivider[data-error]::before {
+  animation: dividererror 1600ms ease-in-out;
+}
+
+@keyframes dividererror {
+  0%,
+  100% {
+    background: rgb(255 255 255 / 14%);
+  }
+
+  20%,
+  60% {
+    background: rgb(229 72 77 / 85%);
+  }
+}
+
+@keyframes dividerbusy {
+  0%,
+  100% {
+    background: rgb(255 255 255 / 14%);
+  }
+
+  50% {
+    background: rgb(255 255 255 / 75%);
+  }
+}
+
+.divider-action {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--rail-text-label);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 11px;
+  gap: 3px;
+  margin-inline-start: 0;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 1px 0;
+  pointer-events: none;
+  transition: opacity 300ms ease, max-width 0s 300ms, padding 0s 300ms,
+      margin-inline-start 0s 300ms;
+  white-space: nowrap;
+}
+
+#pinnedDivider:hover .divider-action {
+  margin-inline-start: 6px;
+  max-width: 200px;
+  opacity: 1;
+  padding: 1px 4px;
+  pointer-events: auto;
+  transition: opacity 300ms ease, max-width 0s, padding 0s,
+      margin-inline-start 0s;
+}
+
+.divider-action:hover {
+  background: var(--rail-hover);
+  color: var(--rail-text);
+}
+
+.divider-action cr-icon {
+  --iron-icon-height: 12px;
+  --iron-icon-width: 12px;
+}
+
+#tidyTabs cr-icon {
+  --iron-icon-fill-color: transparent;
+  --iron-icon-stroke-color: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2px;
 }
 
 #tabList {
@@ -113,6 +204,9 @@ webui-browser-tab.dragsource {
 }
 
 #newTabButton,
+#pinnedDivider,
+.folder-row,
+.tidygroup-row,
 webui-browser-tab {
   -webkit-app-region: no-drag;
 }
@@ -199,6 +293,112 @@ webui-browser-tab {
   flex-direction: column;
   gap: 2px;
   padding-inline-start: 12px;
+}
+
+.tidygroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tidygroup-row {
+  align-items: center;
+  border-radius: 6px;
+  color: var(--rail-text-label, #8a8a8a);
+  cursor: default;
+  display: flex;
+  font-size: 11px;
+  gap: 4px;
+  height: 22px;
+  letter-spacing: 0.02em;
+  padding: 0 8px;
+  position: relative;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.tidygroup-row:hover {
+  background: var(--rail-hover, rgb(255 255 255 / 10%));
+}
+
+.tidygroup-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tidygroup-row .folder-name-input {
+  text-transform: none;
+}
+
+.tidygroup-count {
+  color: var(--rail-text-label, #8a8a8a);
+  transition: opacity 300ms ease;
+}
+
+.tidygroup-row:hover .tidygroup-count {
+  opacity: 0;
+}
+
+.tidygroup-actions {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  inset-inline-end: 4px;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 300ms ease;
+}
+
+.tidygroup-row:hover .tidygroup-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tidygroup-action {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--rail-text-label, #8a8a8a);
+  cursor: pointer;
+  display: flex;
+  padding: 2px;
+}
+
+.tidygroup-action:hover {
+  background: var(--rail-hover-strong, rgb(255 255 255 / 16%));
+  color: var(--rail-text, #f2f2f2);
+}
+
+.tidygroup-action cr-icon,
+.tidygroup-action .folder-icon {
+  --iron-icon-height: 13px;
+  --iron-icon-width: 13px;
+  height: 13px;
+  width: 13px;
+}
+
+.tidygroup-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: auto;
+  padding-inline-start: 9px;
+  overflow: hidden;
+  transition: height 200ms cubic-bezier(0.42, 0, 0, 1),
+      opacity 200ms cubic-bezier(0.42, 0, 0, 1), visibility 0s;
+  visibility: visible;
+}
+
+.tidygroup:not([data-expanded]) .tidygroup-children {
+  height: 0;
+  opacity: 0;
+  transition: height 200ms cubic-bezier(0.42, 0, 0, 1),
+      opacity 200ms cubic-bezier(0.42, 0, 0, 1), visibility 0s 200ms;
+  visibility: hidden;
 }
 
 .folder-icon {

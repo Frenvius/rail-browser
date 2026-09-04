@@ -1,0 +1,111 @@
+<!DOCTYPE HTML>
+<html dir="$i18n{textdirection}" lang="$i18n{language}">
+  <meta charset="utf-8">
+  <title>Rail Credits</title>
+  <style>
+    html, body {
+      background: #16161f;
+      color: #f2f2f2;
+      margin: 0;
+      min-height: 100%;
+      padding: 0;
+    }
+    * {
+      box-sizing: border-box;
+      font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    }
+    main {
+      margin: 0 auto;
+      max-width: 720px;
+      padding: 48px 24px 64px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 6px;
+    }
+    h2 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      margin: 36px 0 12px;
+      text-transform: uppercase;
+    }
+    .lede {
+      color: #b4b4b4;
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .entry {
+      background: rgb(255 255 255 / 6%);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      padding: 16px 18px;
+    }
+    .name {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .meta {
+      color: #8a8a8a;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .body {
+      color: #cfcfcf;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 10px;
+    }
+    a {
+      color: #9d86ff;
+    }
+  </style>
+  <link rel="stylesheet" href="chrome://resources/css/text_defaults_md.css">
+  <main>
+    <h1>Credits</h1>
+    <p class="lede">
+      Software redistributed by Rail, and the terms it is shipped under.
+    </p>
+
+    <h2>Extensions</h2>
+    <div class="entry">
+      <div class="name">uBlock Origin 1.74.0</div>
+      <div class="meta">
+        Raymond Hill &amp; contributors &middot;
+        GNU General Public License, version 3
+      </div>
+      <div class="body">
+        Preinstalled on profile creation and removable from
+        <a href="chrome://extensions">chrome://extensions</a>. Rail ships the
+        upstream release asset byte for byte, unmodified and unrepacked, and the
+        full license text travels inside the extension. The corresponding source
+        for this exact version is published as
+        <code>uBlock-1.74.0.tar.gz</code> on the Rail release page, next to the
+        installer. Upstream:
+        <a href="https://github.com/gorhill/uBlock">github.com/gorhill/uBlock</a>.
+      </div>
+    </div>
+
+    <h2>Engine</h2>
+    <div class="entry">
+      <div class="name">Chromium</div>
+      <div class="meta">The Chromium Authors &middot; BSD 3-Clause</div>
+      <div class="body">
+        Rail is built on the Chromium source tree. Per-component licenses for
+        everything Chromium itself bundles are listed at
+        <a href="chrome://credits">chrome://credits</a>.
+      </div>
+    </div>
+    <div class="entry">
+      <div class="name">ungoogled-chromium</div>
+      <div class="meta">The ungoogled-chromium Authors &middot; BSD 3-Clause</div>
+      <div class="body">
+        The patch set applied to the engine, removing Google web service
+        integration and background requests. Upstream:
+        <a href="https://github.com/ungoogled-software/ungoogled-chromium">github.com/ungoogled-software/ungoogled-chromium</a>.
+      </div>
+    </div>
+  </main>
+</html>

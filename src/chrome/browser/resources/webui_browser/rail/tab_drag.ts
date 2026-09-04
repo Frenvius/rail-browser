@@ -10,9 +10,20 @@ export interface DragHandOff {
   detachable: boolean;
 }
 
+export type DragSlotKind = 'tab'|'header'|'group';
+
+export interface DragSlot {
+  id: string;
+  kind: DragSlotKind;
+  group: string;
+}
+
 export interface RailDragHost extends TabDragHost {
   pinnedItemsForDrag: TabStripItem[];
   setPinnedItemsForDrag(items: TabStripItem[]): void;
+  dragSlots(pinned: boolean, groupDrag: boolean): DragSlot[];
+  applyDragSlots(slots: DragSlot[], pinned: boolean): void;
+  dragElementFor(slot: DragSlot): HTMLElement|null;
   moveTabToSpace(tabId: string, spaceId: string): void;
   setTabPinned(tabId: string, pinned: boolean): void;
   handOffDrag(drag: DragHandOff): void;
@@ -35,6 +46,8 @@ export class TabDrag {
   private lastY_ = 0;
   private pinned_ = false;
   private dormant_ = false;
+  private isGroup_ = false;
+  private suppressClick_ = false;
   private dragging_ = false;
   private hoveredDot_: HTMLElement|null = null;
   private crossesDivider_ = false;
@@ -51,17 +64,27 @@ export class TabDrag {
     if (e.button !== 0) {
       return;
     }
-    const element = e.composedPath().find(
-                        node => node instanceof Element &&
-                            node.localName === 'webui-browser-tab') as
-        TabElement | undefined;
+    const path = e.composedPath();
+    const tab = path.find(
+                    node => node instanceof Element &&
+                        node.localName === 'webui-browser-tab') as TabElement |
+        undefined;
+    const header = path.find(
+                       node => node instanceof Element &&
+                           node.classList.contains('tidygroup-row')) as
+        HTMLElement | undefined;
+    const onAction = path.some(
+        node => node instanceof Element &&
+            node.classList.contains('tidygroup-action'));
+    const element = tab ?? (onAction ? undefined : header);
     if (!element) {
       return;
     }
     const rect = element.getBoundingClientRect();
-    this.tabId_ = element.tabData.id;
-    this.pinned_ = element.pinned;
-    this.dormant_ = element.dormant;
+    this.isGroup_ = !tab;
+    this.tabId_ = tab ? tab.tabData.id : header!.dataset['group'] ?? '';
+    this.pinned_ = tab ? tab.pinned : false;
+    this.dormant_ = tab ? tab.dormant : false;
     this.startX_ = e.clientX;
     this.startY_ = e.clientY;
     this.lastY_ = e.clientY;
@@ -77,7 +100,7 @@ export class TabDrag {
       return;
     }
     for (const element of this.host_.shadowRoot!.querySelectorAll<HTMLElement>(
-             'webui-browser-tab')) {
+             'webui-browser-tab, .tidygroup')) {
       element.classList.remove('dragsource');
     }
     this.element_()?.classList.add('dragsource');
@@ -126,7 +149,8 @@ export class TabDrag {
         setInterval(() => this.edgeScroll_(), SCROLL_INTERVAL_MS);
     this.host_.setDragInProgressForDrag(true);
     this.host_.setTabStripNoDrag(true);
-    if (!this.dormant_) {
+    this.suppressClick_ = this.isGroup_;
+    if (!this.dormant_ && !this.isGroup_) {
       this.host_.activateTabForDrag(this.tabId_);
     }
 
@@ -142,7 +166,7 @@ export class TabDrag {
       row: element.getBoundingClientRect(),
       grabX: this.offsetX_,
       grabY: this.offsetY_,
-      detachable: !this.dormant_,
+      detachable: !this.dormant_ && !this.isGroup_,
     });
     element.classList.add('dragsource');
   }
@@ -171,7 +195,7 @@ export class TabDrag {
   private hoverDivider_(y: number) {
     const divider =
         this.host_.shadowRoot?.querySelector<HTMLElement>('#pinnedDivider');
-    if (!divider) {
+    if (!divider || this.isGroup_) {
       return;
     }
     const rect = divider.getBoundingClientRect();
@@ -200,32 +224,70 @@ export class TabDrag {
   }
 
   private reorder_() {
-    const items = [
-      ...(this.pinned_ ? this.host_.pinnedItemsForDrag :
-                         this.host_.itemsForDrag),
-    ];
-    const index = items.findIndex(item => item.id === this.tabId_);
+    const slots = this.host_.dragSlots(this.pinned_, this.isGroup_);
+    const kind: DragSlotKind = this.isGroup_ ? 'group' : 'tab';
+    const index =
+        slots.findIndex(slot => slot.id === this.tabId_ && slot.kind === kind);
     if (index === -1) {
       return;
     }
     const top = this.lastY_ - this.offsetY_;
-    const before = this.swapTarget_(items[index - 1]);
+    const before = this.swapTarget_(slots[index - 1]);
     if (before && top < this.midpoint_(before)) {
-      this.swap_(items, index, index - 1);
+      this.swap_(slots, index, index - 1);
       return;
     }
-    const after = this.swapTarget_(items[index + 1]);
+    const after = this.swapTarget_(slots[index + 1]);
     if (after && top + this.height_ > this.midpoint_(after)) {
-      this.swap_(items, index, index + 1);
+      this.swap_(slots, index, index + 1);
+      return;
+    }
+    if (this.regroup_(slots, index)) {
+      this.host_.applyDragSlots(slots, this.pinned_);
     }
   }
 
-  private swapTarget_(item: TabStripItem|undefined): HTMLElement|null {
-    if (!item || item.type !== 'tab') {
+  private regroup_(slots: DragSlot[], index: number): boolean {
+    const slot = slots[index];
+    if (this.pinned_ || this.isGroup_ || !slot) {
+      return false;
+    }
+    const previous = slots[index - 1];
+    let group = '';
+    if (previous) {
+      group = previous.kind === 'header' ? previous.id : previous.group;
+    }
+    if (group && index === slots.length - 1 && this.pulledPastEnd_(slot)) {
+      group = '';
+    }
+    if (group === slot.group) {
+      return false;
+    }
+    slot.group = group;
+    return true;
+  }
+
+  private pulledPastEnd_(slot: DragSlot): boolean {
+    const element = this.host_.dragElementFor(slot);
+    if (!element) {
+      return false;
+    }
+    return this.lastY_ >
+        element.getBoundingClientRect().bottom + this.height_ / 2;
+  }
+
+  private swapTarget_(slot: DragSlot|undefined): HTMLElement|null {
+    if (!slot) {
       return null;
     }
-    const element = this.host_.getTabElementForDrag(item.id);
-    return element && element.dormant === this.dormant_ ? element : null;
+    const element = this.host_.dragElementFor(slot);
+    if (!element) {
+      return null;
+    }
+    if (slot.kind !== 'tab' || this.isGroup_) {
+      return element;
+    }
+    return (element as TabElement).dormant === this.dormant_ ? element : null;
   }
 
   private midpoint_(element: HTMLElement): number {
@@ -233,13 +295,10 @@ export class TabDrag {
     return rect.top + rect.height / 2;
   }
 
-  private swap_(items: TabStripItem[], from: number, to: number) {
-    [items[from], items[to]] = [items[to]!, items[from]!];
-    if (this.pinned_) {
-      this.host_.setPinnedItemsForDrag(items);
-    } else {
-      this.host_.setItemsForDrag(items);
-    }
+  private swap_(slots: DragSlot[], from: number, to: number) {
+    [slots[from], slots[to]] = [slots[to]!, slots[from]!];
+    this.regroup_(slots, to);
+    this.host_.applyDragSlots(slots, this.pinned_);
   }
 
   private hoverDot_(x: number, y: number) {
@@ -268,10 +327,22 @@ export class TabDrag {
     this.tabId_ = '';
     this.dragging_ = false;
     this.dormant_ = false;
+    this.isGroup_ = false;
     this.crossesDivider_ = false;
   }
 
-  private element_(): TabElement|null {
-    return this.tabId_ ? this.host_.getTabElementForDrag(this.tabId_) : null;
+  consumeSuppressedClick(): boolean {
+    const suppressed = this.suppressClick_;
+    this.suppressClick_ = false;
+    return suppressed;
+  }
+
+  private element_(): HTMLElement|null {
+    return this.tabId_ ? this.host_.dragElementFor({
+      id: this.tabId_,
+      kind: this.isGroup_ ? 'group' : 'tab',
+      group: '',
+    }) :
+                         null;
   }
 }

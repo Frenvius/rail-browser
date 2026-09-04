@@ -15,16 +15,29 @@ export interface FolderSection {
   rows: PinnedRow[];
 }
 
+export interface TidySection {
+  group: Folder;
+  items: TabStripItem[];
+}
+
+export type LooseEntry = {
+  kind: 'item',
+  item: TabStripItem,
+}|{
+  kind: 'group',
+  section: TidySection,
+};
+
 export interface Sections {
   favoriteRows: PinnedRow[];
   folderSections: FolderSection[];
   pinnedRows: PinnedRow[];
-  looseItems: TabStripItem[];
+  looseEntries: LooseEntry[];
 }
 
 export function splitSections(
-    items: TabStripItem[], pinned: PinnedTabs, spaces: Spaces,
-    folders: Folders): Sections {
+    items: TabStripItem[], pinned: PinnedTabs, spaces: Spaces, folders: Folders,
+    tidyGroups: Folders): Sections {
   const claimed = new Set<string>();
 
   const rowsFor = (entries: PinnedEntry[]): PinnedRow[] => entries.map(entry => {
@@ -55,10 +68,29 @@ export function splitSections(
   const pinnedRows = rowsFor(spaceEntries.filter(
       entry => !entry.folder || !folders.byId(entry.folder)));
 
-  const looseItems: TabStripItem[] = [];
+  const looseEntries: LooseEntry[] = [];
+  const openSections = new Map<string, TidySection>();
+  const collect = (groupId: string, item: TabStripItem) => {
+    const group = groupId ? tidyGroups.byId(groupId) : undefined;
+    if (!group) {
+      looseEntries.push({kind: 'item', item});
+      return;
+    }
+    const open = openSections.get(group.id);
+    if (open) {
+      open.items.push(item);
+      return;
+    }
+    const section: TidySection = {group, items: [item]};
+    openSections.set(group.id, section);
+    looseEntries.push({kind: 'group', section});
+  };
+
   for (const row of spaces.rowsIn(spaces.activeId)) {
     if (!row.tabId) {
-      looseItems.push({type: 'tab', id: row.key, tabData: dormantTabData(row)});
+      collect(
+          row.group,
+          {type: 'tab', id: row.key, tabData: dormantTabData(row)});
       continue;
     }
     if (claimed.has(row.tabId) || pinned.byTab(row.tabId)) {
@@ -69,12 +101,15 @@ export function splitSections(
             candidate.type === 'tab' && candidate.id === row.tabId);
     if (item) {
       claimed.add(item.id);
-      looseItems.push(item);
+      collect(row.group, item);
     }
   }
 
-  looseItems.push(...items.filter(
-      item => item.type === 'group' && spaces.owns(item.id)));
+  for (const item of items) {
+    if (item.type === 'group' && spaces.owns(item.id)) {
+      looseEntries.push({kind: 'item', item});
+    }
+  }
 
-  return {favoriteRows, folderSections, pinnedRows, looseItems};
+  return {favoriteRows, folderSections, pinnedRows, looseEntries};
 }
