@@ -5428,7 +5428,7 @@ index 65d7e76ce5..2a771f01f5 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..a9d09b53c6 100644
+index aa4e0fe69e..863b713b9a 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -6562,7 +6562,7 @@ index aa4e0fe69e..a9d09b53c6 100644
    }
  
    getTabElementForDrag(id: string) {
-@@ -376,7 +1305,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -376,7 +1305,20 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    setItemsForDrag(items: TabStripItem[]) {
@@ -6571,10 +6571,20 @@ index aa4e0fe69e..a9d09b53c6 100644
 +        this.spaces_.activeId,
 +        items.filter(item => item.type === 'tab').map(item => item.id));
 +    this.refreshSections_();
++  }
++
++  get pinnedItemsForDrag() {
++    return this.pinnedRows_.map(row => row.item);
++  }
++
++  setPinnedItemsForDrag(items: TabStripItem[]) {
++    this.pinnedTabs_.reorder(
++        this.spaces_.activeId, items.map(item => item.id));
++    this.refreshSections_();
    }
  
    activateTabForDrag(id: string) {
-@@ -391,16 +1323,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -391,16 +1333,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      this.$.tabstrip.classList.toggle('nodrag', noDrag);
    }
  
@@ -6596,14 +6606,18 @@ index aa4e0fe69e..a9d09b53c6 100644
 +    return this.selectedIds_.length > 1 && this.selection_.has(id) ?
 +        [...this.selectedIds_] :
 +        [id];
-+  }
-+
+   }
+ 
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  private dragTabIds_(id: string): string[] {
 +    return this.dragRowIds_(id)
 +        .map(rowId => this.targetFor(rowId)?.tabId)
 +        .filter((tabId): tabId is string => !!tabId);
-+  }
-+
+   }
+ 
+-  closeDragElement() {
+-    this.dragDelegate_.onMouseUp();
 +  onTabDragMoved(x: number, y: number) {
 +    this.dragDelegate_.onDragMoved(x, y);
 +  }
@@ -6624,10 +6638,8 @@ index aa4e0fe69e..a9d09b53c6 100644
 +        this.unpinTab_(id);
 +      }
 +    }
-   }
- 
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
++  }
++
 +  moveTabToSpace(tabId: string, spaceId: string) {
 +    for (const id of this.dragRowIds_(tabId)) {
 +      const target = this.targetFor(id);
@@ -6635,10 +6647,8 @@ index aa4e0fe69e..a9d09b53c6 100644
 +        this.moveToSpace_(target, spaceId);
 +      }
 +    }
-   }
- 
--  closeDragElement() {
--    this.dragDelegate_.onMouseUp();
++  }
++
 +  protected onTabMousedown_(e: MouseEvent) {
 +    this.dragDelegate_.onMouseDown(e);
    }

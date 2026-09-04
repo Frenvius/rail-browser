@@ -11,6 +11,8 @@ export interface DragHandOff {
 }
 
 export interface RailDragHost extends TabDragHost {
+  pinnedItemsForDrag: TabStripItem[];
+  setPinnedItemsForDrag(items: TabStripItem[]): void;
   moveTabToSpace(tabId: string, spaceId: string): void;
   setTabPinned(tabId: string, pinned: boolean): void;
   handOffDrag(drag: DragHandOff): void;
@@ -86,9 +88,7 @@ export class TabDrag {
       return;
     }
     this.lastY_ = y;
-    if (!this.pinned_) {
-      this.reorder_();
-    }
+    this.reorder_();
     this.hoverDot_(x, y);
     this.hoverDivider_(y);
   }
@@ -200,7 +200,10 @@ export class TabDrag {
   }
 
   private reorder_() {
-    const items = [...this.host_.itemsForDrag];
+    const items = [
+      ...(this.pinned_ ? this.host_.pinnedItemsForDrag :
+                         this.host_.itemsForDrag),
+    ];
     const index = items.findIndex(item => item.id === this.tabId_);
     if (index === -1) {
       return;
@@ -232,7 +235,11 @@ export class TabDrag {
 
   private swap_(items: TabStripItem[], from: number, to: number) {
     [items[from], items[to]] = [items[to]!, items[from]!];
-    this.host_.setItemsForDrag(items);
+    if (this.pinned_) {
+      this.host_.setPinnedItemsForDrag(items);
+    } else {
+      this.host_.setItemsForDrag(items);
+    }
   }
 
   private hoverDot_(x: number, y: number) {

@@ -110,6 +110,24 @@ export class PinnedTabs {
     this.onChange_();
   }
 
+  reorder(spaceId: string, ids: string[]) {
+    const rows = this.entriesIn(spaceId);
+    const ordered = [...new Set(
+        ids.map(
+               id => rows.find(
+                   entry =>
+                       entry.key === id || (!!entry.tabId && entry.tabId === id)))
+            .filter(entry => entry !== undefined))];
+    if (!ordered.length) {
+      return;
+    }
+    const moving = new Set(ordered);
+    let next = 0;
+    this.entries_ =
+        this.entries_.map(entry => moving.has(entry) ? ordered[next++]! : entry);
+    this.onChange_();
+  }
+
   moveTo(key: string, spaceId: string) {
     const entry = this.byKey(key);
     if (!entry) {
