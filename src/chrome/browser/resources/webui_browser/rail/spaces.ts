@@ -3,7 +3,7 @@ import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 import type {SystemBackdropSettings} from '../browser.mojom-webui.js';
 import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 
-import type {PinnedTabs} from './pinned_tabs.js';
+import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
 
 export const SPACE_COLORS = [
@@ -850,6 +850,11 @@ export class Spaces {
   }
 }
 
+function storePin(entry: PinnedEntry): StoredPin {
+  const {home, homeTitle, homeFavicon, url, title, favicon} = entry;
+  return {home, homeTitle, homeFavicon, url, title, favicon};
+}
+
 export function serializeSidebar(
     spaces: Spaces, pinned: PinnedTabs): SidebarState {
   const stored: StoredSpace[] = spaces.all.map(space => ({
@@ -859,25 +864,14 @@ export function serializeSidebar(
     icon: space.icon,
     profile: space.profile,
     activeUrl: spaces.activeUrlIn(space.id),
-    pinned: pinned.entriesIn(space.id).map(({home, url, title, favicon}) => ({
-      home,
-      url,
-      title,
-      favicon,
-    })),
+    pinned: pinned.entriesIn(space.id).map(storePin),
     tabs: spaces.rowsIn(space.id)
               .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
               .map(({url, title, favicon}) => ({url, title, favicon})),
   }));
   const favoritesByProfile: Record<string, StoredPin[]> = {};
   for (const profileId of pinned.favoriteProfiles()) {
-    favoritesByProfile[profileId] =
-        pinned.favorites(profileId).map(({home, url, title, favicon}) => ({
-          home,
-          url,
-          title,
-          favicon,
-        }));
+    favoritesByProfile[profileId] = pinned.favorites(profileId).map(storePin);
   }
   return {
     activeSpace: spaces.activeId,

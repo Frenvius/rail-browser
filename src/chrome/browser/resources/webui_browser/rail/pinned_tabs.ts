@@ -22,6 +22,8 @@ export interface PinnedEntry {
   key: string;
   space: string;
   home: string;
+  homeTitle: string;
+  homeFavicon: string;
   url: string;
   title: string;
   favicon: string;
@@ -74,6 +76,8 @@ export class PinnedTabs {
           key: this.mintKey_(),
           space: spaceId,
           home: pin.home,
+          homeTitle: pin.homeTitle ?? pin.title,
+          homeFavicon: pin.homeFavicon ?? pin.favicon,
           url: pin.url,
           title: pin.title,
           favicon: pin.favicon,
@@ -87,6 +91,8 @@ export class PinnedTabs {
     return this.add_({
       space: spaceId,
       home: tab.url,
+      homeTitle: tab.title,
+      homeFavicon: tab.favicon.dataUrl,
       url: tab.url,
       title: tab.title,
       favicon: tab.favicon.dataUrl,
@@ -98,6 +104,8 @@ export class PinnedTabs {
     return this.add_({
       space: spaceId,
       home: row.url,
+      homeTitle: row.title,
+      homeFavicon: row.favicon,
       url: row.url,
       title: row.title,
       favicon: row.favicon,
@@ -160,6 +168,8 @@ export class PinnedTabs {
     }
     entry.tabId = '';
     entry.url = entry.home;
+    entry.title = entry.homeTitle;
+    entry.favicon = entry.homeFavicon;
     this.onChange_();
     return true;
   }

@@ -4,6 +4,8 @@ const SAVE_DELAY_MS = 500;
 
 export interface StoredPin {
   home: string;
+  homeTitle?: string;
+  homeFavicon?: string;
   url: string;
   title: string;
   favicon: string;
