@@ -5428,7 +5428,7 @@ index 65d7e76ce5..2a771f01f5 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..863b713b9a 100644
+index aa4e0fe69e..0598c395d8 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,7 @@
@@ -5706,7 +5706,7 @@ index aa4e0fe69e..863b713b9a 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,19 +398,696 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,19 +398,706 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -5999,6 +5999,9 @@ index aa4e0fe69e..863b713b9a 100644
 +      case 'unpin':
 +        this.unpinTab_(target.id);
 +        break;
++      case 'replace-pinned-url':
++        this.replacePinnedUrl_(target.id);
++        break;
 +      case 'favorite':
 +        this.toggleFavorite_(target);
 +        break;
@@ -6261,6 +6264,13 @@ index aa4e0fe69e..863b713b9a 100644
 +    }
 +  }
 +
++  private replacePinnedUrl_(id: string) {
++    const entry = this.entryFor_(id);
++    if (entry) {
++      this.pinnedTabs_.setHome(entry.key);
++    }
++  }
++
 +  private unpinTab_(id: string) {
 +    const entry = this.entryFor_(id);
 +    if (!entry) {
@@ -6404,7 +6414,7 @@ index aa4e0fe69e..863b713b9a 100644
      this.tabStripService_.activateTab(tabId);
      this.fire<TabActivated>('tab-activated', item.tabData);
    }
-@@ -288,6 +1105,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -288,6 +1115,12 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private updateTab(tab: Tab) {
@@ -6417,7 +6427,7 @@ index aa4e0fe69e..863b713b9a 100644
      const updated = this.updateItem_(tab.id, 'tab', {
        type: 'tab',
        id: tab.id,
-@@ -303,6 +1126,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -303,6 +1136,8 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private removeItem(id: NodeId) {
@@ -6426,7 +6436,7 @@ index aa4e0fe69e..863b713b9a 100644
      const itemToRemove = this.findItem_<TabStripItem>(id);
      this.setItems_(this.items_.filter(item => item.id !== id));
  
-@@ -311,8 +1136,105 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -311,8 +1146,105 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6533,7 +6543,7 @@ index aa4e0fe69e..863b713b9a 100644
    }
  
    // Utility helpers:
-@@ -334,11 +1256,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -334,11 +1266,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    private setActiveTab_(id: string) {
@@ -6550,7 +6560,7 @@ index aa4e0fe69e..863b713b9a 100644
    }
  
    private updateItemAt_(index: number, item: TabStripItem) {
-@@ -367,8 +1294,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -367,8 +1304,10 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // TabDragHost impl:
  
@@ -6562,7 +6572,7 @@ index aa4e0fe69e..863b713b9a 100644
    }
  
    getTabElementForDrag(id: string) {
-@@ -376,7 +1305,20 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -376,7 +1315,20 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    }
  
    setItemsForDrag(items: TabStripItem[]) {
@@ -6584,7 +6594,7 @@ index aa4e0fe69e..863b713b9a 100644
    }
  
    activateTabForDrag(id: string) {
-@@ -391,16 +1333,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -391,16 +1343,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      this.$.tabstrip.classList.toggle('nodrag', noDrag);
    }
  

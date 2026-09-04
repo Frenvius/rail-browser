@@ -136,6 +136,17 @@ export class PinnedTabs {
     this.onChange_();
   }
 
+  setHome(key: string) {
+    const entry = this.byKey(key);
+    if (!entry) {
+      return;
+    }
+    entry.home = entry.url;
+    entry.homeTitle = entry.title;
+    entry.homeFavicon = entry.favicon;
+    this.onChange_();
+  }
+
   moveTo(key: string, spaceId: string) {
     const entry = this.byKey(key);
     if (!entry) {

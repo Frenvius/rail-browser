@@ -17,7 +17,8 @@ export interface TabMenuTarget {
 
 export type TabCommand = 'close'|'close-others'|'close-right'|'copy-link'|
     'duplicate'|'favorite'|'move-to-space'|'move-to-window'|'mute'|
-    'new-tab-below'|'new-window'|'pin'|'reload'|'sleep'|'unpin';
+    'new-tab-below'|'new-window'|'pin'|'reload'|'replace-pinned-url'|'sleep'|
+    'unpin';
 
 export interface WindowRow {
   id: number;
@@ -82,6 +83,14 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
     {
       command: 'favorite',
       label: target.favorite ? 'Remove from Favorites' : 'Add to Favorites',
+    },
+    target.pinned && single && !target.dormant && {
+      command: 'edit-pinned',
+      label: 'Edit Pinned Page',
+      children: menuItems([{
+        command: 'replace-pinned-url',
+        label: 'Replace Pinned URL with Current',
+      }]),
     },
     separator(),
     target.hasOthers && single &&
