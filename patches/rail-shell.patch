@@ -5428,10 +5428,10 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..d0aa651160 100644
+index 65d7e76ce5..aa371c597b 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -4,27 +4,191 @@
+@@ -4,27 +4,193 @@
  
  import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
  
@@ -5527,18 +5527,6 @@ index 65d7e76ce5..d0aa651160 100644
 +  </div>
 +  <div id="pinnedDivider" ?data-busy="${this.tidyBusy_}"
 +      ?data-error="${this.tidyError_}">
-+    ${this.looseTabCount_() ? html`
-+      <button class="divider-action" id="tidyTabs" title="Group tabs"
-+          @click="${this.onTidyTabsClick_}">
-+        <cr-icon icon="webui-browser:tidy"></cr-icon>
-+        <span>Tidy</span>
-+      </button>
-+      <button class="divider-action" id="clearTabs" title="Close all tabs"
-+          @click="${this.onClearTabsClick_}">
-+        <cr-icon icon="cr:expand-more"></cr-icon>
-+        <span>Clear</span>
-+      </button>
-+    ` : ''}
 +  </div>
 +  <div id="tabList" class="${this.dropTarget_ ? 'droptarget' : ''}">
 +    ${this.looseEntries_.map(entry => entry.kind === 'item' ?
@@ -5617,6 +5605,20 @@ index 65d7e76ce5..d0aa651160 100644
 -  <cr-icon-button id="newTabButton" iron-icon="cr:add"
 -      title="$i18n{tooltipNewTab}"
 +  </div>
++  </div>
++  <div id="dividerActions">
++    ${this.looseTabCount_() ? html`
++      <button class="divider-action" id="tidyTabs" title="Group tabs"
++          @click="${this.onTidyTabsClick_}">
++        <cr-icon icon="webui-browser:tidy"></cr-icon>
++        <span>Tidy</span>
++      </button>
++      <button class="divider-action" id="clearTabs" title="Close all tabs"
++          @click="${this.onClearTabsClick_}">
++        <cr-icon icon="cr:expand-more"></cr-icon>
++        <span>Clear</span>
++      </button>
++    ` : ''}
 +  </div>
 +  <button id="newTabButton" title="$i18n{tooltipNewTab}"
        @click="${this.onNewTabButtonClick_}">

@@ -19,6 +19,7 @@
   flex-direction: column;
   min-height: 0;
   padding: 4px 0 0;
+  position: relative;
 }
 
 #tabstrip.nodrag {
@@ -49,8 +50,11 @@
   flex: 0 0 auto;
   flex-direction: column;
   gap: 2px;
-  min-height: 8px;
   padding: 0 6px;
+}
+
+#pinnedList:has(*) {
+  padding-bottom: 8px;
 }
 
 #favoritesList {
@@ -82,13 +86,34 @@
 
 #pinnedDivider {
   align-items: center;
+  anchor-name: --rail-pinned-divider;
   display: flex;
   flex: 0 0 auto;
-  height: 22px;
-  margin: 1px 6px 0;
+  height: 1px;
+  margin: 0 6px;
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
+}
+
+#pinnedDivider::after {
+  content: '';
+  height: 16px;
+  inset-inline: 0;
+  position: absolute;
+  top: -8px;
+}
+
+#dividerActions {
+  align-items: center;
+  display: flex;
+  inset-inline-end: 6px;
+  pointer-events: none;
+  position: absolute;
+  position-anchor: --rail-pinned-divider;
+  top: anchor(center);
+  transform: translateY(-50%);
+  z-index: 3;
 }
 
 #pinnedDivider::before {
@@ -141,7 +166,7 @@ webui-browser-tab.dragsource,
 
 .divider-action {
   align-items: center;
-  background: none;
+  background: var(--rail-chrome-strong);
   border: 0;
   border-radius: 4px;
   color: var(--rail-text-label);
@@ -156,12 +181,15 @@ webui-browser-tab.dragsource,
   overflow: hidden;
   padding: 1px 0;
   pointer-events: none;
+  position: relative;
   transition: opacity 300ms ease, max-width 0s 300ms, padding 0s 300ms,
       margin-inline-start 0s 300ms;
   white-space: nowrap;
+  z-index: 1;
 }
 
-#pinnedDivider:hover .divider-action {
+#tabstrip:has(#pinnedDivider:hover) .divider-action,
+#dividerActions:hover .divider-action {
   margin-inline-start: 6px;
   max-width: 200px;
   opacity: 1;
@@ -194,13 +222,13 @@ webui-browser-tab.dragsource,
   flex: 1 0 auto;
   flex-direction: column;
   gap: 2px;
-  padding: 0 6px 24px;
+  padding: 8px 6px 24px;
 }
 
 #tabList.droptarget {
+  border-radius: 8px;
   outline: 1px solid var(--rail-accent, #7c5cfc);
   outline-offset: -4px;
-  border-radius: 8px;
 }
 
 #newTabButton,
