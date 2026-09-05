@@ -65,6 +65,10 @@ export function isLoading(state: TabNetworkState): boolean {
       state === TabNetworkState.kLoading;
 }
 
+export function tabTitle(title: string, state: TabNetworkState): string {
+  return title || (isLoading(state) ? 'Loading...' : '');
+}
+
 export function tabTooltip(title: string, url: string): string {
   let host = '';
   try {

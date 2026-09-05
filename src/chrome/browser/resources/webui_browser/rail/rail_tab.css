@@ -152,27 +152,23 @@
     position: relative;
 }
 
-:host([loading]) #faviconContainer::after {
-    animation: rail-tab-spin 900ms linear infinite;
-    border: 1.5px solid transparent;
-    border-radius: 50%;
-    border-top-color: var(--rail-accent, #7c5cfc);
-    content: '';
-    height: 17px;
-    left: 50%;
-    position: absolute;
-    top: 50%;
-    width: 17px;
+:host([loading]) #favicon {
+    opacity: 0;
 }
 
-@keyframes rail-tab-spin {
-    from {
-        transform: translate(-50%, -50%) rotate(0deg);
-    }
-
-    to {
-        transform: translate(-50%, -50%) rotate(360deg);
-    }
+:host([loading]) #faviconContainer::after {
+    background-color: color-mix(in srgb, var(--rail-accent, #7c5cfc) 45%, #fff);
+    content: '';
+    height: 16px;
+    left: 50%;
+    mask-image: url(chrome://resources/images/throbber_small.svg);
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: 16px 16px;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
 }
 
 .close {

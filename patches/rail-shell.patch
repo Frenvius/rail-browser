@@ -5149,10 +5149,17 @@ index 4f1c700024..0ded2eee38 100644
 -        transparent 12px, var(--color-tab-background-active-frame-active) 13px);
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
-index 5d7329b14c..5acfcdd3a8 100644
+index 5d7329b14c..d68878aab4 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
-@@ -9,14 +9,35 @@ import type {TabElement} from './tab.js';
+@@ -4,19 +4,42 @@
+ 
+ import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
+ 
++import {tabTitle} from '../rail/tab_alerts.js';
++
+ import type {TabElement} from './tab.js';
+ 
  export function getHtml(this: TabElement) {
    // clang-format off
    return html`<!--_html_template_start_-->
@@ -5161,7 +5168,8 @@ index 5d7329b14c..5acfcdd3a8 100644
    <div id="faviconContainer">
      <div id="favicon"></div>
    </div>
-   <span id="title">${this.tabData.title}</span>
+-  <span id="title">${this.tabData.title}</span>
++  <span id="title">${tabTitle(this.tabData.title, this.tabData.networkState)}</span>
 +  <div id="alert" kind="${this.alertKind_()}" ?hidden="${!this.alertKind_()}"
 +      title="${this.alertLabel_()}">
 +    <svg viewBox="0 0 24 24" ?hidden="${this.alertKind_() !== 'record'}">
@@ -9326,7 +9334,7 @@ index e242711595..ba27170c35 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..e39fb89ab7 100644
+index 3fabca0c2a..7c67c22ab4 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -9600,18 +9608,20 @@ index 3fabca0c2a..e39fb89ab7 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -753,9 +897,7 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
+@@ -753,9 +897,10 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
 -  if (webui_browser::mojom::Page* page = GetWebUIBrowserUI()->page()) {
 -    page->SetFocusToLocationBar(is_user_initiated);
--  }
++  if (!is_user_initiated && command_bubble_ && command_bubble_->visible()) {
++    return;
+   }
 +  OpenRailCommandBar(/*new_tab_mode=*/false, is_user_initiated);
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -865,7 +1007,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
+@@ -865,7 +1010,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
    return ShowTranslateBubbleResult::kBrowserWindowNotValid;
  }
  
@@ -9619,7 +9629,7 @@ index 3fabca0c2a..e39fb89ab7 100644
  DownloadBubbleUIController*
  WebUIBrowserWindow::GetDownloadBubbleUIController() {
    NOTIMPLEMENTED_LOG_ONCE();
-@@ -882,6 +1023,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -882,6 +1026,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -9632,7 +9642,7 @@ index 3fabca0c2a..e39fb89ab7 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -947,6 +1094,12 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,6 +1097,12 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -9645,7 +9655,7 @@ index 3fabca0c2a..e39fb89ab7 100644
    int command_id;
    if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
-@@ -1138,6 +1291,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1138,6 +1294,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
      views::Widget::ClosedReason close_reason) {
    // TODO(webium): don't close a window during tab dragging.
  
@@ -9654,7 +9664,7 @@ index 3fabca0c2a..e39fb89ab7 100644
    // Give beforeunload handlers, the user, or policy the chance to cancel the
    // close before we hide the window below.
    if (!browser_->HandleBeforeClose()) {
-@@ -1181,6 +1336,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+@@ -1181,6 +1339,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
        true /* include_app_name */);
  }
  
@@ -9702,7 +9712,7 @@ index 3fabca0c2a..e39fb89ab7 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
      gfx::NativeView child,
      const gfx::Point& location) {
-@@ -1217,6 +1413,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1416,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  
