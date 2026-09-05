@@ -105,10 +105,12 @@
 }
 
 #dividerActions {
+  -webkit-app-region: no-drag;
   align-items: center;
+  app-region: no-drag;
   display: flex;
   inset-inline-end: 6px;
-  pointer-events: none;
+  pointer-events: auto;
   position: absolute;
   position-anchor: --rail-pinned-divider;
   top: anchor(center);
@@ -207,7 +209,7 @@ webui-browser-tab.dragsource,
 }
 
 .divider-action:hover {
-  background: var(--rail-hover);
+  background: color-mix(in srgb, var(--rail-chrome-strong), white 10%);
   color: var(--rail-text);
 }
 
