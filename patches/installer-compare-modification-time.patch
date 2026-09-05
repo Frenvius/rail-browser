@@ -1,5 +1,5 @@
 diff --git a/chrome/installer/util/duplicate_tree_detector.cc b/chrome/installer/util/duplicate_tree_detector.cc
-index 64bf062e47..d25fcf6220 100644
+index 64bf062e47..9927c70bf3 100644
 --- a/chrome/installer/util/duplicate_tree_detector.cc
 +++ b/chrome/installer/util/duplicate_tree_detector.cc
 @@ -39,7 +39,6 @@ bool IsIdenticalFileHierarchy(const base::FilePath& src_path,
@@ -10,11 +10,16 @@ index 64bf062e47..d25fcf6220 100644
      // For developer builds, also check last modification time (to make sure
      // version dir DLLs are replaced on over-install even if the tested change
      // doesn't happen to change a given DLL's size).
-@@ -49,7 +48,6 @@ bool IsIdenticalFileHierarchy(const base::FilePath& src_path,
+@@ -49,7 +48,11 @@ bool IsIdenticalFileHierarchy(const base::FilePath& src_path,
                << dest_info.last_modified << ")";
        return false;
      }
 -#endif
++    if (!base::ContentsEqual(src_path, dest_path)) {
++      VLOG(1) << "Files differ in content: " << src_path << " vs "
++              << dest_path;
++      return false;
++    }
      // The files are identical.
      return true;
    }
