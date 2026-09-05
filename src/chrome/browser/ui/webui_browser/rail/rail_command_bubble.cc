@@ -103,7 +103,7 @@ RailCommandBubble::~RailCommandBubble() {
 }
 
 bool RailCommandBubble::visible() const {
-  return showing_;
+  return showing_ || waiting_ready_;
 }
 
 void RailCommandBubble::SetCommandContext(
