@@ -2,7 +2,8 @@ import {loadTimeData} from '//resources/js/load_time_data.js';
 
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
-export const INCOGNITO = loadTimeData.valueExists('incognito') &&
+export const INCOGNITO = loadTimeData.isInitialized() &&
+    loadTimeData.valueExists('incognito') &&
     loadTimeData.getBoolean('incognito');
 
 export const MINI = new URLSearchParams(location.search).has('mini');
@@ -23,6 +24,7 @@ export interface StoredFolder {
   id: string;
   name: string;
   expanded: boolean;
+  after?: string;
 }
 
 export interface StoredTab {

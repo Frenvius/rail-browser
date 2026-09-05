@@ -28,8 +28,17 @@ export type LooseEntry = {
   section: TidySection,
 };
 
+export type PinnedEntryRow = {
+  kind: 'row',
+  row: PinnedRow,
+}|{
+  kind: 'folder',
+  section: FolderSection,
+};
+
 export interface Sections {
   favoriteRows: PinnedRow[];
+  pinnedEntries: PinnedEntryRow[];
   folderSections: FolderSection[];
   pinnedRows: PinnedRow[];
   looseEntries: LooseEntry[];
@@ -59,14 +68,40 @@ export function splitSections(
   const favoriteRows =
       rowsFor(pinned.favorites(spaces.profileOf(spaces.activeId)));
   const spaceEntries = pinned.entriesIn(spaces.activeId);
-  const folderSections = folders.in(spaces.activeId)
-                             .map(folder => ({
-                                    folder,
-                                    rows: rowsFor(spaceEntries.filter(
-                                        entry => entry.folder === folder.id)),
-                                  }));
-  const pinnedRows = rowsFor(spaceEntries.filter(
-      entry => !entry.folder || !folders.byId(entry.folder)));
+  const sectionsByFolder = new Map<string, FolderSection>(
+      folders.in(spaces.activeId).map(folder => [folder.id, {folder, rows: []}]));
+  const pinnedEntries: PinnedEntryRow[] = [];
+  const empty = [...sectionsByFolder.values()].filter(
+      section => !spaceEntries.some(entry => entry.folder === section.folder.id));
+  const placeEmpty = (after: string) => {
+    for (const section of empty.filter(
+             section => section.folder.after === after)) {
+      pinnedEntries.push({kind: 'folder', section});
+    }
+  };
+
+  placeEmpty('');
+  for (const entry of spaceEntries) {
+    const [row] = rowsFor([entry]);
+    const section =
+        entry.folder ? sectionsByFolder.get(entry.folder) : undefined;
+    if (!section) {
+      pinnedEntries.push({kind: 'row', row: row!});
+      placeEmpty(entry.key);
+      continue;
+    }
+    if (!section.rows.length) {
+      pinnedEntries.push({kind: 'folder', section});
+    }
+    section.rows.push(row!);
+    placeEmpty(entry.key);
+  }
+
+  const folderSections =
+      pinnedEntries.filter(entry => entry.kind === 'folder')
+          .map(entry => entry.section);
+  const pinnedRows = pinnedEntries.filter(entry => entry.kind === 'row')
+                         .map(entry => entry.row);
 
   const looseEntries: LooseEntry[] = [];
   const openSections = new Map<string, TidySection>();
@@ -111,5 +146,5 @@ export function splitSections(
     }
   }
 
-  return {favoriteRows, folderSections, pinnedRows, looseEntries};
+  return {favoriteRows, pinnedEntries, folderSections, pinnedRows, looseEntries};
 }

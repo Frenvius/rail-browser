@@ -5,6 +5,7 @@ export interface Folder {
   space: string;
   name: string;
   expanded: boolean;
+  after: string;
 }
 
 export class Folders {
@@ -31,6 +32,7 @@ export class Folders {
           space: space.id,
           name: stored.name,
           expanded: stored.expanded !== false,
+          after: stored.after ?? '',
         });
       }
     }
@@ -38,15 +40,44 @@ export class Folders {
 
   storedIn(spaceId: string): StoredFolder[] {
     return this.in(spaceId).map(
-        ({id, name, expanded}) => ({id, name, expanded}));
+        ({id, name, expanded, after}) => ({id, name, expanded, after}));
+  }
+
+  setAfter(id: string, after: string) {
+    const folder = this.byId(id);
+    if (!folder || folder.after === after) {
+      return;
+    }
+    folder.after = after;
+    this.onChange_();
   }
 
   create(spaceId: string, name: string): Folder {
-    const folder:
-        Folder = {id: crypto.randomUUID(), space: spaceId, name, expanded: true};
+    const folder: Folder = {
+      id: crypto.randomUUID(),
+      space: spaceId,
+      name,
+      expanded: true,
+      after: '',
+    };
     this.folders_.push(folder);
     this.onChange_();
     return folder;
+  }
+
+  reorder(spaceId: string, ids: string[]) {
+    const ordered = [...new Set(
+        ids.map(id => this.folders_.find(
+                   folder => folder.id === id && folder.space === spaceId))
+            .filter(folder => folder !== undefined))];
+    if (!ordered.length) {
+      return;
+    }
+    const moving = new Set(ordered);
+    let next = 0;
+    this.folders_ =
+        this.folders_.map(folder => moving.has(folder) ? ordered[next++]! : folder);
+    this.onChange_();
   }
 
   rename(id: string, name: string) {

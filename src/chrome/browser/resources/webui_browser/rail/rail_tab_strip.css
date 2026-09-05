@@ -124,8 +124,15 @@
 }
 
 webui-browser-tab.dragsource,
+.folder.dragsource,
 .tidygroup.dragsource {
   opacity: 0.3;
+}
+
+.folder-row.droptarget {
+  background: rgb(255 255 255 / 10%);
+  outline: 1px solid var(--rail-accent, #7c5cfc);
+  outline-offset: -1px;
 }
 
 #pinnedDivider.droptarget::before {
