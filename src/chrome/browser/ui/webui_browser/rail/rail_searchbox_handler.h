@@ -35,6 +35,21 @@ class RailSearchboxHandler : public ContextualSearchboxHandler {
   void QueryAutocomplete(const std::u16string& input,
                          bool prevent_inline_autocomplete,
                          uint32_t cursor_position) override;
+  void OpenAutocompleteMatch(uint8_t line,
+                             const GURL& url,
+                             bool are_matches_showing,
+                             uint8_t mouse_button,
+                             bool alt_key,
+                             bool ctrl_key,
+                             bool meta_key,
+                             bool shift_key) override;
+
+  void set_open_in_new_tab(bool open_in_new_tab) {
+    open_in_new_tab_ = open_in_new_tab;
+  }
+
+ private:
+  bool open_in_new_tab_ = false;
 };
 
 }  // namespace rail

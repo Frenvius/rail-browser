@@ -7562,27 +7562,10 @@ index 45603d71ea..bf167924d3 100644
    `;
  }
 diff --git a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts b/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
-index cee7a49569..5ef57054bd 100644
+index cee7a49569..1321bff375 100644
 --- a/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
 +++ b/chrome/browser/resources/webui_browser/webui_browser_searchbox.ts
-@@ -10,6 +10,7 @@ import type {SearchboxDropdownElement} from '//resources/cr_components/searchbox
- import type {SearchboxInputElement} from '//resources/cr_components/searchbox/searchbox_input.js';
- import type {SearchboxMixinInterface} from '//resources/cr_components/searchbox/searchbox_mixin.js';
- import {SearchboxMixin} from '//resources/cr_components/searchbox/searchbox_mixin.js';
-+import {mojoTimeTicks} from '//resources/cr_components/searchbox/utils.js';
- import {I18nMixinLit} from '//resources/cr_elements/i18n_mixin_lit.js';
- import {WebUiListenerMixinLit} from '//resources/cr_elements/web_ui_listener_mixin_lit.js';
- import {loadTimeData} from '//resources/js/load_time_data.js';
-@@ -28,6 +29,8 @@ export interface WebuiBrowserSearchboxElement {
-   };
- }
- 
-+const TAB_ICON = 'tab_cr23.svg';
-+
- const WebuiBrowserSearchboxElementBase =
-     SearchboxMixin(I18nMixinLit(WebUiListenerMixinLit(CrLitElement)));
- 
-@@ -116,6 +119,21 @@ export class WebuiBrowserSearchboxElement extends
+@@ -116,6 +116,21 @@ export class WebuiBrowserSearchboxElement extends
      }
    }
  
@@ -7604,51 +7587,6 @@ index cee7a49569..5ef57054bd 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
  
-@@ -129,6 +147,44 @@ export class WebuiBrowserSearchboxElement extends
-     this.initialInputScrollHeight = this.$.input.scrollHeight;
-   }
- 
-+  // Set while the command bar was opened for a new tab: whatever the user
-+  // picks has to land in a tab of its own instead of replacing the active one.
-+  newTabMode: boolean = false;
-+
-+  override navigateToMatch(matchIndex: number, e: KeyboardEvent|MouseEvent) {
-+    // Read before firing: the host closes the command bar synchronously on
-+    // this event, and closing clears the mode.
-+    const opensInNewTab = this.newTabMode;
-+    const match = this.result?.matches?.[matchIndex];
-+    const tabSwitchIndex = match?.actions?.findIndex(
-+                               action => action.iconPath.endsWith(TAB_ICON)) ??
-+        -1;
-+    if (tabSwitchIndex >= 0) {
-+      this.fire('searchbox-match-opened');
-+      this.pageHandler_.executeAction(
-+          matchIndex, tabSwitchIndex, match!.destinationUrl,
-+          mojoTimeTicks(Date.now()), /*mouse_button=*/ 0, /*alt_key=*/ false,
-+          /*ctrl_key=*/ false, /*meta_key=*/ false, /*shift_key=*/ false);
-+      return;
-+    }
-+    this.fire('searchbox-match-opened');
-+    if (!opensInNewTab) {
-+      super.navigateToMatch(matchIndex, e);
-+      return;
-+    }
-+    // Disposition is derived from the modifiers of the accepting event, so the
-+    // new foreground tab is requested by forging ctrl+shift.
-+    const forced = {
-+      button: 0,
-+      altKey: false,
-+      ctrlKey: true,
-+      metaKey: false,
-+      shiftKey: true,
-+      preventDefault: () => e.preventDefault(),
-+    };
-+    super.navigateToMatch(matchIndex, forced as unknown as MouseEvent);
-+  }
-+
-   focusInput() {
-     this.$.input.focus();
-   }
 diff --git a/chrome/browser/resources/webui_browser/webview.ts b/chrome/browser/resources/webui_browser/webview.ts
 index a94af80a25..19d95edcd0 100644
 --- a/chrome/browser/resources/webui_browser/webview.ts

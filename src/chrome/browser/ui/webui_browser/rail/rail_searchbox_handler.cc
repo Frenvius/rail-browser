@@ -72,4 +72,23 @@ void RailSearchboxHandler::QueryAutocomplete(const std::u16string& input,
       input, prevent_inline_autocomplete, cursor_position);
 }
 
+void RailSearchboxHandler::OpenAutocompleteMatch(
+    uint8_t line,
+    const GURL& url,
+    bool are_matches_showing,
+    uint8_t mouse_button,
+    bool alt_key,
+    bool ctrl_key,
+    bool meta_key,
+    bool shift_key) {
+  if (open_in_new_tab_) {
+    ContextualSearchboxHandler::OpenAutocompleteMatch(
+        line, url, are_matches_showing, 0, false, true, false, true);
+    return;
+  }
+  ContextualSearchboxHandler::OpenAutocompleteMatch(
+      line, url, are_matches_showing, mouse_button, alt_key, ctrl_key,
+      meta_key, shift_key);
+}
+
 }  // namespace rail

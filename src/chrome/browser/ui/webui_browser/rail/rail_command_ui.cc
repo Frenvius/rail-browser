@@ -138,6 +138,7 @@ void RailCommandUI::CreatePageHandler(
       web_ui()->GetWebContents(),
       base::BindRepeating(&RailCommandUI::GetOrCreateContextualSessionHandle,
                           base::Unretained(this)));
+  searchbox_handler_->set_open_in_new_tab(new_tab_mode_);
 }
 
 Profile* RailCommandUI::CurrentProfile() {
@@ -152,6 +153,10 @@ void RailCommandUI::Open(const std::string& text,
                          bool new_tab_mode,
                          int width,
                          rail_command::mojom::CommandContextPtr context) {
+  new_tab_mode_ = new_tab_mode;
+  if (searchbox_handler_) {
+    searchbox_handler_->set_open_in_new_tab(new_tab_mode_);
+  }
   Profile* profile = CurrentProfile();
   context->profile_changed = searchbox_profile_ && searchbox_profile_ != profile;
   context->profile_tabs = TabsInProfile(WindowFor(web_ui()), profile);

@@ -65,7 +65,7 @@ export class RailCommandElement extends CrLitElement {
   }
 
   private async onOpen_(
-      text: string, selectAll: boolean, newTabMode: boolean, width: number,
+      text: string, selectAll: boolean, _newTabMode: boolean, width: number,
       context: CommandContext) {
     document.body.style.width = `${width}px`;
     document.documentElement.style.setProperty(
@@ -90,7 +90,6 @@ export class RailCommandElement extends CrLitElement {
     if (context.profileChanged) {
       this.$.address.rebindProxy();
     }
-    this.$.address.newTabMode = newTabMode;
     this.$.address.setInputText(text);
     this.$.address.focusInput();
     if (selectAll) {

@@ -102,6 +102,7 @@ class RailCommandUI : public TopChromeWebUIController,
   };
 
   std::optional<PendingOpen> pending_open_;
+  bool new_tab_mode_ = false;
   base::RepeatingCallback<void(int)> ready_callback_;
 
   mojo::Receiver<rail_command::mojom::PageHandlerFactory>
