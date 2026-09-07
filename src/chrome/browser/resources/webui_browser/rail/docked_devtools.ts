@@ -15,6 +15,8 @@ export class DockedDevTools {
   private webview?: WebviewElement;
   private guestId: string = '';
   private inspected?: TabWebviewElement;
+  private boundsKey: string = '';
+  private resizeReleaseTimer: number = 0;
 
   constructor(host: DockedDevToolsHost) {
     this.host = host;
@@ -30,10 +32,25 @@ export class DockedDevTools {
       await webview.updateComplete;
       webview.attachGuest(guestId);
     }
+    const boundsKey = [
+      inspectedBounds.x,
+      inspectedBounds.y,
+      inspectedBounds.width,
+      inspectedBounds.height,
+      hideInspected,
+    ].join(':');
+    const resizing = this.boundsKey !== '' && this.boundsKey !== boundsKey;
+    this.boundsKey = boundsKey;
     this.layOutInspectedContents(inspectedBounds, hideInspected);
+    if (resizing) {
+      this.holdResizeSurface();
+    }
   }
 
   close() {
+    window.clearTimeout(this.resizeReleaseTimer);
+    this.resizeReleaseTimer = 0;
+    this.boundsKey = '';
     if (this.webview) {
       this.webview.remove();
       this.webview = undefined;
@@ -54,6 +71,19 @@ export class DockedDevTools {
   private release(webview: TabWebviewElement) {
     webview.classList.remove('docked', 'hiddenByDevtools');
     webview.removeAttribute('style');
+  }
+
+  private holdResizeSurface() {
+    const inspected = this.inspected;
+    if (!inspected) {
+      return;
+    }
+    window.clearTimeout(this.resizeReleaseTimer);
+    inspected.style.pointerEvents = 'none';
+    this.resizeReleaseTimer = window.setTimeout(() => {
+      inspected.style.pointerEvents = '';
+      this.resizeReleaseTimer = 0;
+    }, 750);
   }
 
   private layOutInspectedContents(bounds: Rect, hideInspected: boolean) {

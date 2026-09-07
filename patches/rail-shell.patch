@@ -3861,6 +3861,80 @@ index 7ed817af4c..a982765715 100644
  };
  
  #endif  // CHROME_BROWSER_DEVTOOLS_DEVTOOLS_UI_CONTROLLER_H_
+diff --git a/chrome/browser/devtools/devtools_window_views.cc b/chrome/browser/devtools/devtools_window_views.cc
+index 19d63814cb..aed2081183 100644
+--- a/chrome/browser/devtools/devtools_window_views.cc
++++ b/chrome/browser/devtools/devtools_window_views.cc
+@@ -9,12 +9,19 @@
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/webui_browser/webui_browser_window.h"  // nogncheck
+ #include "chrome/browser/ui/web_modal/browser_window_modal_dialog_delegate.h"  // nogncheck
+ #include "components/input/native_web_keyboard_event.h"
+ #include "components/web_modal/web_contents_modal_dialog_host.h"
+ #include "components/web_modal/web_contents_modal_dialog_manager.h"
+ #include "content/public/browser/keyboard_event_processing_result.h"
++#include "content/public/browser/navigation_controller.h"
+ #include "content/public/browser/render_process_host.h"
++#include "third_party/blink/public/common/input/web_input_event.h"
++#include "ui/base/accelerators/accelerator.h"
++#include "ui/content_accelerators/accelerator_util.h"
++#include "ui/events/event_constants.h"
++#include "ui/events/keycodes/keyboard_codes.h"
+ 
+ #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+ #include "chrome/browser/printing/print_preview_dialog_controller.h"
+@@ -78,7 +85,49 @@ DevToolsWindow* DevToolsWindow::AsDevToolsWindow(
+ content::KeyboardEventProcessingResult DevToolsWindow::PreHandleKeyboardEvent(
+     WebContents* source,
+     const input::NativeWebKeyboardEvent& event) {
++  if (event.GetType() == blink::WebInputEvent::Type::kRawKeyDown) {
++    const ui::Accelerator accelerator =
++        ui::GetAcceleratorFromNativeWebKeyboardEvent(event);
++    const bool reload =
++        accelerator == ui::Accelerator(ui::VKEY_R, ui::EF_CONTROL_DOWN) ||
++        accelerator == ui::Accelerator(ui::VKEY_F5, ui::EF_NONE);
++    const bool bypass_cache =
++        accelerator == ui::Accelerator(
++                           ui::VKEY_R,
++                           ui::EF_CONTROL_DOWN | ui::EF_SHIFT_DOWN) ||
++        accelerator == ui::Accelerator(ui::VKEY_F5, ui::EF_CONTROL_DOWN) ||
++        accelerator == ui::Accelerator(ui::VKEY_F5, ui::EF_SHIFT_DOWN);
++    if (reload || bypass_cache) {
++      WebContents* inspected = GetInspectedWebContents();
++      if (inspected) {
++        inspected->GetController().Reload(
++            bypass_cache ? content::ReloadType::BYPASSING_CACHE
++                         : content::ReloadType::NORMAL,
++            true);
++        return content::KeyboardEventProcessingResult::HANDLED;
++      }
++    }
++  }
++
+   BrowserWindow* inspected_window = GetInspectedBrowserWindow();
++  if (inspected_window && WebUIBrowserWindow::FromNativeWindow(
++                              inspected_window->GetNativeWindow())) {
++    if (event.GetType() != blink::WebInputEvent::Type::kRawKeyDown) {
++      return content::KeyboardEventProcessingResult::NOT_HANDLED;
++    }
++    const ui::Accelerator accelerator =
++        ui::GetAcceleratorFromNativeWebKeyboardEvent(event);
++    const bool function_key = accelerator.key_code() >= ui::VKEY_F1 &&
++                              accelerator.key_code() <= ui::VKEY_F24;
++    const bool shortcut =
++        !accelerator.IsAltGrDown() &&
++        (accelerator.IsCtrlDown() || accelerator.IsAltDown() ||
++         accelerator.IsCmdDown() || accelerator.IsFunctionDown() ||
++         function_key);
++    return shortcut
++               ? content::KeyboardEventProcessingResult::NOT_HANDLED_IS_SHORTCUT
++               : content::KeyboardEventProcessingResult::NOT_HANDLED;
++  }
+   if (inspected_window) {
+     return inspected_window->PreHandleKeyboardEvent(event);
+   }
 diff --git a/chrome/browser/extensions/chrome_extension_function_details.cc b/chrome/browser/extensions/chrome_extension_function_details.cc
 index 9cfacb4358..8bf5c7b1a2 100644
 --- a/chrome/browser/extensions/chrome_extension_function_details.cc
@@ -9485,7 +9559,7 @@ index e242711595..ba27170c35 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..cb5cd79878 100644
+index 3fabca0c2a..790483d499 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -9524,7 +9598,15 @@ index 3fabca0c2a..cb5cd79878 100644
  #include "chrome/browser/ui/webui_browser/webui_stub_location_bar.h"
  #include "chrome/browser/ui/zoom/browser_window_zoom_observer.h"
  #include "chrome/common/chrome_render_frame.mojom.h"
-@@ -53,6 +62,11 @@
+@@ -41,6 +50,7 @@
+ #include "components/sharing_message/sharing_dialog_data.h"
+ #include "components/web_modal/web_contents_modal_dialog_manager.h"
+ #include "content/public/browser/keyboard_event_processing_result.h"
++#include "content/public/browser/navigation_controller.h"
+ #include "content/public/browser/web_contents.h"
+ #include "content/public/browser/web_contents_observer.h"
+ #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
+@@ -53,6 +63,11 @@
  #include "ui/views/widget/widget.h"
  #include "ui/views/widget/widget_delegate.h"
  
@@ -9536,7 +9618,7 @@ index 3fabca0c2a..cb5cd79878 100644
  #if BUILDFLAG(IS_CHROMEOS)
  #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
  #endif  // BUILDFLAG(IS_CHROMEOS)
-@@ -104,6 +118,15 @@ class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
+@@ -104,6 +119,15 @@ class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
  
    views::ClientView* CreateClientView(views::Widget* widget) override;
    std::u16string GetWindowTitle() const override;
@@ -9552,7 +9634,7 @@ index 3fabca0c2a..cb5cd79878 100644
    bool ShouldDescendIntoChildForEventHandling(
        gfx::NativeView child,
        const gfx::Point& location) override;
-@@ -124,24 +147,42 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -124,24 +148,42 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
    views::Widget::InitParams params(
        views::Widget::InitParams::CLIENT_OWNS_WIDGET);
    params.name = "WebUIBrowserWindow";
@@ -9597,7 +9679,7 @@ index 3fabca0c2a..cb5cd79878 100644
  
    modal_dialog_host_ = std::make_unique<WebUIBrowserModalDialogHost>(this);
    extensions_container_ = std::make_unique<WebUIToolbarExtensionsContainer>(
-@@ -150,7 +191,9 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -150,7 +192,9 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
        std::make_unique<ui::ScopedUnownedUserData<ExtensionsContainer>>(
            browser_->GetUnownedUserDataHost(), *extensions_container_);
  
@@ -9608,7 +9690,7 @@ index 3fabca0c2a..cb5cd79878 100644
    web_view_ = widget_->SetClientContentsView(std::move(web_view));
    // Set the ColorProviderSource after attaching to the WebView otherwise
    // attaching overwrites it.
-@@ -182,17 +225,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -182,17 +226,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
            base::BindRepeating(&WebUIBrowserWindow::OnContentsElementShown,
                                base::Unretained(this)));
  
@@ -9636,7 +9718,7 @@ index 3fabca0c2a..cb5cd79878 100644
    widget_.reset();
  }
  
-@@ -262,6 +315,11 @@ void WebUIBrowserWindow::Show() {
+@@ -262,6 +316,11 @@ void WebUIBrowserWindow::Show() {
  // The code about Browser's activation state is copied from
  // BrowserView::PaintAsActiveChanged().
  void WebUIBrowserWindow::PaintAsActiveChanged() {
@@ -9648,7 +9730,7 @@ index 3fabca0c2a..cb5cd79878 100644
    if (widget_->ShouldPaintAsActive()) {
      browser_->DidBecomeActive();
    } else {
-@@ -336,8 +394,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
+@@ -336,8 +395,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
  }
  
  bool WebUIBrowserWindow::IsOnCurrentWorkspace() const {
@@ -9662,7 +9744,7 @@ index 3fabca0c2a..cb5cd79878 100644
  }
  
  bool WebUIBrowserWindow::IsVisibleOnScreen() const {
-@@ -584,6 +645,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
+@@ -584,6 +646,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
        continue;
      }
  
@@ -9673,7 +9755,7 @@ index 3fabca0c2a..cb5cd79878 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -617,10 +682,92 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -617,10 +683,107 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -9688,6 +9770,21 @@ index 3fabca0c2a..cb5cd79878 100644
 +      page->RunRailCommand(rail_command);
 +      return true;
 +    }
++  }
++
++  if (command_id == IDC_RELOAD ||
++      command_id == IDC_RELOAD_BYPASSING_CACHE) {
++    content::WebContents* active =
++        browser_->tab_strip_model()->GetActiveWebContents();
++    if (!active) {
++      return false;
++    }
++    active->GetController().Reload(
++        command_id == IDC_RELOAD_BYPASSING_CACHE
++            ? content::ReloadType::BYPASSING_CACHE
++            : content::ReloadType::NORMAL,
++        true);
++    return true;
 +  }
 +
    return chrome::ExecuteCommand(browser_.get(), command_id,
@@ -9766,7 +9863,7 @@ index 3fabca0c2a..cb5cd79878 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -691,6 +838,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +854,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -9775,7 +9872,7 @@ index 3fabca0c2a..cb5cd79878 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -753,9 +902,10 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
+@@ -753,9 +918,10 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
@@ -9788,7 +9885,7 @@ index 3fabca0c2a..cb5cd79878 100644
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -865,7 +1015,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
+@@ -865,7 +1031,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
    return ShowTranslateBubbleResult::kBrowserWindowNotValid;
  }
  
@@ -9796,7 +9893,7 @@ index 3fabca0c2a..cb5cd79878 100644
  DownloadBubbleUIController*
  WebUIBrowserWindow::GetDownloadBubbleUIController() {
    NOTIMPLEMENTED_LOG_ONCE();
-@@ -882,6 +1031,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -882,6 +1047,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -9809,7 +9906,7 @@ index 3fabca0c2a..cb5cd79878 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -947,6 +1102,12 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,11 +1118,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -9822,7 +9919,38 @@ index 3fabca0c2a..cb5cd79878 100644
    int command_id;
    if (!FindCommandIdForAccelerator(accelerator, &command_id)) {
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
-@@ -1138,6 +1299,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+   }
+ 
++  if (event.GetType() == blink::WebInputEvent::Type::kRawKeyDown &&
++      (command_id == IDC_RELOAD ||
++       command_id == IDC_RELOAD_BYPASSING_CACHE)) {
++    return AcceleratorPressed(accelerator)
++               ? content::KeyboardEventProcessingResult::HANDLED
++               : content::KeyboardEventProcessingResult::NOT_HANDLED_IS_SHORTCUT;
++  }
++
+   // TODO(webium): Handle shortcuts that are registered in the FocusManager.
+   // We handle only browser window shortcuts here. Secondary UIs can
+   // registered their own shortcuts (e.g. Ctrl+Enter closes the Find Bar) via
+@@ -973,7 +1158,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+ #if !BUILDFLAG(IS_MAC)
+ bool WebUIBrowserWindow::HandleKeyboardEvent(
+     const input::NativeWebKeyboardEvent& event) {
+-  return false;
++  if (event.GetType() != blink::WebInputEvent::Type::kRawKeyDown) {
++    return false;
++  }
++  const ui::Accelerator accelerator =
++      ui::GetAcceleratorFromNativeWebKeyboardEvent(event);
++  if (rail::HandleRailAccelerator(accelerator, GetWebUIBrowserUI()->page(),
++                                  rail::IsMiniWindow(browser_))) {
++    return true;
++  }
++  return accelerator_manager_.Process(accelerator);
+ }
+ 
+ views::NativeWidget* WebUIBrowserWindow::CreateNativeWidget() {
+@@ -1138,6 +1332,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
      views::Widget::ClosedReason close_reason) {
    // TODO(webium): don't close a window during tab dragging.
  
@@ -9831,7 +9959,7 @@ index 3fabca0c2a..cb5cd79878 100644
    // Give beforeunload handlers, the user, or policy the chance to cancel the
    // close before we hide the window below.
    if (!browser_->HandleBeforeClose()) {
-@@ -1181,6 +1344,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+@@ -1181,6 +1377,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
        true /* include_app_name */);
  }
  
@@ -9879,7 +10007,7 @@ index 3fabca0c2a..cb5cd79878 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
      gfx::NativeView child,
      const gfx::Point& location) {
-@@ -1217,6 +1421,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1454,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  
