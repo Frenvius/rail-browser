@@ -20,8 +20,8 @@ import {openSpaceMenu} from './space_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_MATERIAL, spaceHex} from './spaces.js';
 
-export type SpaceCommand = 'create'|'move'|'newprofile'|'remove'|'rename'|
-    'restyle'|'select'|'setprofile';
+export type SpaceCommand = 'create'|'export'|'move'|'newprofile'|'remove'|
+    'rename'|'restyle'|'select'|'setprofile';
 
 export interface SpaceCommandDetail {
   command: SpaceCommand;
@@ -30,6 +30,7 @@ export interface SpaceCommandDetail {
   color: string;
   icon: string;
   delta: number;
+  destination: string;
   profile: string;
 }
 
@@ -129,6 +130,7 @@ export class SpaceBarElement extends CrLitElement {
         {
           space,
           profiles: this.profiles,
+          spaces: this.spaces,
           canRename: this.variant === 'title',
           canMoveLeft: this.canMove_(-1),
           canMoveRight: this.canMove_(1),
@@ -139,6 +141,10 @@ export class SpaceBarElement extends CrLitElement {
 
   private runMenuCommand_(detail: SpaceMenuDetail) {
     switch (detail.command) {
+      case 'export':
+        this.fire_(
+            'export', this.menuTarget_, {destination: detail.destination});
+        return;
       case 'recolor':
         this.openPicker_('color');
         return;
@@ -343,6 +349,7 @@ export class SpaceBarElement extends CrLitElement {
       color: '',
       icon: '',
       delta: 0,
+      destination: '',
       profile: '',
       ...extra,
     });

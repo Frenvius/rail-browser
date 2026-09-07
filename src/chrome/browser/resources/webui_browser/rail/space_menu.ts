@@ -3,12 +3,13 @@ import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_PROFILE_NAME} from './spaces.js';
 
-export type SpaceMenuCommand = 'change-icon'|'move'|'new-profile'|'recolor'|
-    'remove'|'rename'|'set-profile';
+export type SpaceMenuCommand = 'change-icon'|'export'|'move'|'new-profile'|
+    'recolor'|'remove'|'rename'|'set-profile';
 
 export interface SpaceMenuContext {
   space: Space;
   profiles: SpaceProfile[];
+  spaces: Space[];
   canRename: boolean;
   canMoveLeft: boolean;
   canMoveRight: boolean;
@@ -19,6 +20,7 @@ export interface SpaceMenuDetail {
   command: SpaceMenuCommand;
   color: string;
   delta: number;
+  destination: string;
   profile: string;
 }
 
@@ -38,6 +40,14 @@ function profileItems(context: SpaceMenuContext): NativeMenuItem[] {
 function buildItems(context: SpaceMenuContext): NativeMenuItem[] {
   return menuItems([
     {label: 'Space Context Menu'},
+    {
+      command: 'export',
+      label: `Export “${context.space.name}” into Folder`,
+      children: context.spaces.map(space =>
+          space.id === context.space.id ?
+              {label: space.name} :
+              {command: `export:${space.id}`, label: space.name}),
+    },
     {command: 'change-icon', label: 'Change Space Icon...'},
     context.canRename && {command: 'rename', label: 'Rename Space...'},
     {command: 'recolor', label: 'Edit Theme Color...'},
@@ -66,6 +76,7 @@ export function openSpaceMenu(
       command,
       color: command === 'recolor' ? argument : '',
       delta: command === 'move' ? Number(argument) : 0,
+      destination: command === 'export' ? argument : '',
       profile: command === 'set-profile' ? argument : '',
     });
   });

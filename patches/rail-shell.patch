@@ -5719,7 +5719,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..d79ed9df34 100644
+index aa4e0fe69e..edb0358c8c 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6045,7 +6045,7 @@ index aa4e0fe69e..d79ed9df34 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,149 +446,1473 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +446,1506 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6682,12 +6682,14 @@ index aa4e0fe69e..d79ed9df34 100644
 +    this.refreshSections_();
 +  }
 +
-+  private pinTab_(tabId: string): PinnedEntry|undefined {
++  private pinTab_(tabId: string, refresh = true): PinnedEntry|undefined {
 +    const sleeping = this.spaces_.dormantByKey(tabId);
 +    if (sleeping) {
 +      const entry = this.pinnedTabs_.pinDormant(sleeping, sleeping.space);
 +      this.spaces_.drop(tabId);
-+      this.refreshSections_();
++      if (refresh) {
++        this.refreshSections_();
++      }
 +      return entry;
 +    }
 +    const item = this.findItem_<TabItem>(tabId, 'tab');
@@ -6696,8 +6698,35 @@ index aa4e0fe69e..d79ed9df34 100644
 +    }
 +    const entry =
 +        this.pinnedTabs_.pin(item.tabData, this.spaces_.spaceOf(tabId));
-+    this.refreshSections_();
++    if (refresh) {
++      this.refreshSections_();
++    }
 +    return entry;
++  }
++
++  private exportSpaceToFolder_(sourceId: string, destinationId: string) {
++    const source = this.spaces_.byId(sourceId);
++    if (!source || sourceId === destinationId ||
++        !this.spaces_.byId(destinationId)) {
++      return;
++    }
++    const rows = [
++      ...this.spaces_.rowsIn(sourceId)
++          .filter(row => !isNewTabUrl(row.url))
++          .map(({key, url, title, favicon}) => ({key, url, title, favicon})),
++      ...this.pinnedTabs_.entriesIn(sourceId)
++          .filter(entry => !entry.tabId)
++          .map(({key, url, title, favicon}) => ({key, url, title, favicon})),
++    ];
++    if (!rows.length) {
++      return;
++    }
++    const folder = this.folders_.create(destinationId, source.name);
++    for (const row of rows) {
++      const entry = this.pinnedTabs_.pinDormant(row, destinationId);
++      this.pinnedTabs_.setFolder(entry.key, folder.id);
++    }
++    this.refreshSections_();
 +  }
 +
 +  private fileInFolder_(
@@ -6860,13 +6889,17 @@ index aa4e0fe69e..d79ed9df34 100644
 +  }
 +
 +  protected onRailSpaceCommand_(e: CustomEvent<SpaceCommandDetail>) {
-+    const {command, id, name, color, icon, delta, profile} = e.detail;
++    const {command, id, name, color, icon, delta, destination, profile} =
++        e.detail;
 +    switch (command) {
 +      case 'select':
 +        this.selectSpace_(id);
 +        break;
 +      case 'create':
 +        this.newSpace();
++        break;
++      case 'export':
++        this.exportSpaceToFolder_(id, destination);
 +        break;
 +      case 'rename':
 +        this.spaces_.rename(id, name.trim());
