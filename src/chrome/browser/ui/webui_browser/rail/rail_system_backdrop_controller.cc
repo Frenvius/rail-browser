@@ -242,6 +242,8 @@ class SystemBackdropController::Impl {
         UsesWallpaperBackdrop(config.material) !=
         UsesWallpaperBackdrop(config_.material);
     config_ = config;
+    effect_brush_.Reset();
+    fallback_brush_.Reset();
     if (!composition_) {
       ApplyDwmFallback();
       return;
@@ -578,13 +580,16 @@ class SystemBackdropController::Impl {
     if (!sprite_) {
       return;
     }
-    ComPtr<wuc::ICompositionBrush> brush =
-        active_ ? CreateEffectBrush() : CreateFallbackBrush();
-    if (!brush) {
-      brush = CreateFallbackBrush();
+    if (!fallback_brush_) {
+      fallback_brush_ = CreateFallbackBrush();
     }
+    if (active_ && !effect_brush_) {
+      effect_brush_ = CreateEffectBrush();
+    }
+    wuc::ICompositionBrush* brush =
+        active_ && effect_brush_ ? effect_brush_.Get() : fallback_brush_.Get();
     if (brush) {
-      sprite_->put_Brush(brush.Get());
+      sprite_->put_Brush(brush);
     }
   }
 
@@ -610,6 +615,8 @@ class SystemBackdropController::Impl {
   ComPtr<wuc::Desktop::IDesktopWindowTarget> desktop_target_;
   ComPtr<wuc::ISpriteVisual> sprite_;
   ComPtr<wuc::ICompositionBackdropBrush> backdrop_;
+  ComPtr<wuc::ICompositionBrush> effect_brush_;
+  ComPtr<wuc::ICompositionBrush> fallback_brush_;
 };
 
 std::unique_ptr<SystemBackdropController> SystemBackdropController::Create(
