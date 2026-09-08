@@ -78,8 +78,8 @@ class ShellTransparency : public content::WebContentsObserver,
   }
 };
 
-void EnsureBackdropStyles(HWND hwnd) {
-  if (!g_backdrop_enabled) {
+void EnsureBackdropStyles(HWND hwnd, const views::Widget* widget) {
+  if (!g_backdrop_enabled || (widget && widget->IsFullscreen())) {
     return;
   }
   const LONG style = ::GetWindowLong(hwnd, GWL_STYLE);
@@ -177,7 +177,8 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
   if (message == WM_WINDOWPOSCHANGED || message == WM_SIZE ||
       message == WM_DWMCOMPOSITIONCHANGED || message == WM_THEMECHANGED) {
     const LRESULT result = ::DefSubclassProc(hwnd, message, w_param, l_param);
-    EnsureBackdropStyles(hwnd);
+    EnsureBackdropStyles(hwnd,
+                         reinterpret_cast<views::Widget*>(ref_data));
     return result;
   }
 
@@ -189,7 +190,7 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
 void PrepareSystemBackdropWindow(views::Widget* widget) {
   HWND hwnd = views::HWNDForWidget(widget);
   g_backdrop_enabled = true;
-  EnsureBackdropStyles(hwnd);
+  EnsureBackdropStyles(hwnd, widget);
   const COLORREF caption_color = DWMWA_COLOR_NONE;
   ::DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &caption_color,
                           sizeof(caption_color));
@@ -273,7 +274,7 @@ gfx::Rect StableSavedBounds(const views::Widget* widget,
 void InstallResizeCursorSubclass(views::Widget* widget) {
   CHECK(::SetWindowSubclass(views::HWNDForWidget(widget),
                             ResizeCursorSubclassProc, kResizeCursorSubclassId,
-                            0));
+                            reinterpret_cast<DWORD_PTR>(widget)));
 }
 
 void RemoveResizeCursorSubclass(views::Widget* widget) {
