@@ -8817,6 +8817,64 @@ index 15a65f7152..ac0b5f8c87 100644
  };
  
  // These are all the different icons that can be displayed in the chip next to
+diff --git a/chrome/browser/ui/webui_browser/find_bar_owner_webui_browser.cc b/chrome/browser/ui/webui_browser/find_bar_owner_webui_browser.cc
+index 703276b26d..166365b740 100644
+--- a/chrome/browser/ui/webui_browser/find_bar_owner_webui_browser.cc
++++ b/chrome/browser/ui/webui_browser/find_bar_owner_webui_browser.cc
+@@ -6,12 +6,11 @@
+ 
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser.h"
+-#include "chrome/browser/ui/browser_element_identifiers.h"
+-#include "chrome/browser/ui/interaction/browser_elements.h"
+ #include "chrome/browser/ui/views/translate/translate_bubble_controller.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
+ #include "components/strings/grit/components_strings.h"
+ #include "ui/base/l10n/l10n_util.h"
++#include "ui/gfx/geometry/insets.h"
+ #include "ui/views/view.h"
+ #include "ui/views/widget/widget.h"
+ 
+@@ -25,35 +24,10 @@ views::Widget* FindBarOwnerWebUIBrowser::GetOwnerWidget() {
+ }
+ 
+ gfx::Rect FindBarOwnerWebUIBrowser::GetFindBarBoundingBox() {
+-  if (!window_->browser()->SupportsWindowFeature(
+-          Browser::WindowFeature::kFeatureLocationBar)) {
+-    return gfx::Rect();
+-  }
+-
+-  ui::TrackedElement* location_bar = BrowserElements::From(window_->browser())
+-                                         ->GetElement(kLocationBarElementId);
+-  if (!location_bar) {
+-    return gfx::Rect();
+-  }
+-
+-  ui::TrackedElement* contents_container =
+-      BrowserElements::From(window_->browser())
+-          ->GetElement(kContentsContainerViewElementId);
+-  CHECK(contents_container);
+-
+-  gfx::Rect location_bar_bounds = location_bar->GetScreenBounds();
+-  gfx::Rect contents_container_bounds = contents_container->GetScreenBounds();
+-  // The bounding box spans vertically from the bottom of the location bar to
+-  // the bottom of the contents container and has the same width as the location
+-  // bar.
+-  gfx::Rect bounding_box_in_screen(
+-      location_bar_bounds.x(), location_bar_bounds.bottom(),
+-      location_bar_bounds.width(),
+-      contents_container_bounds.bottom() - location_bar_bounds.bottom());
+-  gfx::Rect bounding_box_in_owner =
+-      bounding_box_in_screen -
+-      window_->widget()->GetWindowBoundsInScreen().OffsetFromOrigin();
+-  return bounding_box_in_owner;
++  gfx::Rect bounds = window_->GetContentsBoundsInScreen();
++  bounds.Inset(gfx::Insets::TLBR(8, 0, 0, 0));
++  return bounds -
++         window_->widget()->GetWindowBoundsInScreen().OffsetFromOrigin();
+ }
+ 
+ gfx::Rect FindBarOwnerWebUIBrowser::GetFindBarClippingBox() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 index df2247060d..d78a6d8e14 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
