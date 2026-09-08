@@ -5719,7 +5719,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..edb0358c8c 100644
+index aa4e0fe69e..5135eb7582 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6045,7 +6045,7 @@ index aa4e0fe69e..edb0358c8c 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,149 +446,1506 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +446,1515 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6897,6 +6897,15 @@ index aa4e0fe69e..edb0358c8c 100644
 +        break;
 +      case 'create':
 +        this.newSpace();
++        break;
++      case 'newfolder': {
++        const folder = this.folders_.create(this.activeSpace_, 'New Folder');
++        this.refreshSections_();
++        void this.startFolderRename_(folder.id);
++        break;
++      }
++      case 'newtab':
++        this.fire('new-tab-requested');
 +        break;
 +      case 'export':
 +        this.exportSpaceToFolder_(id, destination);

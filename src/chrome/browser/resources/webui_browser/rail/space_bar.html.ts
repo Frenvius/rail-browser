@@ -27,16 +27,34 @@ ${this.variant === 'title' ? html`
 ` : INCOGNITO ? '' : html`
   <div id="bar">
     <div id="dots">
-      ${this.spaces.map(space => html`
+      ${this.visibleSpaces_().map(space => html`
         <button class="dot" data-id="${space.id}" title="${space.name}"
+          aria-label="Switch to ${space.name}"
+          aria-pressed="${space.id === this.activeId}"
+          ?compact="${this.compact_}"
           ?selected="${space.id === this.activeId}"
           @click="${this.onDotClick_}"
-          @contextmenu="${this.onDotContextmenu_}"></button>
+          @contextmenu="${this.onDotContextmenu_}">
+          ${!this.compact_ || space.id === this.activeId ?
+    !space.icon ? html`<span class="space-dot"></span>` :
+    space.icon.startsWith('cr:') ?
+        html`<cr-icon icon="${space.icon}"></cr-icon>` :
+        html`<span class="space-icon">${space.icon}</span>` : ''}
+        </button>
       `)}
+      ${this.hasOverflow_() ? html`
+        <button id="more" title="More spaces" aria-label="More spaces"
+          @click="${this.onMoreClick_}">
+          <cr-icon icon="cr:more-vert"></cr-icon>
+        </button>
+      ` : ''}
     </div>
-    <button id="add" title="New space" @click="${this.onAddClick_}">
-      <cr-icon icon="cr:add"></cr-icon>
-    </button>
+    ${this.hasOverflow_() ? '' : html`
+      <button id="add" title="New space" aria-label="New space"
+        @click="${this.onAddClick_}">
+        <cr-icon icon="cr:add"></cr-icon>
+      </button>
+    `}
   </div>
 `}
 <cr-action-menu id="menu" @close="${this.onMenuClose_}">

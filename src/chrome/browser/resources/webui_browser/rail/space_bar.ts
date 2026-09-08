@@ -7,11 +7,14 @@ import '//resources/cr_elements/icons.html.js';
 import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 
 import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
 import {announceMenuOpen} from './menu_overlay.js';
+import type {NativeMenuItem} from './native_menu.js';
+import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import {INCOGNITO} from './sidebar_state.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
@@ -20,8 +23,8 @@ import {openSpaceMenu} from './space_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_MATERIAL, spaceHex} from './spaces.js';
 
-export type SpaceCommand = 'create'|'export'|'move'|'newprofile'|'remove'|
-    'rename'|'restyle'|'select'|'setprofile';
+export type SpaceCommand = 'create'|'export'|'move'|'newfolder'|'newprofile'|
+    'newtab'|'remove'|'rename'|'restyle'|'select'|'setprofile';
 
 export interface SpaceCommandDetail {
   command: SpaceCommand;
@@ -62,6 +65,8 @@ export class SpaceBarElement extends CrLitElement {
       tabCounts: {type: Object},
       material: {type: Number},
       variant: {type: String},
+      compact_: {type: Boolean, state: true},
+      visibleCount_: {type: Number, state: true},
       editing_: {type: Boolean, state: true},
       confirming_: {type: Boolean, state: true},
       profileName_: {type: String, state: true},
@@ -75,15 +80,56 @@ export class SpaceBarElement extends CrLitElement {
   accessor tabCounts: Record<string, number> = {};
   accessor material: SystemBackdropMaterial = DEFAULT_MATERIAL;
   accessor variant: 'dots'|'title' = 'dots';
+  protected accessor compact_ = false;
+  protected accessor visibleCount_ = 1;
   protected accessor editing_ = false;
+  private readonly resizeObserver_ = new ResizeObserver(() =>
+    this.updateSpaceLayout_());
   protected accessor confirming_ = false;
   protected accessor profileName_ = '';
   protected accessor menuTarget_ = '';
   private menuX_ = 0;
   private menuY_ = 0;
 
+  override connectedCallback() {
+    super.connectedCallback();
+    this.resizeObserver_.observe(this);
+    this.updateSpaceLayout_();
+  }
+
+  override disconnectedCallback() {
+    this.resizeObserver_.disconnect();
+    super.disconnectedCallback();
+  }
+
+  override updated(changedProperties: PropertyValues<this>) {
+    super.updated(changedProperties);
+    this.updateSpaceLayout_();
+  }
+
   protected activeSpace_(): Space|undefined {
     return this.spaces.find(space => space.id === this.activeId);
+  }
+
+  protected visibleSpaces_(): Space[] {
+    if (this.spaces.length <= this.visibleCount_) {
+      return this.spaces;
+    }
+    const visible = this.spaces.slice(0, this.visibleCount_);
+    const active = this.activeSpace_();
+    if (active && !visible.includes(active)) {
+      visible[visible.length - 1] = active;
+    }
+    return visible;
+  }
+
+  protected overflowSpaces_(): Space[] {
+    const visible = new Set(this.visibleSpaces_().map(space => space.id));
+    return this.spaces.filter(space => !visible.has(space.id));
+  }
+
+  protected hasOverflow_(): boolean {
+    return this.overflowSpaces_().length > 0;
   }
 
   protected activeName_(): string {
@@ -248,7 +294,41 @@ export class SpaceBarElement extends CrLitElement {
   }
 
   protected onAddClick_() {
-    this.fire_('create', '');
+    showNativeMenu(this.newItems_(), command => this.runNewCommand_(command));
+  }
+
+  protected onMoreClick_() {
+    showNativeMenu(menuItems([
+      {label: 'Spaces'},
+      ...this.overflowSpaces_().map(space => ({
+        command: `select:${space.id}`,
+        label: space.name,
+      })),
+      separator(),
+      {label: 'New', children: this.newItems_()},
+    ]), command => {
+      if (command.startsWith('select:')) {
+        this.fire_('select', command.slice('select:'.length));
+      } else {
+        this.runNewCommand_(command);
+      }
+    });
+  }
+
+  private newItems_(): NativeMenuItem[] {
+    return [
+      {command: 'create', label: 'New Space'},
+      {command: 'newfolder', label: 'New Folder'},
+      separator(),
+      {command: 'newtab', label: 'New Tab', accelerator: 'Ctrl+T'},
+    ];
+  }
+
+  private runNewCommand_(command: string) {
+    if (command === 'create' || command === 'newfolder' ||
+        command === 'newtab') {
+      this.fire_(command, '');
+    }
   }
 
   protected onNameClick_() {
@@ -330,6 +410,20 @@ export class SpaceBarElement extends CrLitElement {
   private onWindowBlur_ = () => {
     this.stopEditing_(true);
   };
+
+  private updateSpaceLayout_() {
+    const width = this.shadowRoot.querySelector<HTMLElement>('#bar')
+                      ?.clientWidth ?? this.clientWidth;
+    if (!width) {
+      return;
+    }
+    const visibleSlots = Math.max(1, Math.floor((width - 31) / 25));
+    const iconSlots = Math.max(1, visibleSlots - 1);
+    const compact = this.spaces.length > iconSlots;
+    this.compact_ = compact;
+    this.visibleCount_ = this.spaces.length > visibleSlots ?
+        Math.max(1, visibleSlots - 1) : visibleSlots;
+  }
 
   private input_(): HTMLInputElement|null {
     return this.shadowRoot.querySelector('input');

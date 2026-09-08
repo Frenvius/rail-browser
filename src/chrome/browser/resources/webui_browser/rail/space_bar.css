@@ -7,6 +7,7 @@
 #name,
 #nameInput,
 .dot,
+#more,
 #add,
 cr-action-menu,
 .dropdown-item,
@@ -18,8 +19,12 @@ cr-dialog {
   align-items: center;
   display: flex;
   gap: 6px;
-  height: 28px;
+  height: 32px;
   margin: 4px 8px 0;
+}
+
+#bar:has(#more) #dots {
+  justify-content: space-between;
 }
 
 #title {
@@ -71,61 +76,89 @@ cr-dialog {
   align-items: center;
   display: flex;
   flex: 1;
-  gap: 6px;
+  gap: 0;
   justify-content: center;
+  min-width: 0;
 }
 
-.dot {
-  background: var(--rail-text-muted, #c0c0d8);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  height: 6px;
-  opacity: 0.55;
-  padding: 0;
-  transition: opacity 120ms ease, transform 120ms ease;
-  width: 6px;
-}
-
-.dot:hover {
-  opacity: 0.8;
-}
-
-.dot[selected] {
-  opacity: 1;
-  transform: scale(1.34);
-}
-
-.dot.droptarget {
-  background: var(--rail-accent, #7c5cfc);
-  opacity: 1;
-  transform: scale(2);
-}
-
-.dot:focus-visible {
-  outline: 2px solid var(--rail-accent, #7c5cfc);
-  outline-offset: 2px;
-}
-
+.dot,
+#more,
 #add {
   align-items: center;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--rail-text-label, #808098);
   cursor: pointer;
   display: flex;
-  height: 22px;
+  flex: 0 0 25px;
+  height: 25px;
   justify-content: center;
   padding: 0;
-  width: 22px;
-  --iron-icon-width: 14px;
-  --iron-icon-height: 14px;
-  --iron-icon-fill-color: var(--rail-text-label, #808098);
+  position: relative;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+  width: 25px;
+  --iron-icon-width: 12px;
+  --iron-icon-height: 12px;
+  --iron-icon-fill-color: currentcolor;
 }
 
+.dot:hover,
+#more:hover,
 #add:hover {
   background: var(--rail-elevated, #282840);
+  color: var(--rail-text-muted, #c0c0d8);
+}
+
+.dot[selected] {
+  background: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 20%, transparent);
+  color: var(--rail-text, #f0f0ff);
+}
+
+.dot[compact]:not([selected])::after {
+  background: currentcolor;
+  border-radius: 50%;
+  content: '';
+  height: 4px;
+  opacity: 0.65;
+  width: 4px;
+}
+
+.dot.droptarget {
+  background: var(--rail-accent, #7c5cfc);
+  color: var(--rail-text, #f0f0ff);
+}
+
+.dot:active,
+#more:active,
+#add:active {
+  transform: scale(0.96);
+}
+
+.dot:focus-visible,
+#more:focus-visible,
+#add:focus-visible {
+  outline: 2px solid var(--rail-accent, #7c5cfc);
+  outline-offset: 2px;
+}
+
+.space-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.space-dot {
+  background: currentcolor;
+  border-radius: 50%;
+  height: 4px;
+  opacity: 0.65;
+  width: 4px;
+}
+
+.dot[selected] .space-dot {
+  height: 6px;
+  opacity: 1;
+  width: 6px;
 }
 
 cr-action-menu {

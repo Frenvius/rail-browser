@@ -296,7 +296,7 @@ export class Spaces {
         name: stored.name,
         color: stored.color.length === 9 ? stored.color :
                                             withStrength(stored.color, 0),
-        icon: stored.icon || SPACE_ICONS[0]![0],
+        icon: stored.icon ?? SPACE_ICONS[0]![0],
         profile: stored.profile ?? '',
         activeKey: '',
       };
@@ -903,8 +903,8 @@ export class Spaces {
     return {
       id,
       name: `Space ${index + 1}`,
-      color: withStrength(SPACE_COLORS[index % SPACE_COLORS.length]!, 0),
-      icon: SPACE_ICONS[index % SPACE_ICONS.length]![0],
+      color: withStrength('#192e50', 0.8),
+      icon: '',
       profile: '',
       activeKey: '',
     };
