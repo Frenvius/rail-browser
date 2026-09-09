@@ -11,6 +11,8 @@ class PrefRegistrySyncable;
 
 namespace rail {
 
+extern const char kSidebarStatePref[];
+
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
 

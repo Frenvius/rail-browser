@@ -8,7 +8,7 @@ export const INCOGNITO = loadTimeData.isInitialized() &&
 
 export const MINI = new URLSearchParams(location.search).has('mini');
 
-const SAVE_DELAY_MS = 500;
+const SAVE_DELAY_MS = 0;
 
 export interface StoredPin {
   home: string;
@@ -56,9 +56,7 @@ export interface SidebarState {
   essentials?: StoredPin[];
 }
 
-export async function readSidebarState(): Promise<SidebarState|null> {
-  const {value} =
-      await browserProxyFactory.getInstance().handler.getSidebarState();
+export function parseSidebarState(value: string): SidebarState|null {
   try {
     const parsed = JSON.parse(value || 'null');
     const state = parsed && Array.isArray(parsed.spaces) ?
@@ -71,6 +69,12 @@ export async function readSidebarState(): Promise<SidebarState|null> {
   } catch (e) {
     return INCOGNITO ? {activeSpace: '', spaces: []} : null;
   }
+}
+
+export async function readSidebarState(): Promise<SidebarState|null> {
+  const {value} =
+      await browserProxyFactory.getInstance().handler.getSidebarState();
+  return parseSidebarState(value);
 }
 
 export class SidebarStore {

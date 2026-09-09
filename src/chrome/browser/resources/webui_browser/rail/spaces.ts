@@ -288,6 +288,15 @@ export class Spaces {
     return true;
   }
 
+  clear() {
+    this.spaces_ = [];
+    this.activeId_ = '';
+    this.rows_ = [];
+    this.claims_.clear();
+    this.creating_ = 0;
+    this.nextKey_ = 0;
+  }
+
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
     this.material_ = state?.material ?? DEFAULT_MATERIAL;
     for (const stored of state?.spaces ?? []) {

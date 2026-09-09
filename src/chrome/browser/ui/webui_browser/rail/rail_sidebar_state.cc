@@ -5,11 +5,7 @@
 
 namespace rail {
 
-namespace {
-
-constexpr char kSidebarStatePref[] = "rail.sidebar_state";
-
-}
+const char kSidebarStatePref[] = "rail.sidebar_state";
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {

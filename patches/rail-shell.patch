@@ -5719,7 +5719,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..5135eb7582 100644
+index aa4e0fe69e..1bfd77f303 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -5731,7 +5731,7 @@ index aa4e0fe69e..5135eb7582 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -20,11 +22,32 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
+@@ -20,11 +22,33 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
  import {TabStripObservation} from '/tab_strip_api/tab_strip_observation.js';
  import type {TabStripObserver} from '/tab_strip_api/tab_strip_observer.js';
  
@@ -5742,7 +5742,8 @@ index aa4e0fe69e..5135eb7582 100644
 +import {favoritesKey, isFavorites, PinnedTabs} from '../rail/pinned_tabs.js';
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow} from '../rail/sections.js';
 +import {splitSections} from '../rail/sections.js';
-+import {MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
++import type {SidebarState} from '../rail/sidebar_state.js';
++import {MINI, parseSidebarState, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
 +import {slideDirection, slideIn, slideOut} from '../rail/space_slide.js';
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
@@ -5766,7 +5767,7 @@ index aa4e0fe69e..5135eb7582 100644
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-@@ -36,6 +59,8 @@ export interface TabStripElement {
+@@ -36,6 +60,8 @@ export interface TabStripElement {
    };
  }
  
@@ -5775,7 +5776,7 @@ index aa4e0fe69e..5135eb7582 100644
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -64,7 +89,7 @@ class TabStripItemFactory {
+@@ -64,7 +90,7 @@ class TabStripItemFactory {
  }
  
  export class TabStripElement extends CrLitElement implements TabStripObserver,
@@ -5784,7 +5785,7 @@ index aa4e0fe69e..5135eb7582 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -82,6 +107,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -82,6 +108,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        items_: {
          type: Array,
        },
@@ -5827,7 +5828,7 @@ index aa4e0fe69e..5135eb7582 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -90,16 +151,75 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,21 +152,82 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -5904,7 +5905,14 @@ index aa4e0fe69e..5135eb7582 100644
  
    constructor() {
      super();
-@@ -112,11 +232,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+ 
+     this.tabStripService_ = TabStripService.getRemote();
++    browserProxyFactory.getInstance().callbackRouter.onSidebarStateChanged
++        .addListener(this.onSidebarStateChanged_.bind(this));
+   }
+ 
+   override connectedCallback() {
+@@ -112,11 +235,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -5921,7 +5929,7 @@ index aa4e0fe69e..5135eb7582 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +263,43 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +266,62 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -5950,9 +5958,15 @@ index aa4e0fe69e..5135eb7582 100644
 +      browserProxyFactory.getInstance().handler.listProfiles(),
 +    ]);
 +    this.spaces_.setProfiles(profiles);
-+    // Pinned rows claim their tabs first: a tab driving one is restored from
-+    // that half of the record and must not be matched twice.
++    this.restoreSidebarState_(state, tabs);
++  }
++
++  private restoreSidebarState_(state: SidebarState|null, tabs: Tab[]) {
 +    const claimed = new Set<string>();
++    this.pinnedTabs_.clear();
++    this.spaces_.clear();
++    this.folders_.clear();
++    this.tidyGroups_.clear();
 +    this.pinnedTabs_.restore(state, tabs, claimed);
 +    this.spaces_.restore(state, tabs, claimed);
 +    this.folders_.restore(state);
@@ -5962,10 +5976,23 @@ index aa4e0fe69e..5135eb7582 100644
 +        this.spaces_.assign(entry.tabId, entry.space, entry.url);
 +      }
 +    }
++  }
++
++  private onSidebarStateChanged_(value: string) {
++    const state = parseSidebarState(value);
++    if (!state) {
++      return;
++    }
++    const tabs = this.items_
++                     .filter((item): item is TabItem => item.type === 'tab')
++                     .map(item => item.tabData);
++    this.restoreSidebarState_(state, tabs);
++    this.selection_.reset(this.activeTab_);
++    this.refreshSections_();
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +321,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +343,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -5994,7 +6021,7 @@ index aa4e0fe69e..5135eb7582 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +357,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +379,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6009,7 +6036,7 @@ index aa4e0fe69e..5135eb7582 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -240,15 +417,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -240,15 +439,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    // End TabStripObserver impl:
  
@@ -6045,7 +6072,7 @@ index aa4e0fe69e..5135eb7582 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,149 +446,1515 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +468,1515 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -8638,7 +8665,7 @@ index 3d4fe27f4f..2029b374e0 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..ac0b5f8c87 100644
+index 15a65f7152..b31dba9ee3 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -8717,7 +8744,7 @@ index 15a65f7152..ac0b5f8c87 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,29 @@ interface Page {
+@@ -44,6 +91,31 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -8738,6 +8765,8 @@ index 15a65f7152..ac0b5f8c87 100644
 +
 +  OnRailAdoptTab(tabs_api.mojom.NodeId id, string space_id);
 +
++  OnSidebarStateChanged(string value);
++
 +  OnSidebarContextMenu(gfx.mojom.Point point);
 +
 +  OnTabDragMoved(gfx.mojom.Point point);
@@ -8747,7 +8776,7 @@ index 15a65f7152..ac0b5f8c87 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -55,7 +125,7 @@ interface PageHandler {
+@@ -55,7 +127,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -8756,7 +8785,7 @@ index 15a65f7152..ac0b5f8c87 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +160,69 @@ interface PageHandler {
+@@ -90,6 +162,69 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -9015,7 +9044,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..f612788449 100644
+index 3ba14e7289..98d2bc2518 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -9148,7 +9177,7 @@ index 3ba14e7289..f612788449 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +411,200 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +411,208 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -9164,6 +9193,14 @@ index 3ba14e7289..f612788449 100644
 +  Browser* browser = GetBrowser();
 +  rail::SetSidebarState(browser ? browser->profile()->GetPrefs() : nullptr,
 +                        value);
++}
++
++void WebUIBrowserPageHandler::OnSidebarStateChanged() {
++  Browser* browser = GetBrowser();
++  if (browser && controller_) {
++    controller_->page()->OnSidebarStateChanged(
++        rail::GetSidebarState(browser->profile()->GetPrefs()));
++  }
 +}
 +
 +void WebUIBrowserPageHandler::StartTabDragGhost(
@@ -9349,19 +9386,39 @@ index 3ba14e7289..f612788449 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
+@@ -339,7 +620,15 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+     : content::DocumentService<webui_browser::mojom::PageHandler>(
+           render_frame_host,
+           std::move(receiver)),
+-      controller_(controller->GetWeakPtr()) {}
++      controller_(controller->GetWeakPtr()) {
++  if (Browser* browser = GetBrowser()) {
++    sidebar_state_registrar_.Init(browser->profile()->GetPrefs());
++    sidebar_state_registrar_.Add(
++        rail::kSidebarStatePref,
++        base::BindRepeating(&WebUIBrowserPageHandler::OnSidebarStateChanged,
++                            weak_factory_.GetWeakPtr()));
++  }
++}
+ 
+ Browser* WebUIBrowserPageHandler::GetBrowser() {
+   if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..10ab25883f 100644
+index 859da4ef00..1b6dbe4047 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-@@ -9,6 +9,7 @@
+@@ -9,8 +9,10 @@
  #include "base/values.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/webui_browser/browser.mojom.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
  #include "components/browser_apis/tab_strip/types/node_id.h"
++#include "components/prefs/pref_change_registrar.h"
  #include "content/public/browser/document_service.h"
-@@ -25,6 +26,10 @@ class MenuModelAdapter;
+ #include "content/public/browser/web_contents.h"
+ #include "mojo/public/cpp/bindings/pending_receiver.h"
+@@ -25,6 +27,10 @@ class MenuModelAdapter;
  class MenuRunner;
  }  // namespace views
  
@@ -9372,7 +9429,7 @@ index 859da4ef00..10ab25883f 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +61,65 @@ class WebUIBrowserPageHandler
+@@ -56,8 +62,66 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -9431,6 +9488,7 @@ index 859da4ef00..10ab25883f 100644
   private:
 +  void OnRailMenuCommand(const std::string& command);
 +  void OnRailMenuClosed();
++  void OnSidebarStateChanged();
 +
 +  void OnTabDragMoved(const gfx::Point& point);
 +  void OnTabDragEnded(const gfx::Point& point, bool inside);
@@ -9438,7 +9496,7 @@ index 859da4ef00..10ab25883f 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +131,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +133,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -9447,7 +9505,7 @@ index 859da4ef00..10ab25883f 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -77,11 +141,14 @@ class WebUIBrowserPageHandler
+@@ -77,11 +143,16 @@ class WebUIBrowserPageHandler
    std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
  
    std::unique_ptr<content::WebContents> glic_contents_;
@@ -9457,6 +9515,8 @@ index 859da4ef00..10ab25883f 100644
    // services, causing a raw_ptr of BrowserUI dangling here, so use a weak ptr
    // instead.
    base::WeakPtr<WebUIBrowserUI> controller_;
++
++  PrefChangeRegistrar sidebar_state_registrar_;
 +
 +  base::WeakPtrFactory<WebUIBrowserPageHandler> weak_factory_{this};
  };

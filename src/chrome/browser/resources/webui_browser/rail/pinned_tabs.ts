@@ -57,6 +57,11 @@ export class PinnedTabs {
             .map(entry => favoritesProfile(entry.space)))];
   }
 
+  clear() {
+    this.entries_ = [];
+    this.nextKey_ = 0;
+  }
+
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
     const groups: Array<[string, StoredPin[]]> =
         (state?.spaces ?? []).map(space => [space.id, space.pinned ?? []]);

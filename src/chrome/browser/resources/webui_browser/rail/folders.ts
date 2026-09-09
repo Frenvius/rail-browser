@@ -21,6 +21,10 @@ export class Folders {
     return this.folders_.find(folder => folder.id === id);
   }
 
+  clear() {
+    this.folders_ = [];
+  }
+
   restore(
       state: SidebarState|null,
       pick: (space: StoredSpace) => StoredFolder[] |
