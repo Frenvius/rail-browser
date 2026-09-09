@@ -1,5 +1,6 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_menu.h"
 
+#include <algorithm>
 #include <map>
 #include <set>
 #include <utility>
@@ -309,22 +310,33 @@ void RailMenu::StyleSubmenu(views::MenuItemView* item) {
   submenu_items_[menu_widget] = item;
 
   const gfx::Rect menu_bounds = menu_widget->GetWindowBoundsInScreen();
+  const gfx::Rect window_bounds = parent_->GetWindowBoundsInScreen();
+  const int anchor_y =
+      item == root_ ? cursor_.y() : item->GetBoundsInScreen().y();
   const int anchor_bottom = item == root_
                                 ? cursor_.y()
                                 : item->GetBoundsInScreen().bottom();
-  const bool opens_upward =
-      menu_bounds.bottom() <= anchor_bottom + kSlideAnchorSlack;
-  if (item != root_) {
-    gfx::Rect bounds(menu_bounds.origin(), container->GetPreferredSize({}));
-    if (!opens_upward) {
-      bounds.set_y(item->GetBoundsInScreen().y() -
-                   container->GetInsets().top());
-    }
-    if (bounds != menu_bounds) {
-      menu_widget->SetBounds(bounds);
-      RefreshClip(menu_widget);
-    }
+  gfx::Rect bounds = item == root_
+                         ? menu_bounds
+                         : gfx::Rect(menu_bounds.origin(),
+                                     container->GetPreferredSize({}));
+  const bool constrained_upward = bounds.bottom() > window_bounds.bottom();
+  if (constrained_upward) {
+    bounds.set_y(std::max(window_bounds.y(), anchor_y - bounds.height()));
+  } else if (item != root_) {
+    bounds.set_y(item->GetBoundsInScreen().y() -
+                 container->GetInsets().top());
   }
+  if (bounds.y() < window_bounds.y()) {
+    bounds.set_y(window_bounds.y());
+  }
+  if (bounds != menu_bounds) {
+    menu_widget->SetBounds(bounds);
+    RefreshClip(menu_widget);
+  }
+  const bool opens_upward =
+      constrained_upward ||
+      bounds.bottom() <= anchor_bottom + kSlideAnchorSlack;
   RefreshClip(menu_widget);
   RevealAcrylic(menu_widget, nullptr, backdrops_[menu_widget].get(),
                 opens_upward ? kAcrylicSlideDistance : -kAcrylicSlideDistance,
