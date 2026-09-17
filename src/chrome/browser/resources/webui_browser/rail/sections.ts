@@ -62,7 +62,7 @@ export function splitSections(
       };
     }
     claimed.add(item.id);
-    return {item, dormant: spaces.isAsleep(item.id)};
+    return {item, dormant: false};
   });
 
   const favoriteRows =

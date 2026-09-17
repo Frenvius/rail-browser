@@ -35,7 +35,7 @@ export interface PinnedEntry {
 // not have a tab driving it, which is what lets the row outlive a close.
 export class PinnedTabs {
   private entries_: PinnedEntry[] = [];
-  private nextKey_ = 0;
+  private restored_ = false;
 
   constructor(private onChange_: () => void) {}
 
@@ -57,12 +57,9 @@ export class PinnedTabs {
             .map(entry => favoritesProfile(entry.space)))];
   }
 
-  clear() {
-    this.entries_ = [];
-    this.nextKey_ = 0;
-  }
-
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
+    const previous = new Map(this.entries_.map(entry => [entry.key, entry]));
+    this.entries_ = [];
     const groups: Array<[string, StoredPin[]]> =
         (state?.spaces ?? []).map(space => [space.id, space.pinned ?? []]);
     const byProfile = state?.favoritesByProfile ??
@@ -72,14 +69,24 @@ export class PinnedTabs {
     }
     for (const [spaceId, stored] of groups) {
       for (const pin of stored) {
+        const existing = pin.id ?
+            previous.get(pin.id) :
+            [...previous.values()].find(
+                entry => entry.space === spaceId && entry.home === pin.home &&
+                    entry.url === pin.url &&
+                    entry.folder === (pin.folder ?? ''));
+        if (existing) {
+          previous.delete(existing.key);
+        }
         const tab = tabs.find(
-            candidate =>
-                candidate.url === pin.url && !claimed.has(candidate.id));
+            candidate => !claimed.has(candidate.id) &&
+                (existing ? candidate.id === existing.tabId :
+                            !this.restored_ && candidate.url === pin.url));
         if (tab) {
           claimed.add(tab.id);
         }
         this.entries_.push({
-          key: this.mintKey_(),
+          key: pin.id ?? existing?.key ?? this.mintKey_(),
           space: spaceId,
           home: pin.home,
           homeTitle: pin.homeTitle ?? pin.title,
@@ -92,6 +99,21 @@ export class PinnedTabs {
         });
       }
     }
+    this.restored_ = true;
+  }
+
+  snapshot(): PinnedEntry[] {
+    return this.entries_.map(entry => ({...entry}));
+  }
+
+  revert(entries: PinnedEntry[], liveTabs: Set<string>) {
+    this.entries_ = entries.map(entry => ({...entry}));
+    for (const entry of this.entries_) {
+      if (entry.tabId && !liveTabs.has(entry.tabId)) {
+        this.detach_(entry);
+      }
+    }
+    this.onChange_();
   }
 
   pin(tab: Tab, spaceId: string): PinnedEntry {
@@ -205,10 +227,7 @@ export class PinnedTabs {
     if (!entry) {
       return false;
     }
-    entry.tabId = '';
-    entry.url = entry.home;
-    entry.title = entry.homeTitle;
-    entry.favicon = entry.homeFavicon;
+    this.detach_(entry);
     this.onChange_();
     return true;
   }
@@ -242,8 +261,15 @@ export class PinnedTabs {
     return entry;
   }
 
+  private detach_(entry: PinnedEntry) {
+    entry.tabId = '';
+    entry.url = entry.home;
+    entry.title = entry.homeTitle;
+    entry.favicon = entry.homeFavicon;
+  }
+
   private mintKey_(): string {
-    return `pinned${this.nextKey_++}`;
+    return `pinned-${crypto.randomUUID()}`;
   }
 }
 

@@ -5719,7 +5719,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..1bfd77f303 100644
+index aa4e0fe69e..c231ed547c 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -5731,6 +5731,15 @@ index aa4e0fe69e..1bfd77f303 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
+@@ -11,7 +13,7 @@ import '//resources/cr_elements/icons.html.js';
+ import {assert, assertNotReachedCase} from '//resources/js/assert.js';
+ import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
+ import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+-import {TabStripService} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
++import {TabsObserverReceiver, TabStripService} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
+ import type {TabStripServiceRemote} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
+ import type {Container, Tab, TabCreatedContainer, TabGroup} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
+ import {OnDataChangedEventFieldTags, whichOnDataChangedEvent} from '/tab_strip_api/tab_strip_api_events.mojom-webui.js';
 @@ -20,11 +22,33 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
  import {TabStripObservation} from '/tab_strip_api/tab_strip_observation.js';
  import type {TabStripObserver} from '/tab_strip_api/tab_strip_observer.js';
@@ -5749,8 +5758,8 @@ index aa4e0fe69e..1bfd77f303 100644
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
 +import {backdropSettings, DEFAULT_MATERIAL, isNewTabUrl, serializeSidebar,
 +        spaceHex, Spaces, tintStrength} from '../rail/spaces.js';
-+import type {DragHandOff, DragSlot, RailDragHost} from '../rail/tab_drag.js';
-+import {TabDrag} from '../rail/tab_drag.js';
++import type {DragHandOff, DragSlot, PinnedDragRows, RailDragHost} from '../rail/tab_drag.js';
++import {mergeItemOrder, nativeTabMoves, TabDrag} from '../rail/tab_drag.js';
 +import type {FolderCommand, GroupCommand, TabCommand, TabCommandDetail, TabMenuTarget} from '../rail/tab_menu.js';
 +import {openFolderMenu, openGroupMenu, openTabMenu} from '../rail/tab_menu.js';
 +import {actsOnSelection, TabSelection} from '../rail/tab_selection.js';
@@ -5828,7 +5837,7 @@ index aa4e0fe69e..1bfd77f303 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -90,21 +152,82 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,21 +152,85 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -5895,6 +5904,9 @@ index aa4e0fe69e..1bfd77f303 100644
 +
 +  private slidingSpace_ = false;
 +  private backdropKey_ = '';
++  private readonly wakingPins_ = new Set<string>();
++  private nativeOrderTask_: Promise<void> = Promise.resolve();
++  private readonly ownMoves_ = new Map<string, number>();
  
    private readonly tabStripService_: TabStripServiceRemote;
    private tabStripObservation_: TabStripObservation|undefined;
@@ -5912,7 +5924,7 @@ index aa4e0fe69e..1bfd77f303 100644
    }
  
    override connectedCallback() {
-@@ -112,11 +235,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -112,11 +238,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -5929,7 +5941,7 @@ index aa4e0fe69e..1bfd77f303 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +266,62 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +269,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -5963,8 +5975,6 @@ index aa4e0fe69e..1bfd77f303 100644
 +
 +  private restoreSidebarState_(state: SidebarState|null, tabs: Tab[]) {
 +    const claimed = new Set<string>();
-+    this.pinnedTabs_.clear();
-+    this.spaces_.clear();
 +    this.folders_.clear();
 +    this.tidyGroups_.clear();
 +    this.pinnedTabs_.restore(state, tabs, claimed);
@@ -5979,6 +5989,9 @@ index aa4e0fe69e..1bfd77f303 100644
 +  }
 +
 +  private onSidebarStateChanged_(value: string) {
++    if (!this.store_.accept(value)) {
++      return;
++    }
 +    const state = parseSidebarState(value);
 +    if (!state) {
 +      return;
@@ -5992,7 +6005,7 @@ index aa4e0fe69e..1bfd77f303 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +343,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +347,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6021,7 +6034,7 @@ index aa4e0fe69e..1bfd77f303 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +379,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +383,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6036,7 +6049,69 @@ index aa4e0fe69e..1bfd77f303 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -240,15 +439,26 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -236,19 +439,87 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+ 
+   onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {}
+ 
+-  onNodeMoved(_onNodeMoved: OnNodeMovedEvent) {}
++  onNodeMoved(onNodeMoved: OnNodeMovedEvent) {
++    const pending = this.ownMoves_.get(onNodeMoved.id) ?? 0;
++    if (pending > 1) {
++      this.ownMoves_.set(onNodeMoved.id, pending - 1);
++    } else if (pending === 1) {
++      this.ownMoves_.delete(onNodeMoved.id);
++    } else {
++      this.queueNativeOrder_();
++    }
++  }
++
++  syncTabOrder() {
++    const order = [
++      ...this.favoriteRows_.map(row => row.item.id),
++      ...this.pinnedEntries_.flatMap(entry => entry.kind === 'row' ?
++          [entry.row.item.id] : entry.section.rows.map(row => row.item.id)),
++      ...this.looseTabIds_(),
++    ];
++    this.queueNativeOrder_(order);
++  }
++
++  private queueNativeOrder_(order?: string[]) {
++    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
++      if (order) {
++        this.ownMoves_.clear();
++        const tabStrip = await this.readTabStrip_();
++        for (const move of nativeTabMoves(tabStrip, order)) {
++          this.ownMoves_.set(move.id, (this.ownMoves_.get(move.id) ?? 0) + 1);
++          try {
++            await this.tabStripService_.moveNode(move.id, move.position);
++          } catch (error) {
++            this.ownMoves_.delete(move.id);
++            throw error;
++          }
++        }
++      }
++      const items = this.processModelContainer_(await this.readTabStrip_());
++      if (!order) {
++        const ids =
++            items.filter(item => item.type === 'tab').map(item => item.id);
++        for (const space of this.spaces_.all) {
++          this.spaces_.reorder(space.id, ids);
++          this.pinnedTabs_.reorder(space.id, ids);
++        }
++      }
++      this.setItems_(mergeItemOrder(this.items_, items));
++    }).catch(error => {
++      console.error('Failed to synchronize tab order', error);
++    });
++  }
++
++  private async readTabStrip_(): Promise<Container> {
++    const snapshot = await this.tabStripService_.getTabs();
++    const receiver = new TabsObserverReceiver({onTabEvents: () => {}});
++    receiver.$.bindHandle(snapshot.stream.handle);
++    receiver.$.close();
++    return snapshot.tabStrip;
++  }
  
    // End TabStripObserver impl:
  
@@ -6072,7 +6147,7 @@ index aa4e0fe69e..1bfd77f303 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,149 +468,1515 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +529,1547 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6172,6 +6247,8 @@ index aa4e0fe69e..1bfd77f303 100644
 -    if (updated) {
 -      if (tab.isActive) {
 -        this.setActiveTab_(tab.id);
+-      }
+-      this.fire<TabUpdated>('tab-updated', tab);
 +  private async syncOpeners_() {
 +    if (!this.spaces_.hasOpeners()) {
 +      return;
@@ -6180,16 +6257,21 @@ index aa4e0fe69e..1bfd77f303 100644
 +    const pairs = new Map(openers.map(pair => [pair.tab, pair.opener]));
 +    if (this.spaces_.retainOpeners(pairs)) {
 +      this.refreshSections_();
-+    }
-+  }
-+
+     }
+   }
+ 
+-  private removeItem(id: NodeId) {
+-    const itemToRemove = this.findItem_<TabStripItem>(id);
+-    this.setItems_(this.items_.filter(item => item.id !== id));
 +  private async toggleMute_(tabId: NodeId) {
 +    if (!tabId) {
 +      return;
 +    }
 +    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
 +  }
-+
+ 
+-    if (itemToRemove && itemToRemove.type === 'tab') {
+-      this.fire<TabClosed>('tab-closed', id);
 +  protected onTabAudioClick_(e: CustomEvent<{id: string}>) {
 +    this.toggleMute_(e.detail.id);
 +  }
@@ -6200,7 +6282,7 @@ index aa4e0fe69e..1bfd77f303 100644
 +        await browserProxyFactory.getInstance().handler.getTabOpener(tabId);
 +    if (!opener) {
 +      return;
-+    }
+     }
 +    if (foreground) {
 +      this.spaces_.forgetOpeners(this.spaces_.spaceOf(tabId));
 +    }
@@ -6209,12 +6291,18 @@ index aa4e0fe69e..1bfd77f303 100644
 +      this.spaces_.placeAfterOpener(tabId);
 +    }
 +    this.refreshSections_();
-+  }
-+
+   }
+ 
+-  protected onNewTabButtonClick_() {
+-    this.tabStripService_.createTabAt(null, null);
 +  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
 +    this.closeTarget_(e.detail.id);
-+  }
-+
+   }
+ 
+-  // Utility helpers:
+-  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
+-    return this.items_.findIndex(
+-        item => item.id === id && (!type || item.type === type));
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -6227,11 +6315,10 @@ index aa4e0fe69e..1bfd77f303 100644
 +    if (ctrl) {
 +      if (this.selection_.toggle(id, this.activeTab_)) {
 +        this.activateTab(id);
-       }
--      this.fire<TabUpdated>('tab-updated', tab);
++      }
 +      this.syncSelection_();
 +      return;
-     }
++    }
 +    this.collapseSelection_(id);
 +    this.pendingBelow_ = '';
 +    if (!this.spaces_.relatedRows(this.activeTab_, id)) {
@@ -6240,35 +6327,46 @@ index aa4e0fe69e..1bfd77f303 100644
 +    this.activateTab(id);
    }
  
--  private removeItem(id: NodeId) {
--    const itemToRemove = this.findItem_<TabStripItem>(id);
--    this.setItems_(this.items_.filter(item => item.id !== id));
+-  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
+-      |undefined {
+-    return this.items_.find(
+-               item => item.id === id && (!type || item.type === type)) as T |
+-        undefined;
 +  private rowOrder_(): string[] {
 +    return [
 +      ...this.favoriteRows_.map(row => row.item.id),
 +      ...this.pinnedRows_.map(row => row.item.id),
 +      ...this.looseTabIds_(),
 +    ];
-+  }
+   }
  
--    if (itemToRemove && itemToRemove.type === 'tab') {
--      this.fire<TabClosed>('tab-closed', id);
+-  protected getTabElement_(id: string): TabElement|null {
+-    return this.shadowRoot.querySelector<TabElement>(
+-        `webui-browser-tab#${this.tabIdToDomId(id)}`);
 +  private syncSelection_() {
 +    const order = this.rowOrder_();
 +    this.selection_.retain(order);
 +    this.selectedIds_ =
 +        this.selection_.size > 1 ? this.selection_.ids(order) : [];
-+  }
-+
+   }
+ 
+-  private setActiveTab_(id: string) {
+-    this.activeTab_ = id;
 +  protected isSelected_(id: string): boolean {
 +    return this.selectedIds_.includes(id);
-+  }
-+
+   }
+ 
+-  protected setItems_(items: TabStripItem[]) {
+-    this.items_ = items;
 +  private collapseSelection_(id: string) {
 +    this.selection_.reset(id);
 +    this.syncSelection_();
-+  }
-+
+   }
+ 
+-  private updateItemAt_(index: number, item: TabStripItem) {
+-    const newItems = [...this.items_];
+-    newItems[index] = item;
+-    this.setItems_(newItems);
 +  protected async onTabContextMenu_(
 +      e: CustomEvent<TabMenuTarget&{x: number, y: number}>) {
 +    const {id} = e.detail;
@@ -6278,7 +6376,7 @@ index aa4e0fe69e..1bfd77f303 100644
 +    }
 +    if (!this.selection_.has(id)) {
 +      this.collapseSelection_(id);
-     }
++    }
 +    target.count = this.selectedIds_.length > 1 ? this.selectedIds_.length : 1;
 +    if (target.tabId) {
 +      const {muted} = await browserProxyFactory.getInstance().handler.getTabMuted(
@@ -6301,30 +6399,26 @@ index aa4e0fe69e..1bfd77f303 100644
 +        });
    }
  
--  protected onNewTabButtonClick_() {
--    this.tabStripService_.createTabAt(null, null);
+-  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
+-      boolean {
+-    const index = this.findItemIndex_(id, type);
+-    if (index === -1) {
+-      return false;
 +  openSpaceMenu(x: number, y: number) {
 +    this.shadowRoot.querySelector<SpaceBarElement>('#spaceTitle')
 +        ?.openMenuAt(x, y);
-   }
- 
--  // Utility helpers:
--  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
--    return this.items_.findIndex(
--        item => item.id === id && (!type || item.type === type));
++  }
++
 +  protected onStripContextmenu_(e: MouseEvent) {
 +    if (e.defaultPrevented) {
 +      return;
-+    }
+     }
 +    e.preventDefault();
 +    this.openSpaceMenu(e.clientX, e.clientY);
-   }
++  }
  
--  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
--      |undefined {
--    return this.items_.find(
--               item => item.id === id && (!type || item.type === type)) as T |
--        undefined;
+-    this.updateItemAt_(index, newItem);
+-    return true;
 +  private runMenuCommand_(detail: TabCommandDetail) {
 +    const {command, target, spaceId, windowId, folderId} = detail;
 +    const targets = this.commandTargets_(command, target);
@@ -6345,9 +6439,11 @@ index aa4e0fe69e..1bfd77f303 100644
 +    }
    }
  
--  protected getTabElement_(id: string): TabElement|null {
--    return this.shadowRoot.querySelector<TabElement>(
--        `webui-browser-tab#${this.tabIdToDomId(id)}`);
+-  // Tab IDs contain ":" characters which are not valid when used as DOM node
+-  // IDs, and also an ID must contain at least one non-special and non-numeric
+-  // character.
+-  protected tabIdToDomId(id: NodeId): string {
+-    return 'id_' + id.replaceAll(':', '_');
 +  private commandTargets_(command: TabCommand, target: TabMenuTarget):
 +      TabMenuTarget[] {
 +    if (!actsOnSelection(command) || this.selectedIds_.length < 2 ||
@@ -6358,8 +6454,7 @@ index aa4e0fe69e..1bfd77f303 100644
 +        .filter((one): one is TabMenuTarget => one !== null);
    }
  
--  private setActiveTab_(id: string) {
--    this.activeTab_ = id;
+-  // TabDragHost impl:
 +  private async moveToNewWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6369,10 +6464,10 @@ index aa4e0fe69e..1bfd77f303 100644
 +    this.collapseSelection_(this.activeTab_);
 +    this.fire('tab-closing', {ids});
 +    await browserProxyFactory.getInstance().handler.moveTabsToNewWindow(ids);
-   }
++  }
  
--  protected setItems_(items: TabStripItem[]) {
--    this.items_ = items;
+-  get itemsForDrag() {
+-    return this.items_;
 +  private async moveToMiniWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6384,10 +6479,8 @@ index aa4e0fe69e..1bfd77f303 100644
 +    await browserProxyFactory.getInstance().handler.moveTabsToMiniWindow(ids);
    }
  
--  private updateItemAt_(index: number, item: TabStripItem) {
--    const newItems = [...this.items_];
--    newItems[index] = item;
--    this.setItems_(newItems);
+-  getTabElementForDrag(id: string) {
+-    return this.getTabElement_(id);
 +  private async moveToWindow_(targets: TabMenuTarget[], windowId: number) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6400,11 +6493,8 @@ index aa4e0fe69e..1bfd77f303 100644
 +        windowId, ids);
    }
  
--  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
--      boolean {
--    const index = this.findItemIndex_(id, type);
--    if (index === -1) {
--      return false;
+-  setItemsForDrag(items: TabStripItem[]) {
+-    this.setItems_(items);
 +  runTabCommand(
 +      command: TabCommand, target: TabMenuTarget, spaceId = '',
 +      folderId = '') {
@@ -6470,11 +6560,11 @@ index aa4e0fe69e..1bfd77f303 100644
 +      case 'close-right':
 +        this.closeToRight_(target.id);
 +        break;
-     }
-+  }
++    }
+   }
  
--    this.updateItemAt_(index, newItem);
--    return true;
+-  activateTabForDrag(id: string) {
+-    this.activateTab(id);
 +  private closeToRight_(targetId: string) {
 +    const loose = this.looseTabIds_();
 +    const index = loose.indexOf(targetId);
@@ -6485,11 +6575,8 @@ index aa4e0fe69e..1bfd77f303 100644
 +    }
    }
  
--  // Tab IDs contain ":" characters which are not valid when used as DOM node
--  // IDs, and also an ID must contain at least one non-special and non-numeric
--  // character.
--  protected tabIdToDomId(id: NodeId): string {
--    return 'id_' + id.replaceAll(':', '_');
+-  setDragInProgressForDrag(value: boolean) {
+-    this.dragInProgress_ = value;
 +  // Pinned rows are left alone: closing them is what the pin was meant to
 +  // prevent, and a dormant row has no tab to close in the first place.
 +  private closeMany_(ids: string[]) {
@@ -6503,56 +6590,49 @@ index aa4e0fe69e..1bfd77f303 100644
 +    }
    }
  
--  // TabDragHost impl:
+-  setTabStripNoDrag(noDrag: boolean) {
+-    this.$.tabstrip.classList.toggle('nodrag', noDrag);
 +  protected looseTabCount_(): number {
 +    return this.looseTabIds_().length;
-+  }
+   }
  
--  get itemsForDrag() {
--    return this.items_;
+-  dragMouseDown(e: MouseEvent) {
+-    this.dragDelegate_.onMouseDown(e);
 +  protected onClearTabsClick_() {
 +    this.closeMany_(this.looseTabIds_());
    }
  
--  getTabElementForDrag(id: string) {
--    return this.getTabElement_(id);
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  private groupIdFrom_(e: Event): string {
 +    return (e.currentTarget as HTMLElement).dataset['group'] ?? '';
    }
  
--  setItemsForDrag(items: TabStripItem[]) {
--    this.setItems_(items);
+-  closeDragElement() {
+-    this.dragDelegate_.onMouseUp();
 +  protected onTidyGroupClick_(e: Event) {
 +    if (this.dragDelegate_.consumeSuppressedClick()) {
 +      return;
 +    }
 +    this.tidyGroups_.toggle(this.groupIdFrom_(e));
 +    this.refreshSections_();
-   }
- 
--  activateTabForDrag(id: string) {
--    this.activateTab(id);
++  }
++
 +  protected onTidyGroupSaveClick_(e: Event) {
 +    e.stopPropagation();
 +    this.saveGroupAsFolder_(this.groupIdFrom_(e));
-   }
- 
--  setDragInProgressForDrag(value: boolean) {
--    this.dragInProgress_ = value;
++  }
++
 +  protected onTidyGroupCloseClick_(e: Event) {
 +    e.stopPropagation();
 +    this.closeGroup_(this.groupIdFrom_(e));
-   }
- 
--  setTabStripNoDrag(noDrag: boolean) {
--    this.$.tabstrip.classList.toggle('nodrag', noDrag);
++  }
++
 +  protected onTidyGroupUngroupClick_(e: Event) {
 +    e.stopPropagation();
 +    this.ungroupGroup_(this.groupIdFrom_(e));
-   }
- 
--  dragMouseDown(e: MouseEvent) {
--    this.dragDelegate_.onMouseDown(e);
++  }
++
 +  protected onTidyGroupContextmenu_(e: MouseEvent) {
 +    e.preventDefault();
 +    const id = this.groupIdFrom_(e);
@@ -6571,16 +6651,12 @@ index aa4e0fe69e..1bfd77f303 100644
 +        this.closeGroup_(id);
 +      }
 +    });
-   }
- 
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
++  }
++
 +  protected onTidyGroupNameClick_(e: Event) {
 +    e.stopPropagation();
-   }
- 
--  closeDragElement() {
--    this.dragDelegate_.onMouseUp();
++  }
++
 +  protected onTidyGroupNameKeydown_(e: KeyboardEvent) {
 +    if (e.key === 'Enter') {
 +      (e.target as HTMLInputElement).blur();
@@ -6998,11 +7074,6 @@ index aa4e0fe69e..1bfd77f303 100644
 +  }
 +
 +  private closeTabs_(ids: string[]) {
-+    const successor = this.successorAfter_(ids);
-+    if (successor) {
-+      this.activateTab(successor);
-+    }
-+    this.fire('tab-closing', {ids});
 +    this.tabStripService_.closeNodes(ids);
 +  }
 +
@@ -7034,8 +7105,7 @@ index aa4e0fe69e..1bfd77f303 100644
 +  }
 +
 +  protected isDormant_(id: string): boolean {
-+    return this.spaces_.dormantByKey(id) !== undefined ||
-+        this.spaces_.isAsleep(id);
++    return this.spaces_.dormantByKey(id) !== undefined;
 +  }
 +
 +  private async transitionSpace_(to: string, apply: () => void) {
@@ -7089,12 +7159,14 @@ index aa4e0fe69e..1bfd77f303 100644
 +      return;
 +    }
 +    this.pinnedTabs_.unpin(entry.key);
++    let rowId = entry.tabId;
 +    if (!entry.tabId) {
-+      this.spaces_.addDormant(
++      rowId = this.spaces_.addDormant(
 +          entry.space || this.spaces_.activeId,
-+          {url: entry.url, title: entry.title, favicon: entry.favicon});
++          {url: entry.url, title: entry.title, favicon: entry.favicon})?.key ?? '';
 +    }
 +    this.refreshSections_();
++    return rowId;
 +  }
 +
 +  // Closing a live pinned row destroys the tab and leaves the row behind; a
@@ -7145,9 +7217,19 @@ index aa4e0fe69e..1bfd77f303 100644
 +  }
 +
 +  private async wakeEntry_(entry: PinnedEntry) {
-+    const tabId = await this.createTab_(entry.url, entry.space);
-+    this.pinnedTabs_.attach(entry.key, tabId);
-+    this.refreshSections_();
++    if (this.wakingPins_.has(entry.key)) {
++      return;
++    }
++    this.wakingPins_.add(entry.key);
++    try {
++      const tabId = await this.createTab_(entry.url, entry.space);
++      if (tabId) {
++        this.pinnedTabs_.attach(entry.key, tabId);
++      }
++    } finally {
++      this.wakingPins_.delete(entry.key);
++      this.refreshSections_();
++    }
 +  }
 +
 +  private refreshSections_() {
@@ -7204,8 +7286,11 @@ index aa4e0fe69e..1bfd77f303 100644
 +  protected activateTab(tabId: NodeId) {
 +    const dormant = this.pinnedTabs_.byKey(tabId);
 +    if (dormant) {
-+      this.wakeEntry_(dormant);
-+      return;
++      if (!dormant.tabId) {
++        this.wakeEntry_(dormant);
++        return;
++      }
++      tabId = dormant.tabId;
 +    }
 +
 +    const sleeping = this.spaces_.wake(tabId);
@@ -7648,14 +7733,37 @@ index aa4e0fe69e..1bfd77f303 100644
 +    this.refreshSections_();
 +  }
 +
-+  setTabPinned(tabId: string, pinned: boolean) {
++  setTabPinned(tabId: string, pinned: boolean): PinnedDragRows {
++    const moved: PinnedDragRows = {tabId, rowIds: []};
 +    for (const id of this.dragRowIds_(tabId)) {
++      let rowId: string|undefined;
 +      if (pinned) {
-+        this.pinTab_(id);
++        const entry = this.entryFor_(id) ?? this.pinTab_(id);
++        rowId = entry ? entry.tabId || entry.key : undefined;
 +      } else {
-+        this.unpinTab_(id);
++        rowId = this.unpinTab_(id);
++      }
++      if (!rowId) {
++        continue;
++      }
++      moved.rowIds.push(rowId);
++      if (id === tabId) {
++        moved.tabId = rowId;
 +      }
 +    }
++    return moved;
++  }
++
++  captureDragState(): () => void {
++    const pins = this.pinnedTabs_.snapshot();
++    const rows = this.spaces_.snapshot();
++    return () => {
++      const liveTabs = new Set(
++          this.items_.filter(item => item.type === 'tab').map(item => item.id));
++      this.pinnedTabs_.revert(pins, liveTabs);
++      this.spaces_.revert(rows, liveTabs);
++      this.refreshSections_();
++    };
 +  }
 +
 +  moveTabToSpace(tabId: string, spaceId: string) {

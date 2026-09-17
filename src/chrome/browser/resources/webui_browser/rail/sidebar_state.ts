@@ -11,6 +11,7 @@ export const MINI = new URLSearchParams(location.search).has('mini');
 const SAVE_DELAY_MS = 0;
 
 export interface StoredPin {
+  id?: string;
   home: string;
   homeTitle?: string;
   homeFavicon?: string;
@@ -79,6 +80,7 @@ export async function readSidebarState(): Promise<SidebarState|null> {
 
 export class SidebarStore {
   private timer_ = 0;
+  private current_: string|null = null;
 
   constructor(private serialize_: () => SidebarState) {}
 
@@ -88,8 +90,16 @@ export class SidebarStore {
     }
     clearTimeout(this.timer_);
     this.timer_ = setTimeout(() => {
-      browserProxyFactory.getInstance().handler.setSidebarState(
-          JSON.stringify(this.serialize_()));
+      this.current_ = JSON.stringify(this.serialize_());
+      browserProxyFactory.getInstance().handler.setSidebarState(this.current_);
     }, SAVE_DELAY_MS);
+  }
+
+  accept(value: string): boolean {
+    if (value === this.current_) {
+      return false;
+    }
+    this.current_ = value;
+    return true;
   }
 }

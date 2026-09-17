@@ -1,6 +1,79 @@
+import type {Container} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
+import type {Position} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
+
 import type {TabStripItem} from '../tab_strip/items.js';
 import type {TabElement} from '../tab_strip/tab.js';
 import type {TabDragHost} from '../tab_strip/tab_drag_host.js';
+
+export function nativeTabMoves(root: Container, order: string[]):
+    Array<{id: string, position: Position}> {
+  const ranks = new Map(order.map((id, index) => [id, index]));
+  const moves: Array<{id: string, position: Position}> = [];
+  const visit = (node: Container, path: string[]) => {
+    const data = node.data;
+    const parent = data.window ?? data.tabStrip ?? data.pinnedTabs ??
+        data.unpinnedTabs ?? data.tabGroup ?? data.splitTab;
+    if (!parent) {
+      return;
+    }
+    const components = [...path, parent.id];
+    const children = node.children ?? [];
+    if (!data.splitTab) {
+      let offset = 0;
+      let run: string[] = [];
+      const flush = () => {
+        const ordered = run.filter(id => ranks.has(id))
+                            .sort((a, b) => ranks.get(a)! - ranks.get(b)!);
+        let next = 0;
+        const desired = run.map(id => ranks.has(id) ? ordered[next++]! : id);
+        for (let index = 0; index < desired.length; index++) {
+          const id = desired[index]!;
+          const from = run.indexOf(id);
+          if (from !== index) {
+            moves.push(
+                {id, position: {path: {components}, index: offset + index}});
+            run.splice(from, 1);
+            run.splice(index, 0, id);
+          }
+        }
+        offset += run.length;
+        run = [];
+      };
+      for (const child of children) {
+        if (child.data.tab) {
+          run.push(child.data.tab.id);
+        } else {
+          flush();
+          offset += countTabs(child);
+        }
+      }
+      flush();
+    }
+    for (const child of children) {
+      visit(child, components);
+    }
+  };
+  visit(root, []);
+  return moves;
+}
+
+function countTabs(node: Container): number {
+  if (node.data.tab) {
+    return 1;
+  }
+  return (node.children ?? [])
+      .reduce((sum, child) => sum + countTabs(child), 0);
+}
+
+export function mergeItemOrder(
+    current: TabStripItem[], ordered: TabStripItem[]): TabStripItem[] {
+  const keyOf = (item: TabStripItem) => `${item.type}:${item.id}`;
+  const byKey = new Map(current.map(item => [keyOf(item), item]));
+  const merged = ordered.map(item => byKey.get(keyOf(item)))
+                     .filter((item): item is TabStripItem => !!item);
+  const placed = new Set(merged);
+  return [...merged, ...current.filter(item => !placed.has(item))];
+}
 
 export interface DragHandOff {
   tabId: string;
@@ -18,6 +91,11 @@ export interface DragSlot {
   group: string;
 }
 
+export interface PinnedDragRows {
+  tabId: string;
+  rowIds: string[];
+}
+
 export interface RailDragHost extends TabDragHost {
   pinnedItemsForDrag: TabStripItem[];
   setPinnedItemsForDrag(items: TabStripItem[]): void;
@@ -25,9 +103,11 @@ export interface RailDragHost extends TabDragHost {
   applyDragSlots(slots: DragSlot[], pinned: boolean): void;
   dragElementFor(slot: DragSlot): HTMLElement|null;
   moveTabToSpace(tabId: string, spaceId: string): void;
-  setTabPinned(tabId: string, pinned: boolean): void;
+  setTabPinned(tabId: string, pinned: boolean): PinnedDragRows;
+  captureDragState(): () => void;
   setTabFolder(tabId: string, folderId: string): void;
   handOffDrag(drag: DragHandOff): void;
+  syncTabOrder(): void;
 }
 
 const DRAG_THRESHOLD = 4;
@@ -45,6 +125,8 @@ export class TabDrag {
   private offsetY_ = 0;
   private height_ = 0;
   private lastY_ = 0;
+  private lastX_ = 0;
+  private layoutFrame_ = 0;
   private pinned_ = false;
   private dormant_ = false;
   private isGroup_ = false;
@@ -53,6 +135,8 @@ export class TabDrag {
   private hoveredDot_: HTMLElement|null = null;
   private hoveredFolder_: HTMLElement|null = null;
   private crossesDivider_ = false;
+  private originId_ = '';
+  private revertCrossing_: (() => void)|null = null;
   private scrollTimer_ = 0;
 
   private onMove_ = (e: MouseEvent) => this.move_(e);
@@ -89,11 +173,14 @@ export class TabDrag {
     const folderId = tab ? '' : header!.dataset['folder'] ?? '';
     this.tabId_ =
         tab ? tab.tabData.id : folderId || header!.dataset['group'] || '';
+    this.originId_ = this.tabId_;
+    this.revertCrossing_ = null;
     this.pinned_ = tab ? tab.pinned : !!folderId;
     this.dormant_ = tab ? tab.dormant : false;
     this.startX_ = e.clientX;
     this.startY_ = e.clientY;
     this.lastY_ = e.clientY;
+    this.lastX_ = e.clientX;
     this.offsetX_ = e.clientX - rect.left;
     this.offsetY_ = e.clientY - rect.top;
     this.height_ = rect.height;
@@ -110,6 +197,11 @@ export class TabDrag {
       element.classList.remove('dragsource');
     }
     this.element_()?.classList.add('dragsource');
+    cancelAnimationFrame(this.layoutFrame_);
+    this.layoutFrame_ = requestAnimationFrame(() => {
+      this.layoutFrame_ = 0;
+      this.onDragMoved(this.lastX_, this.lastY_);
+    });
   }
 
   onDragMoved(x: number, y: number) {
@@ -117,12 +209,13 @@ export class TabDrag {
       return;
     }
     this.lastY_ = y;
+    this.lastX_ = x;
+    this.hoverDot_(x, y);
+    const crossed = this.hoverDivider_(y);
     this.hoverFolder_(x, y);
-    if (!this.hoveredFolder_) {
+    if (!crossed && !this.hoveredFolder_) {
       this.reorder_();
     }
-    this.hoverDot_(x, y);
-    this.hoverDivider_(y);
   }
 
   onDragEnded(inside: boolean) {
@@ -131,21 +224,21 @@ export class TabDrag {
     }
     const spaceId = this.hoveredDot_?.dataset['id'];
     const folderId = this.hoveredFolder_?.dataset['folder'];
-    const crossed = this.crossesDivider_;
     const tabId = this.tabId_;
-    const pinned = this.pinned_;
+    const revert = this.revertCrossing_;
     this.clearDragUi_();
     this.reset_();
 
-    if (inside) {
+    if (!inside) {
+      revert?.();
+    } else {
       if (spaceId) {
         this.host_.moveTabToSpace(tabId, spaceId);
       } else if (folderId) {
         this.host_.setTabFolder(tabId, folderId);
-      } else if (crossed) {
-        this.host_.setTabPinned(tabId, !pinned);
       }
     }
+    this.host_.syncTabOrder();
     this.host_.requestUpdate();
   }
 
@@ -193,6 +286,8 @@ export class TabDrag {
   }
 
   private clearDragUi_() {
+    cancelAnimationFrame(this.layoutFrame_);
+    this.layoutFrame_ = 0;
     clearInterval(this.scrollTimer_);
     this.scrollTimer_ = 0;
     this.hoveredDot_?.classList.remove('droptarget');
@@ -229,16 +324,49 @@ export class TabDrag {
     this.hoveredFolder_ = folder;
   }
 
-  private hoverDivider_(y: number) {
+  private hoverDivider_(y: number): boolean {
     const divider =
         this.host_.shadowRoot?.querySelector<HTMLElement>('#pinnedDivider');
-    if (!divider || this.isGroup_) {
-      return;
+    if (!divider || this.isGroup_ || this.hoveredDot_) {
+      return false;
     }
     const rect = divider.getBoundingClientRect();
     const above = y < rect.top + rect.height / 2;
-    this.crossesDivider_ = !this.hoveredFolder_ && above !== this.pinned_;
+    this.crossesDivider_ = above !== this.pinned_;
     divider.classList.toggle('droptarget', this.crossesDivider_);
+    if (!this.crossesDivider_) {
+      return false;
+    }
+    const slots = this.host_.dragSlots(above, false)
+                      .filter(slot => this.host_.dragElementFor(slot));
+    let at = slots.findIndex(slot => {
+      const element = this.host_.dragElementFor(slot);
+      return element && y < this.midpoint_(element);
+    });
+    if (at < 0) {
+      at = slots.length;
+    }
+    const group = slots[at - 1]?.group ?? '';
+    let rowIds: string[];
+    if (this.revertCrossing_) {
+      this.revertCrossing_();
+      this.revertCrossing_ = null;
+      this.tabId_ = this.originId_;
+      rowIds = [this.tabId_];
+    } else {
+      this.revertCrossing_ = this.host_.captureDragState();
+      const moved = this.host_.setTabPinned(this.tabId_, above);
+      this.tabId_ = moved.tabId;
+      rowIds = moved.rowIds;
+    }
+    this.pinned_ = above;
+    const listed = new Set(slots.map(slot => slot.id));
+    slots.splice(
+        at, 0,
+        ...rowIds.filter(id => id === this.tabId_ || !listed.has(id))
+            .map(id => ({id, kind: 'tab' as const, group})));
+    this.host_.applyDragSlots(slots, above);
+    return true;
   }
 
   private edgeScroll_() {
@@ -322,10 +450,7 @@ export class TabDrag {
     if (!element) {
       return null;
     }
-    if (slot.kind !== 'tab' || this.isGroup_) {
-      return element;
-    }
-    return (element as TabElement).dormant === this.dormant_ ? element : null;
+    return element;
   }
 
   private midpoint_(element: HTMLElement): number {
@@ -367,6 +492,8 @@ export class TabDrag {
     this.dormant_ = false;
     this.isGroup_ = false;
     this.crossesDivider_ = false;
+    this.originId_ = '';
+    this.revertCrossing_ = null;
   }
 
   consumeSuppressedClick(): boolean {

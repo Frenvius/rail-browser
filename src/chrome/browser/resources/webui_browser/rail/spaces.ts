@@ -209,6 +209,11 @@ export interface TabRow {
   favicon: string;
 }
 
+export interface SpacesSnapshot {
+  spaces: Space[];
+  rows: TabRow[];
+}
+
 interface RowFields {
   space: string;
   tabId: string;
@@ -298,6 +303,9 @@ export class Spaces {
   }
 
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
+    const previous = this.rows_;
+    this.rows_ = [];
+    this.spaces_ = [];
     this.material_ = state?.material ?? DEFAULT_MATERIAL;
     for (const stored of state?.spaces ?? []) {
       const space: Space = {
@@ -342,6 +350,39 @@ export class Spaces {
         this.adopt(tab.id, tab.url);
       }
     }
+    for (const row of this.rows_) {
+      const old = row.tabId ?
+          previous.find(other => other.tabId === row.tabId) :
+          undefined;
+      if (!old) {
+        continue;
+      }
+      row.asleep = old.asleep;
+      const opener = previous.find(other => other.key === old.opener);
+      const restored = opener ? this.byTab(opener.tabId) : undefined;
+      row.opener = restored?.space === row.space ? restored.key : '';
+    }
+  }
+
+  snapshot(): SpacesSnapshot {
+    return {
+      spaces: this.spaces_.map(space => ({...space})),
+      rows: this.rows_.map(row => ({...row})),
+    };
+  }
+
+  revert(snapshot: SpacesSnapshot, liveTabs: Set<string>) {
+    this.spaces_ = snapshot.spaces.map(space => ({...space}));
+    this.rows_ = snapshot.rows
+                     .filter(row => !row.tabId || liveTabs.has(row.tabId))
+                     .map(row => ({...row}));
+    const keys = new Set(this.rows_.map(row => row.key));
+    for (const space of this.spaces_) {
+      if (!keys.has(space.activeKey)) {
+        space.activeKey = '';
+      }
+    }
+    this.onChange_();
   }
 
   create(): Space {
@@ -705,14 +746,16 @@ export class Spaces {
     const rows = this.rowsIn(row.space).filter(
         other => other === row || !other.tabId || !closing.has(other.tabId));
     const index = rows.indexOf(row);
-    const after = rows.slice(index + 1);
+    const neighbors = [
+      ...rows.slice(index + 1), ...rows.slice(0, index).reverse(),
+    ];
 
-    const child = after.find(other => other.opener === row.key);
+    const child = neighbors.find(other => other.opener === row.key);
     if (child) {
       return child;
     }
     if (row.opener) {
-      const sibling = after.find(other => other.opener === row.opener);
+      const sibling = neighbors.find(other => other.opener === row.opener);
       if (sibling) {
         return sibling;
       }
@@ -921,8 +964,9 @@ export class Spaces {
 }
 
 function storePin(entry: PinnedEntry): StoredPin {
-  const {home, homeTitle, homeFavicon, url, title, favicon, folder} = entry;
-  return {home, homeTitle, homeFavicon, url, title, favicon, folder};
+  const {key, home, homeTitle, homeFavicon, url, title, favicon, folder} =
+      entry;
+  return {id: key, home, homeTitle, homeFavicon, url, title, favicon, folder};
 }
 
 export function serializeSidebar(
