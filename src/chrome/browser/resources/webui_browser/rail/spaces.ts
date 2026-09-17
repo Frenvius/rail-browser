@@ -342,8 +342,8 @@ export class Spaces {
     if (!this.spaces_.length) {
       this.spaces_.push(this.mint_());
     }
-    this.activeId_ = this.byId(state?.activeSpace ?? '')?.id ??
-        this.spaces_[0]!.id;
+    this.activeId_ = this.byId(this.activeId_)?.id ??
+        this.byId(state?.activeSpace ?? '')?.id ?? this.spaces_[0]!.id;
 
     for (const tab of tabs) {
       if (!claimed.has(tab.id)) {
