@@ -5719,7 +5719,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..c231ed547c 100644
+index aa4e0fe69e..380a7dc40b 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6147,7 +6147,7 @@ index aa4e0fe69e..c231ed547c 100644
  
      if (tab.isActive) {
        this.setActiveTab_(tab.id);
-@@ -258,149 +529,1547 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +529,1550 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6168,6 +6168,9 @@ index aa4e0fe69e..c231ed547c 100644
 -    const item = this.findItem_<TabItem>(tabId, 'tab');
 -    if (!item) {
 +  private async ensureProfile_(tabId: NodeId) {
++    if (MINI) {
++      return;
++    }
 +    const spaceId = this.spaces_.spaceOf(tabId);
 +    const {profileId} =
 +        await browserProxyFactory.getInstance().handler.getTabProfile(tabId);
@@ -6282,14 +6285,14 @@ index aa4e0fe69e..c231ed547c 100644
 +        await browserProxyFactory.getInstance().handler.getTabOpener(tabId);
 +    if (!opener) {
 +      return;
-     }
++    }
 +    if (foreground) {
 +      this.spaces_.forgetOpeners(this.spaces_.spaceOf(tabId));
 +    }
 +    this.spaces_.setOpener(tabId, opener);
 +    if (!placed && this.canAnchor_(opener)) {
 +      this.spaces_.placeAfterOpener(tabId);
-+    }
+     }
 +    this.refreshSections_();
    }
  
