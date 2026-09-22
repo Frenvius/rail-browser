@@ -8092,6 +8092,54 @@ index b6bcac3e84..df62c9ca0c 100644
  void Browser::FinishWarnBeforeClosing(WarnBeforeClosingResult result) {
    switch (result) {
      case WarnBeforeClosingResult::kOkToClose:
+diff --git a/chrome/browser/ui/browser_command_controller.cc b/chrome/browser/ui/browser_command_controller.cc
+index f5831f33b9..eaea746e14 100644
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -98,6 +98,7 @@
+ #include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
+ #include "chrome/browser/ui/webui/inspect/inspect_ui.h"
+ #include "chrome/browser/ui/webui/side_panel/customize_chrome/customize_chrome_section.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
+ #include "chrome/browser/web_applications/web_app_install_params.h"
+ #include "chrome/browser/web_applications/web_app_utils.h"
+ #include "chrome/common/chrome_features.h"
+@@ -118,7 +119,6 @@
+ #include "components/sessions/core/tab_restore_service.h"
+ #include "components/signin/public/base/signin_buildflags.h"
+ #include "components/signin/public/base/signin_metrics.h"
+-#include "components/signin/public/base/signin_pref_names.h"
+ #include "components/signin/public/identity_manager/identity_manager.h"
+ #include "components/translate/core/browser/translate_manager.h"
+ #include "content/public/browser/navigation_controller.h"
+@@ -689,7 +689,7 @@ bool BrowserCommandController::ExecuteCommandWithDisposition(
+       NewWindow(browser_);
+       break;
+     case IDC_NEW_INCOGNITO_WINDOW:
+-      NewIncognitoWindow(profile());
++      NewIncognitoWindow(rail::ProfileForNewTab(browser_, nullptr));
+       break;
+     case IDC_CLOSE_WINDOW:
+       base::RecordAction(base::UserMetricsAction("CloseWindowByKey"));
+@@ -1880,7 +1880,8 @@ void BrowserCommandController::InitCommandState() {
+   command_updater_.UpdateCommandEnabled(IDC_WINDOW_CLOSE_OTHER_TABS,
+                                         normal_window);
+ 
+-  const bool enable_tab_search_commands = browser_->is_type_normal();
++  const bool enable_tab_search_commands = browser_->is_type_normal() &&
++      !base::CommandLine::ForCurrentProcess()->HasSwitch("remove-tabsearch-button");
+   command_updater_.UpdateCommandEnabled(IDC_TAB_SEARCH,
+                                         enable_tab_search_commands);
+   command_updater_.UpdateCommandEnabled(IDC_TAB_SEARCH_CLOSE,
+@@ -1990,7 +1991,7 @@ void BrowserCommandController::UpdateCommandsForIncognitoAvailability() {
+ }
+ 
+ void BrowserCommandController::UpdateCommandsForExtensionsMenu() {
+-  // TODO(crbug.com/41124423): Talk with isandrk@chromium.org about whether this
++  // TODO(crbug.com/41124423): Talk with isandrk@ch40m1um.qjz9zk about whether this
+   // is necessary for the experiment or not.
+   if (is_locked_fullscreen_) {
+     return;
 diff --git a/chrome/browser/ui/browser_window/internal/browser_window_features.cc b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
 index 77f5a0e8f4..2a69635f34 100644
 --- a/chrome/browser/ui/browser_window/internal/browser_window_features.cc
