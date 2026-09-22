@@ -4572,7 +4572,7 @@ index 8ebad94626..1c26e628dd 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..ac12f89e64 100644
+index caed98ffda..701f5c0faa 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4611,7 +4611,7 @@ index caed98ffda..ac12f89e64 100644
 +import {formatDisplayUrl} from './rail/format_url.js';
 +import {openLogoMenu} from './rail/logo_menu.js';
 +import {MENU_OPEN_EVENT} from './rail/menu_overlay.js';
-+import {adoptMiniWindow, MINI, miniProfileName, miniSetTargetSpace, miniSpaces, miniTargetSpace} from './rail/mini_window.js';
++import {adoptMiniWindow, MINI, miniMatchProfile, miniProfileName, miniSetTargetSpace, miniSpaces, miniTargetSpace} from './rail/mini_window.js';
 +import {showNativeMenu} from './rail/native_menu.js';
 +import {runCommand} from './rail/command_registry.js';
 +import {initSidebarResize, toggleSidebarCollapsed} from './rail/sidebar_resize.js';
@@ -4701,7 +4701,7 @@ index caed98ffda..ac12f89e64 100644
      this.trackedElementManager_.startTracking(
          this.$.backButton, 'kToolbarBackButtonElementId');
      this.trackedElementManager_.startTracking(
-@@ -119,6 +150,34 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -119,6 +150,35 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const {width} =
          await browserProxyFactory.getInstance().handler.getTabStripInset();
      this.tabStripInset_ = width;
@@ -4726,6 +4726,7 @@ index caed98ffda..ac12f89e64 100644
 +          const picked = spaces.find(space => space.id === command);
 +          if (picked) {
 +            this.miniSpace_ = miniSetTargetSpace(picked);
++            this.$.tabstrip.openTabs.forEach(tab => miniMatchProfile(tab.id));
 +          }
 +        });
 +  }
@@ -4736,7 +4737,7 @@ index caed98ffda..ac12f89e64 100644
    }
  
    // TabStripControllerDelegate:
-@@ -147,8 +206,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -147,8 +207,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
      browserProxyFactory.getInstance().handler.openAppMenu();
    }
  
@@ -4750,7 +4751,7 @@ index caed98ffda..ac12f89e64 100644
    }
  
    protected onMinimizeClick_(_: Event) {
-@@ -232,15 +294,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,15 +295,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -4838,7 +4839,7 @@ index caed98ffda..ac12f89e64 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -252,6 +386,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -252,6 +387,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -4846,7 +4847,7 @@ index caed98ffda..ac12f89e64 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -270,7 +405,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -270,7 +406,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // is typing and the tab navigates.
      const isNTP = activeTabUrl.startsWith('chrome://newtab');
      if (!isNTP) {
@@ -4855,7 +4856,7 @@ index caed98ffda..ac12f89e64 100644
  
        const tabWebView = this.$.contentRegion.activeWebview;
        if (tabWebView) {
-@@ -287,7 +422,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +423,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -4868,7 +4869,7 @@ index caed98ffda..ac12f89e64 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +444,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +445,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4983,7 +4984,7 @@ index caed98ffda..ac12f89e64 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +543,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +544,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5000,7 +5001,7 @@ index caed98ffda..ac12f89e64 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +582,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +583,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -5719,7 +5720,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..fb9e0de46f 100644
+index aa4e0fe69e..cf36508c7c 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -5740,13 +5741,14 @@ index aa4e0fe69e..fb9e0de46f 100644
  import type {TabStripServiceRemote} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
  import type {Container, Tab, TabCreatedContainer, TabGroup} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
  import {OnDataChangedEventFieldTags, whichOnDataChangedEvent} from '/tab_strip_api/tab_strip_api_events.mojom-webui.js';
-@@ -20,11 +22,33 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
+@@ -20,11 +22,34 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
  import {TabStripObservation} from '/tab_strip_api/tab_strip_observation.js';
  import type {TabStripObserver} from '/tab_strip_api/tab_strip_observer.js';
  
 +import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
 +import {Folders} from '../rail/folders.js';
++import {miniMatchProfile} from '../rail/mini_window.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
 +import {favoritesKey, isFavorites, PinnedTabs} from '../rail/pinned_tabs.js';
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow} from '../rail/sections.js';
@@ -5776,7 +5778,7 @@ index aa4e0fe69e..fb9e0de46f 100644
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-@@ -36,6 +60,8 @@ export interface TabStripElement {
+@@ -36,6 +61,8 @@ export interface TabStripElement {
    };
  }
  
@@ -5785,7 +5787,7 @@ index aa4e0fe69e..fb9e0de46f 100644
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -64,7 +90,7 @@ class TabStripItemFactory {
+@@ -64,7 +91,7 @@ class TabStripItemFactory {
  }
  
  export class TabStripElement extends CrLitElement implements TabStripObserver,
@@ -5794,7 +5796,7 @@ index aa4e0fe69e..fb9e0de46f 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -82,6 +108,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -82,6 +109,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        items_: {
          type: Array,
        },
@@ -5837,7 +5839,7 @@ index aa4e0fe69e..fb9e0de46f 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -90,21 +152,85 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,21 +153,85 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -5924,7 +5926,7 @@ index aa4e0fe69e..fb9e0de46f 100644
    }
  
    override connectedCallback() {
-@@ -112,11 +238,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -112,11 +239,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -5941,7 +5943,7 @@ index aa4e0fe69e..fb9e0de46f 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +269,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +270,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6005,7 +6007,7 @@ index aa4e0fe69e..fb9e0de46f 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +347,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +348,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6034,7 +6036,7 @@ index aa4e0fe69e..fb9e0de46f 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +383,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +384,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6049,7 +6051,7 @@ index aa4e0fe69e..fb9e0de46f 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -236,21 +439,92 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -236,21 +440,92 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {}
  
@@ -6152,7 +6154,7 @@ index aa4e0fe69e..fb9e0de46f 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +532,1551 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +533,1552 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6174,13 +6176,14 @@ index aa4e0fe69e..fb9e0de46f 100644
 -    if (!item) {
 +  private async ensureProfile_(tabId: NodeId) {
 +    if (MINI) {
++      miniMatchProfile(tabId);
 +      return;
 +    }
 +    const spaceId = this.spaces_.spaceOf(tabId);
 +    const {profileId} =
 +        await browserProxyFactory.getInstance().handler.getTabProfile(tabId);
 +    if (profileId === this.spaces_.profileOf(spaceId) ||
-+        this.spaces_.spaceOf(tabId) !== spaceId ||
++        this.spaces_.byTab(tabId)?.space !== spaceId ||
 +        !this.findItem_<TabItem>(tabId, 'tab')) {
        return;
      }

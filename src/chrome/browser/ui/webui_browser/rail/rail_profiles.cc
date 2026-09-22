@@ -26,6 +26,7 @@
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 #include "chrome/common/pref_names.h"
 #include "components/tabs/public/tab_interface.h"
 #include "components/prefs/pref_service.h"
@@ -83,7 +84,8 @@ content::WebContents* InsertTab(Browser* browser,
     return nullptr;
   }
 
-  if (profile == browser->profile()) {
+  const bool mini = IsMiniWindow(browser);
+  if (profile == browser->profile() && !mini) {
     return chrome::AddAndReturnTabAt(browser, url, index, true, std::nullopt,
                                      false);
   }
@@ -92,6 +94,14 @@ content::WebContents* InsertTab(Browser* browser,
       content::WebContents::Create(content::WebContents::CreateParams(profile));
   contents->GetController().LoadURLWithParams(
       content::NavigationController::LoadURLParams(url));
+
+  if (mini) {
+    content::WebContents* inserted = contents.get();
+    TabStripModel* model = browser->tab_strip_model();
+    model->InsertWebContentsAt(index < 0 ? model->count() : index,
+                               std::move(contents), AddTabTypes::ADD_ACTIVE);
+    return inserted;
+  }
 
   NavigateParams params(browser, std::move(contents));
   params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
