@@ -9836,7 +9836,7 @@ index e242711595..ba27170c35 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..790483d499 100644
+index 3fabca0c2a..6d45973370 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -10032,12 +10032,18 @@ index 3fabca0c2a..790483d499 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -617,10 +683,107 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -617,10 +683,113 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
 +  if (command_id == IDC_NEW_TAB) {
 +    OpenRailCommandBar(/*new_tab_mode=*/true, /*select_all=*/false);
++    return true;
++  }
++
++  if ((command_id == IDC_CLOSE_TAB || command_id == IDC_CLOSE_WINDOW) &&
++      browser_->tab_strip_model()->empty()) {
++    Close();
 +    return true;
 +  }
 +
@@ -10140,7 +10146,7 @@ index 3fabca0c2a..790483d499 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -691,6 +854,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +860,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -10149,7 +10155,7 @@ index 3fabca0c2a..790483d499 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -753,9 +918,10 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
+@@ -753,9 +924,10 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
@@ -10162,7 +10168,7 @@ index 3fabca0c2a..790483d499 100644
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -865,7 +1031,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
+@@ -865,7 +1037,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
    return ShowTranslateBubbleResult::kBrowserWindowNotValid;
  }
  
@@ -10170,7 +10176,7 @@ index 3fabca0c2a..790483d499 100644
  DownloadBubbleUIController*
  WebUIBrowserWindow::GetDownloadBubbleUIController() {
    NOTIMPLEMENTED_LOG_ONCE();
-@@ -882,6 +1047,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -882,6 +1053,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -10183,7 +10189,7 @@ index 3fabca0c2a..790483d499 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -947,11 +1118,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,11 +1124,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -10209,7 +10215,7 @@ index 3fabca0c2a..790483d499 100644
    // TODO(webium): Handle shortcuts that are registered in the FocusManager.
    // We handle only browser window shortcuts here. Secondary UIs can
    // registered their own shortcuts (e.g. Ctrl+Enter closes the Find Bar) via
-@@ -973,7 +1158,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -973,7 +1164,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
  #if !BUILDFLAG(IS_MAC)
  bool WebUIBrowserWindow::HandleKeyboardEvent(
      const input::NativeWebKeyboardEvent& event) {
@@ -10227,7 +10233,7 @@ index 3fabca0c2a..790483d499 100644
  }
  
  views::NativeWidget* WebUIBrowserWindow::CreateNativeWidget() {
-@@ -1138,6 +1332,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1138,6 +1338,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
      views::Widget::ClosedReason close_reason) {
    // TODO(webium): don't close a window during tab dragging.
  
@@ -10236,7 +10242,7 @@ index 3fabca0c2a..790483d499 100644
    // Give beforeunload handlers, the user, or policy the chance to cancel the
    // close before we hide the window below.
    if (!browser_->HandleBeforeClose()) {
-@@ -1181,6 +1377,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+@@ -1181,6 +1383,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
        true /* include_app_name */);
  }
  
@@ -10284,7 +10290,7 @@ index 3fabca0c2a..790483d499 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
      gfx::NativeView child,
      const gfx::Point& location) {
-@@ -1217,6 +1454,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1460,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  
