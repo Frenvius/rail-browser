@@ -81,6 +81,7 @@ export async function readSidebarState(): Promise<SidebarState|null> {
 export class SidebarStore {
   private timer_ = 0;
   private current_: string|null = null;
+  private unechoed_: string[] = [];
 
   constructor(private serialize_: () => SidebarState) {}
 
@@ -90,12 +91,22 @@ export class SidebarStore {
     }
     clearTimeout(this.timer_);
     this.timer_ = setTimeout(() => {
-      this.current_ = JSON.stringify(this.serialize_());
-      browserProxyFactory.getInstance().handler.setSidebarState(this.current_);
+      const value = JSON.stringify(this.serialize_());
+      if (value === this.current_) {
+        return;
+      }
+      this.current_ = value;
+      this.unechoed_.push(value);
+      browserProxyFactory.getInstance().handler.setSidebarState(value);
     }, SAVE_DELAY_MS);
   }
 
   accept(value: string): boolean {
+    const echoed = this.unechoed_.indexOf(value);
+    if (echoed !== -1) {
+      this.unechoed_.splice(0, echoed + 1);
+      return false;
+    }
     if (value === this.current_) {
       return false;
     }

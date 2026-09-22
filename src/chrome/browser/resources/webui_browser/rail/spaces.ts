@@ -6,7 +6,7 @@ import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import type {Folders} from './folders.js';
 import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
-import {INCOGNITO} from './sidebar_state.js';
+import {INCOGNITO, MINI} from './sidebar_state.js';
 
 export const SPACE_COLORS = [
   '#331b47', '#591b1c', '#58341a', '#725919',
@@ -215,6 +215,8 @@ export interface SpacesSnapshot {
 }
 
 interface RowFields {
+  key?: string;
+  pending?: boolean;
   space: string;
   tabId: string;
   url: string;
@@ -304,6 +306,19 @@ export class Spaces {
 
   restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
     const previous = this.rows_;
+    const homes = new Map(
+        previous.filter(row => row.tabId).map(row => [row.tabId, row]));
+    const waiting = previous.filter(row => row.pending && !row.tabId);
+    const reuse = (space: string, tabId: string, url: string) => {
+      const row = tabId ?
+          homes.get(tabId) :
+          waiting.find(
+              other => other.space === space && other.url === url);
+      if (row && !tabId) {
+        waiting.splice(waiting.indexOf(row), 1);
+      }
+      return row;
+    };
     this.rows_ = [];
     this.spaces_ = [];
     this.material_ = state?.material ?? DEFAULT_MATERIAL;
@@ -320,12 +335,16 @@ export class Spaces {
       this.spaces_.push(space);
       for (const entry of stored.tabs ?? []) {
         const {url, title, favicon, group} = storedTab(entry);
-        const tab = tabs.find(
-            candidate => candidate.url === url && !claimed.has(candidate.id));
+        const tab = MINI ? undefined : tabs.find(
+            candidate => candidate.url === url && !claimed.has(candidate.id) &&
+                (homes.get(candidate.id)?.space ?? space.id) === space.id);
         if (tab) {
           claimed.add(tab.id);
         }
+        const kept = reuse(space.id, tab ? tab.id : '', url);
         const row = this.push_({
+          key: kept?.key,
+          pending: kept?.pending,
           space: space.id,
           tabId: tab ? tab.id : '',
           url,
@@ -346,9 +365,23 @@ export class Spaces {
         this.byId(state?.activeSpace ?? '')?.id ?? this.spaces_[0]!.id;
 
     for (const tab of tabs) {
-      if (!claimed.has(tab.id)) {
-        this.adopt(tab.id, tab.url);
+      if (claimed.has(tab.id) && !MINI) {
+        continue;
       }
+      const home = MINI ? undefined : homes.get(tab.id);
+      if (!home || !this.byId(home.space) || this.claims_.has(tab.id)) {
+        this.adopt(tab.id, tab.url);
+        continue;
+      }
+      this.push_({
+        key: home.key,
+        space: home.space,
+        tabId: tab.id,
+        url: tab.url,
+        title: home.title,
+        favicon: home.favicon,
+        group: home.group,
+      });
     }
     for (const row of this.rows_) {
       const old = row.tabId ?
@@ -494,16 +527,19 @@ export class Spaces {
       this.assign(tabId, spaceId, url);
       return;
     }
-    const waiting = this.rows_.find(
-        row => row.space === spaceId && row.pending && !row.tabId);
+    const pending = this.rows_.filter(row => row.pending && !row.tabId);
+    const waiting = pending.find(
+                        row => row.url === url &&
+                            (claimed === undefined || row.space === spaceId)) ??
+        pending.find(row => row.space === spaceId);
     if (waiting) {
       waiting.tabId = tabId;
       waiting.pending = false;
-      waiting.url = url;
+      waiting.url = url || waiting.url;
       this.onChange_();
       return;
     }
-    this.push_({space: spaceId, tabId, url, title: '', favicon: ''});
+    this.attach_(spaceId, tabId, url);
     this.onChange_();
   }
 
@@ -524,16 +560,49 @@ export class Spaces {
     }
     const row = this.byTab(tabId);
     if (!row) {
-      this.push_({space: spaceId, tabId, url, title: '', favicon: ''});
+      this.attach_(spaceId, tabId, url);
       this.onChange_();
       return;
     }
     row.url = url;
     if (row.space !== spaceId) {
+      const dormant = this.dormantWith_(spaceId, url);
       row.space = spaceId;
-      this.toEnd_(row);
+      if (dormant) {
+        this.replaceRow_(dormant, row);
+      } else {
+        this.toEnd_(row);
+      }
     }
     this.onChange_();
+  }
+
+  private attach_(spaceId: string, tabId: string, url: string) {
+    const dormant = this.dormantWith_(spaceId, url);
+    if (dormant) {
+      dormant.tabId = tabId;
+      return;
+    }
+    this.push_({space: spaceId, tabId, url, title: '', favicon: ''});
+  }
+
+  private dormantWith_(spaceId: string, url: string): TabRow|undefined {
+    if (!url || isNewTabUrl(url)) {
+      return undefined;
+    }
+    return this.rows_.find(
+        row => row.space === spaceId && !row.tabId && !row.pending &&
+            row.url === url);
+  }
+
+  private replaceRow_(dormant: TabRow, row: TabRow) {
+    this.rows_ = this.rows_.filter(other => other !== row)
+                     .map(other => other === dormant ? row : other);
+    for (const space of this.spaces_) {
+      if (space.activeKey === dormant.key) {
+        space.activeKey = row.key;
+      }
+    }
   }
 
   track(tab: Tab) {
@@ -624,7 +693,7 @@ export class Spaces {
 
   wake(key: string): TabRow|undefined {
     const row = this.dormantByKey(key);
-    if (!row) {
+    if (!row || row.pending) {
       return undefined;
     }
     row.pending = true;
@@ -920,8 +989,8 @@ export class Spaces {
 
   private push_(fields: RowFields): TabRow {
     const row: TabRow = {
-      key: this.mintKey_(),
-      pending: false,
+      key: fields.key ?? this.mintKey_(),
+      pending: fields.pending ?? false,
       asleep: false,
       opener: fields.opener ?? '',
       group: fields.group ?? '',

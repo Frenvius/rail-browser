@@ -1,14 +1,15 @@
 import {test, expect} from 'bun:test';
 import {readFileSync} from 'node:fs';
 
-const load = (file: string, name: string) => {
+const load = (file: string, name: string, mini = false) => {
   const source = readFileSync(new URL(
       `../src/chrome/browser/resources/webui_browser/rail/${file}.ts`,
       import.meta.url), 'utf8').replace(/^import[\s\S]*?;\r?\n/gm, '')
       .replace(/^export /gm, '');
   const compiled = new Bun.Transpiler({loader: 'ts'}).transformSync(source);
-  return new Function('SystemBackdropMaterial', 'INCOGNITO',
-      `${compiled}\nreturn ${name};`)({kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false);
+  return new Function('SystemBackdropMaterial', 'INCOGNITO', 'MINI',
+      `${compiled}\nreturn ${name};`)(
+      {kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false, mini);
 };
 
 const Spaces = load('spaces', 'Spaces');
@@ -154,6 +155,103 @@ test('sidebar refresh preserves local opener and sleep state', () => {
   spaces.restore(state, tabs, new Set());
   expect(spaces.byTab('b').opener).toBe(spaces.byTab('a').key);
   expect(spaces.isAsleep('b')).toBe(true);
+});
+
+test('sidebar refresh keeps an open tab in its own space', () => {
+  const spaces = new Spaces(() => {});
+  const other = {...state.spaces[0], id: 'first', name: 'First',
+    tabs: ['https://example.test/']};
+  const saved = {activeSpace: 's', spaces: [other, state.spaces[0]]};
+  spaces.restore(saved, [], new Set());
+  spaces.adopt('live', 'https://example.test/');
+  expect(spaces.spaceOf('live')).toBe('s');
+  spaces.restore(saved, [tab('live')], new Set());
+  expect(spaces.spaceOf('live')).toBe('s');
+  expect(spaces.rowsIn('first')[0].tabId).toBe('');
+});
+
+test('a row already waking is not woken twice', () => {
+  const spaces = new Spaces(() => {});
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0],
+    tabs: ['https://example.test/']}]};
+  spaces.restore(saved, [], new Set());
+  const row = spaces.rowsIn('s')[0];
+  expect(spaces.wake(row.key)).toBe(row);
+  expect(spaces.wake(row.key)).toBeUndefined();
+});
+
+test('sidebar refresh keeps a waking row and its key', () => {
+  const spaces = new Spaces(() => {});
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0],
+    tabs: ['https://example.test/']}]};
+  spaces.restore(saved, [], new Set());
+  const row = spaces.wake(spaces.rowsIn('s')[0].key);
+  spaces.restore(saved, [], new Set());
+  expect(spaces.rowsIn('s')[0].key).toBe(row.key);
+  expect(spaces.rowsIn('s')[0].pending).toBe(true);
+  spaces.adopt('live', 'https://example.test/');
+  spaces.bind(row.key, 'live');
+  expect(spaces.rowsIn('s')).toHaveLength(1);
+  expect(spaces.rowsIn('s')[0].tabId).toBe('live');
+});
+
+test('sidebar refresh keeps the key of a live row', () => {
+  const spaces = new Spaces(() => {});
+  const tabs = [tab('a')];
+  spaces.restore(state, tabs, new Set());
+  const key = spaces.byTab('a').key;
+  spaces.restore(state, tabs, new Set());
+  expect(spaces.byTab('a').key).toBe(key);
+});
+
+test('an arriving tab takes over a dormant row with its URL', () => {
+  const spaces = new Spaces(() => {});
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0],
+    tabs: ['https://example.test/']}]};
+  spaces.restore(saved, [], new Set());
+  const dormant = spaces.rowsIn('s')[0];
+  spaces.adopt('live', 'https://example.test/');
+  expect(spaces.rowsIn('s')).toHaveLength(1);
+  expect(spaces.rowsIn('s')[0].key).toBe(dormant.key);
+  expect(spaces.rowsIn('s')[0].tabId).toBe('live');
+});
+
+test('moving a tab into a space replaces its dormant twin', () => {
+  const spaces = new Spaces(() => {});
+  const other = {...state.spaces[0], id: 'first', name: 'First',
+    tabs: ['https://example.test/']};
+  const saved = {activeSpace: 's', spaces: [other, state.spaces[0]]};
+  spaces.restore(saved, [], new Set());
+  spaces.adopt('live', 'https://example.test/');
+  spaces.assign('live', 'first', 'https://example.test/');
+  expect(spaces.rowsIn('first')).toHaveLength(1);
+  expect(spaces.rowsIn('first')[0].tabId).toBe('live');
+  expect(spaces.rowsIn('s')).toHaveLength(0);
+});
+
+test('an unclaimed tab binds to the waking row with its URL', () => {
+  const spaces = new Spaces(() => {});
+  const other = {...state.spaces[0], id: 'first', name: 'First',
+    tabs: ['https://example.test/']};
+  const saved = {activeSpace: 's', spaces: [other, state.spaces[0]]};
+  spaces.restore(saved, [], new Set());
+  const row = spaces.wake(spaces.rowsIn('first')[0].key);
+  spaces.adopt('live', 'https://example.test/');
+  expect(spaces.spaceOf('live')).toBe('first');
+  expect(spaces.rowsIn('first')[0].key).toBe(row.key);
+  expect(spaces.rowsIn('s')).toHaveLength(0);
+});
+
+test('a mini window keeps its tab in the active space', () => {
+  const MiniSpaces = load('spaces', 'Spaces', true);
+  const spaces = new MiniSpaces(() => {});
+  const other = {...state.spaces[0], id: 'first', name: 'First',
+    tabs: ['https://example.test/']};
+  const saved = {activeSpace: 's', spaces: [other, state.spaces[0]]};
+  spaces.restore(saved, [tab('mini')], new Set(['mini']));
+  expect(spaces.spaceOf('mini')).toBe('s');
+  spaces.restore(saved, [tab('mini')], new Set());
+  expect(spaces.spaceOf('mini')).toBe('s');
 });
 
 test('restoring a pin never claims a loose tab by URL', () => {
