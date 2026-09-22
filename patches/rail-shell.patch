@@ -5720,7 +5720,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..cf36508c7c 100644
+index aa4e0fe69e..7790be929f 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6154,7 +6154,7 @@ index aa4e0fe69e..cf36508c7c 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +533,1552 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +533,1560 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6222,13 +6222,27 @@ index aa4e0fe69e..cf36508c7c 100644
 -      this.updateItem_(
 -          group.id, 'group', {...groupItem, groupData: group.data});
 +  private sleepCandidates_(): string[] {
-+    return this.items_
-+        .filter(
-+            item => item.type === 'tab' && item.id !== this.activeTab_ &&
-+                !this.spaces_.isAsleep(item.id))
-+        .map(item => item.id);
-+  }
-+
++    const candidates: string[] = [];
++    for (const item of this.items_) {
++      if (item.type !== 'tab' || item.id === this.activeTab_ ||
++          this.spaces_.isAsleep(item.id)) {
++        continue;
++      }
++      if (item.tabData.alertStates.length) {
++        this.tabSleep_.touch(item.id);
++        continue;
++      }
++      candidates.push(item.id);
+     }
++    return candidates;
+   }
+ 
+-  private updateTab(tab: Tab) {
+-    const updated = this.updateItem_(tab.id, 'tab', {
+-      type: 'tab',
+-      id: tab.id,
+-      tabData: tab,
+-    });
 +  private async sleepTab_(tabId: NodeId) {
 +    if (!tabId || tabId === this.activeTab_ || this.spaces_.isAsleep(tabId)) {
 +      return;
@@ -6238,20 +6252,6 @@ index aa4e0fe69e..cf36508c7c 100644
 +        await browserProxyFactory.getInstance().handler.sleepTab(tabId);
 +    if (asleep && this.spaces_.sleep(tabId)) {
 +      this.refreshSections_();
-     }
-   }
- 
--  private updateTab(tab: Tab) {
--    const updated = this.updateItem_(tab.id, 'tab', {
--      type: 'tab',
--      id: tab.id,
--      tabData: tab,
--    });
-+  private async syncSleepingTabs_() {
-+    const {ids} =
-+        await browserProxyFactory.getInstance().handler.getSleepingTabs();
-+    if (ids.map(id => this.spaces_.sleep(id)).some(Boolean)) {
-+      this.refreshSections_();
 +    }
 +  }
  
@@ -6260,6 +6260,17 @@ index aa4e0fe69e..cf36508c7c 100644
 -        this.setActiveTab_(tab.id);
 -      }
 -      this.fire<TabUpdated>('tab-updated', tab);
++  private async syncSleepingTabs_() {
++    const {ids} =
++        await browserProxyFactory.getInstance().handler.getSleepingTabs();
++    if (ids.map(id => this.spaces_.sleep(id)).some(Boolean)) {
++      this.refreshSections_();
+     }
+   }
+ 
+-  private removeItem(id: NodeId) {
+-    const itemToRemove = this.findItem_<TabStripItem>(id);
+-    this.setItems_(this.items_.filter(item => item.id !== id));
 +  private async syncOpeners_() {
 +    if (!this.spaces_.hasOpeners()) {
 +      return;
@@ -6268,25 +6279,28 @@ index aa4e0fe69e..cf36508c7c 100644
 +    const pairs = new Map(openers.map(pair => [pair.tab, pair.opener]));
 +    if (this.spaces_.retainOpeners(pairs)) {
 +      this.refreshSections_();
-     }
-   }
- 
--  private removeItem(id: NodeId) {
--    const itemToRemove = this.findItem_<TabStripItem>(id);
--    this.setItems_(this.items_.filter(item => item.id !== id));
-+  private async toggleMute_(tabId: NodeId) {
-+    if (!tabId) {
-+      return;
 +    }
-+    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
 +  }
  
 -    if (itemToRemove && itemToRemove.type === 'tab') {
 -      this.fire<TabClosed>('tab-closed', id);
++  private async toggleMute_(tabId: NodeId) {
++    if (!tabId) {
++      return;
+     }
++    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
+   }
+ 
+-  protected onNewTabButtonClick_() {
+-    this.tabStripService_.createTabAt(null, null);
 +  protected onTabAudioClick_(e: CustomEvent<{id: string}>) {
 +    this.toggleMute_(e.detail.id);
-+  }
-+
+   }
+ 
+-  // Utility helpers:
+-  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
+-    return this.items_.findIndex(
+-        item => item.id === id && (!type || item.type === type));
 +  private async resolveOpener_(
 +      tabId: NodeId, foreground: boolean, placed: boolean) {
 +    const {opener} =
@@ -6300,20 +6314,22 @@ index aa4e0fe69e..cf36508c7c 100644
 +    this.spaces_.setOpener(tabId, opener);
 +    if (!placed && this.canAnchor_(opener)) {
 +      this.spaces_.placeAfterOpener(tabId);
-     }
++    }
 +    this.refreshSections_();
    }
  
--  protected onNewTabButtonClick_() {
--    this.tabStripService_.createTabAt(null, null);
+-  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
+-      |undefined {
+-    return this.items_.find(
+-               item => item.id === id && (!type || item.type === type)) as T |
+-        undefined;
 +  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
 +    this.closeTarget_(e.detail.id);
    }
  
--  // Utility helpers:
--  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
--    return this.items_.findIndex(
--        item => item.id === id && (!type || item.type === type));
+-  protected getTabElement_(id: string): TabElement|null {
+-    return this.shadowRoot.querySelector<TabElement>(
+-        `webui-browser-tab#${this.tabIdToDomId(id)}`);
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -6338,11 +6354,8 @@ index aa4e0fe69e..cf36508c7c 100644
 +    this.activateTab(id);
    }
  
--  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
--      |undefined {
--    return this.items_.find(
--               item => item.id === id && (!type || item.type === type)) as T |
--        undefined;
+-  private setActiveTab_(id: string) {
+-    this.activeTab_ = id;
 +  private rowOrder_(): string[] {
 +    return [
 +      ...this.favoriteRows_.map(row => row.item.id),
@@ -6351,9 +6364,8 @@ index aa4e0fe69e..cf36508c7c 100644
 +    ];
    }
  
--  protected getTabElement_(id: string): TabElement|null {
--    return this.shadowRoot.querySelector<TabElement>(
--        `webui-browser-tab#${this.tabIdToDomId(id)}`);
+-  protected setItems_(items: TabStripItem[]) {
+-    this.items_ = items;
 +  private syncSelection_() {
 +    const order = this.rowOrder_();
 +    this.selection_.retain(order);
@@ -6361,23 +6373,24 @@ index aa4e0fe69e..cf36508c7c 100644
 +        this.selection_.size > 1 ? this.selection_.ids(order) : [];
    }
  
--  private setActiveTab_(id: string) {
--    this.activeTab_ = id;
-+  protected isSelected_(id: string): boolean {
-+    return this.selectedIds_.includes(id);
-   }
- 
--  protected setItems_(items: TabStripItem[]) {
--    this.items_ = items;
-+  private collapseSelection_(id: string) {
-+    this.selection_.reset(id);
-+    this.syncSelection_();
-   }
- 
 -  private updateItemAt_(index: number, item: TabStripItem) {
 -    const newItems = [...this.items_];
 -    newItems[index] = item;
 -    this.setItems_(newItems);
++  protected isSelected_(id: string): boolean {
++    return this.selectedIds_.includes(id);
+   }
+ 
+-  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
+-      boolean {
+-    const index = this.findItemIndex_(id, type);
+-    if (index === -1) {
+-      return false;
++  private collapseSelection_(id: string) {
++    this.selection_.reset(id);
++    this.syncSelection_();
++  }
++
 +  protected async onTabContextMenu_(
 +      e: CustomEvent<TabMenuTarget&{x: number, y: number}>) {
 +    const {id} = e.detail;
@@ -6393,7 +6406,7 @@ index aa4e0fe69e..cf36508c7c 100644
 +      const {muted} = await browserProxyFactory.getInstance().handler.getTabMuted(
 +          target.tabId);
 +      target.muted = muted;
-+    }
+     }
 +    const {windows} =
 +        await browserProxyFactory.getInstance().handler.listWindows();
 +    openTabMenu(
@@ -6408,28 +6421,29 @@ index aa4e0fe69e..cf36508c7c 100644
 +          this.runMenuCommand_(detail);
 +          this.fire<TabCommandDetail>('rail-tab-command', detail);
 +        });
-   }
- 
--  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
--      boolean {
--    const index = this.findItemIndex_(id, type);
--    if (index === -1) {
--      return false;
-+  openSpaceMenu(x: number, y: number) {
-+    this.shadowRoot.querySelector<SpaceBarElement>('#spaceTitle')
-+        ?.openMenuAt(x, y);
-+  }
-+
-+  protected onStripContextmenu_(e: MouseEvent) {
-+    if (e.defaultPrevented) {
-+      return;
-     }
-+    e.preventDefault();
-+    this.openSpaceMenu(e.clientX, e.clientY);
 +  }
  
 -    this.updateItemAt_(index, newItem);
 -    return true;
++  openSpaceMenu(x: number, y: number) {
++    this.shadowRoot.querySelector<SpaceBarElement>('#spaceTitle')
++        ?.openMenuAt(x, y);
+   }
+ 
+-  // Tab IDs contain ":" characters which are not valid when used as DOM node
+-  // IDs, and also an ID must contain at least one non-special and non-numeric
+-  // character.
+-  protected tabIdToDomId(id: NodeId): string {
+-    return 'id_' + id.replaceAll(':', '_');
++  protected onStripContextmenu_(e: MouseEvent) {
++    if (e.defaultPrevented) {
++      return;
++    }
++    e.preventDefault();
++    this.openSpaceMenu(e.clientX, e.clientY);
+   }
+ 
+-  // TabDragHost impl:
 +  private runMenuCommand_(detail: TabCommandDetail) {
 +    const {command, target, spaceId, windowId, folderId} = detail;
 +    const targets = this.commandTargets_(command, target);
@@ -6448,13 +6462,10 @@ index aa4e0fe69e..cf36508c7c 100644
 +    for (const one of targets) {
 +      this.runTabCommand(command, one, spaceId, folderId);
 +    }
-   }
++  }
  
--  // Tab IDs contain ":" characters which are not valid when used as DOM node
--  // IDs, and also an ID must contain at least one non-special and non-numeric
--  // character.
--  protected tabIdToDomId(id: NodeId): string {
--    return 'id_' + id.replaceAll(':', '_');
+-  get itemsForDrag() {
+-    return this.items_;
 +  private commandTargets_(command: TabCommand, target: TabMenuTarget):
 +      TabMenuTarget[] {
 +    if (!actsOnSelection(command) || this.selectedIds_.length < 2 ||
@@ -6465,7 +6476,8 @@ index aa4e0fe69e..cf36508c7c 100644
 +        .filter((one): one is TabMenuTarget => one !== null);
    }
  
--  // TabDragHost impl:
+-  getTabElementForDrag(id: string) {
+-    return this.getTabElement_(id);
 +  private async moveToNewWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6475,10 +6487,10 @@ index aa4e0fe69e..cf36508c7c 100644
 +    this.collapseSelection_(this.activeTab_);
 +    this.fire('tab-closing', {ids});
 +    await browserProxyFactory.getInstance().handler.moveTabsToNewWindow(ids);
-+  }
+   }
  
--  get itemsForDrag() {
--    return this.items_;
+-  setItemsForDrag(items: TabStripItem[]) {
+-    this.setItems_(items);
 +  private async moveToMiniWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6490,8 +6502,8 @@ index aa4e0fe69e..cf36508c7c 100644
 +    await browserProxyFactory.getInstance().handler.moveTabsToMiniWindow(ids);
    }
  
--  getTabElementForDrag(id: string) {
--    return this.getTabElement_(id);
+-  activateTabForDrag(id: string) {
+-    this.activateTab(id);
 +  private async moveToWindow_(targets: TabMenuTarget[], windowId: number) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6504,8 +6516,8 @@ index aa4e0fe69e..cf36508c7c 100644
 +        windowId, ids);
    }
  
--  setItemsForDrag(items: TabStripItem[]) {
--    this.setItems_(items);
+-  setDragInProgressForDrag(value: boolean) {
+-    this.dragInProgress_ = value;
 +  runTabCommand(
 +      command: TabCommand, target: TabMenuTarget, spaceId = '',
 +      folderId = '') {
@@ -6574,8 +6586,8 @@ index aa4e0fe69e..cf36508c7c 100644
 +    }
    }
  
--  activateTabForDrag(id: string) {
--    this.activateTab(id);
+-  setTabStripNoDrag(noDrag: boolean) {
+-    this.$.tabstrip.classList.toggle('nodrag', noDrag);
 +  private closeToRight_(targetId: string) {
 +    const loose = this.looseTabIds_();
 +    const index = loose.indexOf(targetId);
@@ -6586,8 +6598,8 @@ index aa4e0fe69e..cf36508c7c 100644
 +    }
    }
  
--  setDragInProgressForDrag(value: boolean) {
--    this.dragInProgress_ = value;
+-  dragMouseDown(e: MouseEvent) {
+-    this.dragDelegate_.onMouseDown(e);
 +  // Pinned rows are left alone: closing them is what the pin was meant to
 +  // prevent, and a dormant row has no tab to close in the first place.
 +  private closeMany_(ids: string[]) {
@@ -6601,26 +6613,22 @@ index aa4e0fe69e..cf36508c7c 100644
 +    }
    }
  
--  setTabStripNoDrag(noDrag: boolean) {
--    this.$.tabstrip.classList.toggle('nodrag', noDrag);
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  protected looseTabCount_(): number {
 +    return this.looseTabIds_().length;
    }
  
--  dragMouseDown(e: MouseEvent) {
--    this.dragDelegate_.onMouseDown(e);
-+  protected onClearTabsClick_() {
-+    this.closeMany_(this.looseTabIds_());
-   }
- 
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
-+  private groupIdFrom_(e: Event): string {
-+    return (e.currentTarget as HTMLElement).dataset['group'] ?? '';
-   }
- 
 -  closeDragElement() {
 -    this.dragDelegate_.onMouseUp();
++  protected onClearTabsClick_() {
++    this.closeMany_(this.looseTabIds_());
++  }
++
++  private groupIdFrom_(e: Event): string {
++    return (e.currentTarget as HTMLElement).dataset['group'] ?? '';
++  }
++
 +  protected onTidyGroupClick_(e: Event) {
 +    if (this.dragDelegate_.consumeSuppressedClick()) {
 +      return;
