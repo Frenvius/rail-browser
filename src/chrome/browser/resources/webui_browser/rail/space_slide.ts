@@ -18,7 +18,8 @@ function travel(root: ShadowRoot): number {
 
 export function slideDirection(
     spaces: Space[], from: string, to: string): number {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  if (document.hidden ||
+      matchMedia('(prefers-reduced-motion: reduce)').matches) {
     return 0;
   }
   const ids = spaces.map(space => space.id);
@@ -27,7 +28,8 @@ export function slideDirection(
 
 export async function slideOut(root: ShadowRoot, direction: number) {
   const distance = -direction * travel(root);
-  await Promise.all(panes(root).map(
+  const stalled = new Promise(resolve => setTimeout(resolve, OUT_MS * 3));
+  const slid = Promise.all(panes(root).map(
       pane => pane
                   .animate(
                       [
@@ -39,6 +41,7 @@ export async function slideOut(root: ShadowRoot, direction: number) {
                       ],
                       {duration: OUT_MS, easing: OUT_EASING, fill: 'forwards'})
                   .finished));
+  await Promise.race([slid, stalled]).catch(() => {});
 }
 
 export function slideIn(root: ShadowRoot, direction: number) {

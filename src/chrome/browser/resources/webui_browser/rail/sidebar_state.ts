@@ -8,6 +8,8 @@ export const INCOGNITO = loadTimeData.isInitialized() &&
 
 export const MINI = new URLSearchParams(location.search).has('mini');
 
+export const WINDOW_ID = crypto.randomUUID();
+
 const SAVE_DELAY_MS = 0;
 
 export interface StoredPin {
@@ -33,6 +35,8 @@ export interface StoredTab {
   title: string;
   favicon: string;
   group?: string;
+  owner?: string;
+  tab?: string;
 }
 
 export interface StoredSpace {
@@ -80,7 +84,7 @@ export async function readSidebarState(): Promise<SidebarState|null> {
 
 export class SidebarStore {
   private timer_ = 0;
-  private current_: string|null = null;
+  private latest_: string|null = null;
   private unechoed_: string[] = [];
 
   constructor(private serialize_: () => SidebarState) {}
@@ -92,10 +96,10 @@ export class SidebarStore {
     clearTimeout(this.timer_);
     this.timer_ = setTimeout(() => {
       const value = JSON.stringify(this.serialize_());
-      if (value === this.current_) {
+      if (value === this.latest_) {
         return;
       }
-      this.current_ = value;
+      this.latest_ = value;
       this.unechoed_.push(value);
       browserProxyFactory.getInstance().handler.setSidebarState(value);
     }, SAVE_DELAY_MS);
@@ -103,14 +107,9 @@ export class SidebarStore {
 
   accept(value: string): boolean {
     const echoed = this.unechoed_.indexOf(value);
-    if (echoed !== -1) {
-      this.unechoed_.splice(0, echoed + 1);
-      return false;
-    }
-    if (value === this.current_) {
-      return false;
-    }
-    this.current_ = value;
-    return true;
+    const fresh = echoed === -1 && value !== this.latest_;
+    this.unechoed_.splice(0, echoed + 1);
+    this.latest_ = value;
+    return fresh && !this.unechoed_.length;
   }
 }

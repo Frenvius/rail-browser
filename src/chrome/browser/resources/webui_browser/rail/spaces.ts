@@ -6,7 +6,7 @@ import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import type {Folders} from './folders.js';
 import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
-import {INCOGNITO, MINI} from './sidebar_state.js';
+import {INCOGNITO, MINI, WINDOW_ID} from './sidebar_state.js';
 
 export const SPACE_COLORS = [
   '#331b47', '#591b1c', '#58341a', '#725919',
@@ -204,6 +204,8 @@ export interface TabRow {
   asleep: boolean;
   opener: string;
   group: string;
+  owner: string;
+  remote: string;
   url: string;
   title: string;
   favicon: string;
@@ -224,6 +226,8 @@ interface RowFields {
   favicon: string;
   opener?: string;
   group?: string;
+  owner?: string;
+  remote?: string;
 }
 
 export function isNewTabUrl(url: string): boolean {
@@ -304,8 +308,12 @@ export class Spaces {
     this.nextKey_ = 0;
   }
 
-  restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
+  restore(
+      state: SidebarState|null, tabs: Tab[], claimed: Set<string>,
+      byUrl: boolean) {
     const previous = this.rows_;
+    const activeKeys =
+        new Map(this.spaces_.map(space => [space.id, space.activeKey]));
     const homes = new Map(
         previous.filter(row => row.tabId).map(row => [row.tabId, row]));
     const waiting = previous.filter(row => row.pending && !row.tabId);
@@ -334,14 +342,25 @@ export class Spaces {
       };
       this.spaces_.push(space);
       for (const entry of stored.tabs ?? []) {
-        const {url, title, favicon, group} = storedTab(entry);
+        const {url, title, favicon, group, ...origin} = storedTab(entry);
+        const owner = byUrl ? '' : origin.owner ?? '';
+        const remote = byUrl ? '' : origin.tab ?? '';
         const tab = MINI ? undefined : tabs.find(
-            candidate => candidate.url === url && !claimed.has(candidate.id) &&
+            candidate => !claimed.has(candidate.id) &&
+                (byUrl ? candidate.url === url : candidate.id === remote) &&
                 (homes.get(candidate.id)?.space ?? space.id) === space.id);
         if (tab) {
           claimed.add(tab.id);
+        } else if (remote && tabs.some(one => one.id === remote)) {
+          continue;
         }
-        const kept = reuse(space.id, tab ? tab.id : '', url);
+        const foreign = !tab && !!remote && owner !== WINDOW_ID;
+        const kept = foreign ?
+            previous.find(other => other.remote === remote) :
+            reuse(space.id, tab ? tab.id : '', url);
+        if (!tab && !kept && owner === WINDOW_ID) {
+          continue;
+        }
         const row = this.push_({
           key: kept?.key,
           pending: kept?.pending,
@@ -351,6 +370,8 @@ export class Spaces {
           title,
           favicon,
           group,
+          owner: foreign ? owner : '',
+          remote: foreign ? remote : '',
         });
         if (url === stored.activeUrl && !space.activeKey) {
           space.activeKey = row.key;
@@ -373,7 +394,7 @@ export class Spaces {
         this.adopt(tab.id, tab.url);
         continue;
       }
-      this.push_({
+      const row = this.push_({
         key: home.key,
         space: home.space,
         tabId: tab.id,
@@ -382,6 +403,8 @@ export class Spaces {
         favicon: home.favicon,
         group: home.group,
       });
+      this.keepPlace_(row, previous);
+      this.onChange_();
     }
     for (const row of this.rows_) {
       const old = row.tabId ?
@@ -394,6 +417,12 @@ export class Spaces {
       const opener = previous.find(other => other.key === old.opener);
       const restored = opener ? this.byTab(opener.tabId) : undefined;
       row.opener = restored?.space === row.space ? restored.key : '';
+    }
+    for (const space of this.spaces_) {
+      const key = activeKeys.get(space.id);
+      if (key && this.rowsIn(space.id).some(row => row.key === key)) {
+        space.activeKey = key;
+      }
     }
   }
 
@@ -522,6 +551,16 @@ export class Spaces {
   adopt(tabId: string, url: string) {
     const claimed = this.claims_.get(tabId);
     this.claims_.delete(tabId);
+    const taken = this.rows_.find(row => !row.tabId && row.remote === tabId);
+    if (taken) {
+      taken.tabId = tabId;
+      taken.owner = '';
+      taken.remote = '';
+      taken.pending = false;
+      taken.url = url || taken.url;
+      this.onChange_();
+      return;
+    }
     const spaceId = claimed ?? this.activeId_;
     if (this.byTab(tabId)) {
       this.assign(tabId, spaceId, url);
@@ -592,7 +631,7 @@ export class Spaces {
     }
     return this.rows_.find(
         row => row.space === spaceId && !row.tabId && !row.pending &&
-            row.url === url);
+            !row.remote && row.url === url);
   }
 
   private replaceRow_(dormant: TabRow, row: TabRow) {
@@ -679,6 +718,20 @@ export class Spaces {
     return this.rowsIn(spaceId).filter(row => !row.tabId);
   }
 
+  remoteOf(key: string): string {
+    return this.dormantByKey(key)?.remote ?? '';
+  }
+
+  disown(key: string) {
+    const row = this.dormantByKey(key);
+    if (!row?.remote) {
+      return;
+    }
+    row.owner = '';
+    row.remote = '';
+    this.onChange_();
+  }
+
   dormantByKey(key: string): TabRow|undefined {
     const row = this.rows_.find(other => other.key === key);
     return row && !row.tabId ? row : undefined;
@@ -693,7 +746,7 @@ export class Spaces {
 
   wake(key: string): TabRow|undefined {
     const row = this.dormantByKey(key);
-    if (!row || row.pending) {
+    if (!row || row.pending || row.remote) {
       return undefined;
     }
     row.pending = true;
@@ -707,6 +760,8 @@ export class Spaces {
       return '';
     }
     row.tabId = '';
+    row.owner = '';
+    row.remote = '';
     row.pending = true;
     row.asleep = false;
     this.onChange_();
@@ -720,6 +775,8 @@ export class Spaces {
     }
     row.pending = false;
     row.asleep = false;
+    row.owner = '';
+    row.remote = '';
     if (tabId) {
       this.rows_ =
           this.rows_.filter(other => other === row || other.tabId !== tabId);
@@ -813,7 +870,8 @@ export class Spaces {
       return undefined;
     }
     const rows = this.rowsIn(row.space).filter(
-        other => other === row || !other.tabId || !closing.has(other.tabId));
+        other => other === row ||
+            (!other.remote && (!other.tabId || !closing.has(other.tabId))));
     const index = rows.indexOf(row);
     const neighbors = [
       ...rows.slice(index + 1), ...rows.slice(0, index).reverse(),
@@ -963,6 +1021,27 @@ export class Spaces {
     };
   }
 
+  private keepPlace_(row: TabRow, previous: TabRow[]) {
+    const peers = previous.filter(other => other.space === row.space);
+    const index = peers.findIndex(other => other.key === row.key);
+    if (index === -1) {
+      return;
+    }
+    const earlier = new Set(peers.slice(0, index).map(other => other.key));
+    const rest = this.rows_.filter(other => other !== row);
+    let at = rest.findIndex(other => other.space === row.space);
+    rest.forEach((other, position) => {
+      if (earlier.has(other.key)) {
+        at = position + 1;
+      }
+    });
+    if (at === -1) {
+      return;
+    }
+    rest.splice(at, 0, row);
+    this.rows_ = rest;
+  }
+
   private toEnd_(row: TabRow) {
     this.rows_ = [...this.rows_.filter(other => other !== row), row];
   }
@@ -994,6 +1073,8 @@ export class Spaces {
       asleep: false,
       opener: fields.opener ?? '',
       group: fields.group ?? '',
+      owner: fields.owner ?? '',
+      remote: fields.remote ?? '',
       space: fields.space,
       tabId: fields.tabId,
       url: fields.url,
@@ -1053,8 +1134,14 @@ export function serializeSidebar(
     tidyGroups: tidyGroups.storedIn(space.id),
     tabs: spaces.rowsIn(space.id)
               .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
-              .map(({url, title, favicon, group}) =>
-                       ({url, title, favicon, group})),
+              .map(({url, title, favicon, group, tabId, owner, remote}) => ({
+                     url,
+                     title,
+                     favicon,
+                     group,
+                     owner: tabId ? WINDOW_ID : owner || undefined,
+                     tab: tabId || remote || undefined,
+                   })),
   }));
   const favoritesByProfile: Record<string, StoredPin[]> = {};
   for (const profileId of pinned.favoriteProfiles()) {

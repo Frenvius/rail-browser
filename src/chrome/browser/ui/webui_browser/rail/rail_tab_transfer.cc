@@ -44,6 +44,18 @@ std::u16string TitleOf(BrowserWindowInterface* browser) {
   return contents ? contents->GetTitle() : std::u16string();
 }
 
+tabs::TabInterface* RemoteTab(Browser* caller, const tabs_api::NodeId& id) {
+  std::optional<tabs::TabHandle> handle = id.ToTabHandle();
+  tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
+  BrowserWindowInterface* owner =
+      tab ? tab->GetBrowserWindowInterface() : nullptr;
+  if (!caller || !owner || owner == caller ||
+      owner->GetProfile() != caller->profile()) {
+    return nullptr;
+  }
+  return tab;
+}
+
 }
 
 BrowserWindowInterface* WindowUnderPoint(Browser* source,
@@ -168,6 +180,30 @@ bool MoveTabsToWindow(Browser* source,
     return false;
   }
   chrome::MoveTabsToExistingWindow(source, target, indices);
+  return true;
+}
+
+bool TakeTab(Browser* target, const tabs_api::NodeId& id) {
+  tabs::TabInterface* tab = RemoteTab(target, id);
+  if (!tab) {
+    return false;
+  }
+  Browser* source =
+      tab->GetBrowserWindowInterface()->GetBrowserForMigrationOnly();
+  const int index = source->tab_strip_model()->GetIndexOfTab(tab);
+  if (index == TabStripModel::kNoTab) {
+    return false;
+  }
+  chrome::MoveTabsToExistingWindow(source, target, {index});
+  return true;
+}
+
+bool CloseRemoteTab(Browser* caller, const tabs_api::NodeId& id) {
+  tabs::TabInterface* tab = RemoteTab(caller, id);
+  if (!tab) {
+    return false;
+  }
+  tab->Close();
   return true;
 }
 

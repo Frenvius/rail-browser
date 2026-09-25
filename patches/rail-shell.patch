@@ -5720,7 +5720,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..7790be929f 100644
+index aa4e0fe69e..e9ca5c194e 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -5839,7 +5839,7 @@ index aa4e0fe69e..7790be929f 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -90,21 +153,85 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,21 +153,86 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -5907,6 +5907,7 @@ index aa4e0fe69e..7790be929f 100644
 +  private slidingSpace_ = false;
 +  private backdropKey_ = '';
 +  private readonly wakingPins_ = new Set<string>();
++  private readonly taking_ = new Set<string>();
 +  private nativeOrderTask_: Promise<void> = Promise.resolve();
 +  private readonly ownMoves_ = new Map<string, number>();
  
@@ -5926,7 +5927,7 @@ index aa4e0fe69e..7790be929f 100644
    }
  
    override connectedCallback() {
-@@ -112,11 +239,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -112,11 +240,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -5936,14 +5937,14 @@ index aa4e0fe69e..7790be929f 100644
    private async loadTabStripModel_(observation: TabStripObservation) {
      const tabSnapshot = await this.tabStripService_.getTabs();
      const items = this.processModelContainer_(tabSnapshot.tabStrip);
-+    await this.restoreSidebar_(
++    const primary = await this.restoreSidebar_(
 +        items.filter((item): item is TabItem => item.type === 'tab')
 +            .map(item => item.tabData));
 +    const restoredRow = this.spaces_.activeRow(this.spaces_.activeId);
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +270,63 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +271,70 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -5957,7 +5958,9 @@ index aa4e0fe69e..7790be929f 100644
 +      }
 +    }
 +
-+    this.openStartupTab_(restoredRow);
++    if (primary) {
++      this.openStartupTab_(restoredRow);
++    }
 +    this.syncSleepingTabs_();
 +    for (const item of this.items_) {
 +      if (item.type === 'tab') {
@@ -5966,21 +5969,26 @@ index aa4e0fe69e..7790be929f 100644
 +    }
 +  }
 +
-+  private async restoreSidebar_(tabs: Tab[]) {
-+    const [state, {profiles}] = await Promise.all([
++  private async restoreSidebar_(tabs: Tab[]): Promise<boolean> {
++    const handler = browserProxyFactory.getInstance().handler;
++    const [state, {profiles}, {windows}] = await Promise.all([
 +      readSidebarState(),
-+      browserProxyFactory.getInstance().handler.listProfiles(),
++      handler.listProfiles(),
++      handler.listWindows(),
 +    ]);
++    const primary = !MINI && !windows.length;
 +    this.spaces_.setProfiles(profiles);
-+    this.restoreSidebarState_(state, tabs);
++    this.restoreSidebarState_(state, tabs, primary);
++    return primary;
 +  }
 +
-+  private restoreSidebarState_(state: SidebarState|null, tabs: Tab[]) {
++  private restoreSidebarState_(
++      state: SidebarState|null, tabs: Tab[], byUrl = false) {
 +    const claimed = new Set<string>();
 +    this.folders_.clear();
 +    this.tidyGroups_.clear();
 +    this.pinnedTabs_.restore(state, tabs, claimed);
-+    this.spaces_.restore(state, tabs, claimed);
++    this.spaces_.restore(state, tabs, claimed, byUrl);
 +    this.folders_.restore(state);
 +    this.tidyGroups_.restore(state, space => space.tidyGroups);
 +    for (const entry of this.pinnedTabs_.entries) {
@@ -6007,7 +6015,7 @@ index aa4e0fe69e..7790be929f 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +348,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +356,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6036,7 +6044,7 @@ index aa4e0fe69e..7790be929f 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +384,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +392,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6051,7 +6059,7 @@ index aa4e0fe69e..7790be929f 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -236,21 +440,92 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -236,21 +448,94 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
    onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {}
  
@@ -6128,6 +6136,7 @@ index aa4e0fe69e..7790be929f 100644
 -    ]);
 +  private addTab(tab: Tab, index: number) {
 +    const requested = this.spaces_.requested(tab.id);
++    const taken = this.taking_.has(tab.id);
 +    this.spaces_.adopt(tab.id, tab.url);
 +    const neighbors = this.items_;
 +    const at = Math.min(index, neighbors.length);
@@ -6138,7 +6147,8 @@ index aa4e0fe69e..7790be929f 100644
 +      tabData: tab,
 +    });
 +    this.setItems_(items);
-+    const anchored = this.placeInModelOrder_(tab.id, at, neighbors);
++    const anchored =
++        taken || this.placeInModelOrder_(tab.id, at, neighbors);
 +    if (this.pendingBelow_ && this.pendingBelow_ !== tab.id) {
 +      if (this.canAnchor_(this.pendingBelow_)) {
 +        this.spaces_.placeAfter(tab.id, this.pendingBelow_);
@@ -6154,10 +6164,13 @@ index aa4e0fe69e..7790be929f 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +533,1560 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +543,1597 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
++    if (this.taking_.delete(tab.id)) {
++      this.activateTab(tab.id);
++    }
 +
 +    this.resolveOpener_(tab.id, tab.isActive, anchored || requested)
 +        .then(() => this.revealTab_(tab.id));
@@ -6177,27 +6190,37 @@ index aa4e0fe69e..7790be929f 100644
 +  private async ensureProfile_(tabId: NodeId) {
 +    if (MINI) {
 +      miniMatchProfile(tabId);
-+      return;
-+    }
+       return;
+     }
+-
+-    this.setActiveTab_(tabId);
+-    this.tabStripService_.activateTab(tabId);
+-    this.fire<TabActivated>('tab-activated', item.tabData);
 +    const spaceId = this.spaces_.spaceOf(tabId);
 +    const {profileId} =
 +        await browserProxyFactory.getInstance().handler.getTabProfile(tabId);
 +    if (profileId === this.spaces_.profileOf(spaceId) ||
 +        this.spaces_.byTab(tabId)?.space !== spaceId ||
 +        !this.findItem_<TabItem>(tabId, 'tab')) {
-       return;
-     }
++      return;
++    }
 +    this.reprofile_(tabId, spaceId, this.entryFor_(tabId)?.key ?? '');
-+  }
+   }
  
--    this.setActiveTab_(tabId);
--    this.tabStripService_.activateTab(tabId);
--    this.fire<TabActivated>('tab-activated', item.tabData);
+-  // TODO(webium): implement this.
+-  // private setTabGroupForTab(/*tabId*/ _: NodeId, /*groupId*/ _2?: NodeId) {
+-  //}
+-
+-  private updateTabGroup(group: TabGroup) {
+-    const groupItem = this.findItem_<TabGroupItem>(group.id, 'group');
+-    if (groupItem) {
+-      this.updateItem_(
+-          group.id, 'group', {...groupItem, groupData: group.data});
 +  private placeInModelOrder_(
 +      tabId: NodeId, index: number, neighbors: TabStripItem[]): boolean {
 +    if (index >= neighbors.length) {
 +      return false;
-+    }
+     }
 +    const before = index > 0 ? neighbors[index - 1] : undefined;
 +    if (before) {
 +      return before.type === 'tab' && this.canAnchor_(before.id) &&
@@ -6209,25 +6232,27 @@ index aa4e0fe69e..7790be929f 100644
 +        this.spaces_.placeBefore(tabId, after.id);
    }
  
--  // TODO(webium): implement this.
--  // private setTabGroupForTab(/*tabId*/ _: NodeId, /*groupId*/ _2?: NodeId) {
--  //}
+-  private updateTab(tab: Tab) {
+-    const updated = this.updateItem_(tab.id, 'tab', {
+-      type: 'tab',
+-      id: tab.id,
+-      tabData: tab,
+-    });
 +  private canAnchor_(id: string): boolean {
 +    return !!id && !this.entryFor_(id);
 +  }
  
--  private updateTabGroup(group: TabGroup) {
--    const groupItem = this.findItem_<TabGroupItem>(group.id, 'group');
--    if (groupItem) {
--      this.updateItem_(
--          group.id, 'group', {...groupItem, groupData: group.data});
+-    if (updated) {
+-      if (tab.isActive) {
+-        this.setActiveTab_(tab.id);
 +  private sleepCandidates_(): string[] {
 +    const candidates: string[] = [];
 +    for (const item of this.items_) {
 +      if (item.type !== 'tab' || item.id === this.activeTab_ ||
 +          this.spaces_.isAsleep(item.id)) {
 +        continue;
-+      }
+       }
+-      this.fire<TabUpdated>('tab-updated', tab);
 +      if (item.tabData.alertStates.length) {
 +        this.tabSleep_.touch(item.id);
 +        continue;
@@ -6237,12 +6262,9 @@ index aa4e0fe69e..7790be929f 100644
 +    return candidates;
    }
  
--  private updateTab(tab: Tab) {
--    const updated = this.updateItem_(tab.id, 'tab', {
--      type: 'tab',
--      id: tab.id,
--      tabData: tab,
--    });
+-  private removeItem(id: NodeId) {
+-    const itemToRemove = this.findItem_<TabStripItem>(id);
+-    this.setItems_(this.items_.filter(item => item.id !== id));
 +  private async sleepTab_(tabId: NodeId) {
 +    if (!tabId || tabId === this.activeTab_ || this.spaces_.isAsleep(tabId)) {
 +      return;
@@ -6255,11 +6277,8 @@ index aa4e0fe69e..7790be929f 100644
 +    }
 +  }
  
--    if (updated) {
--      if (tab.isActive) {
--        this.setActiveTab_(tab.id);
--      }
--      this.fire<TabUpdated>('tab-updated', tab);
+-    if (itemToRemove && itemToRemove.type === 'tab') {
+-      this.fire<TabClosed>('tab-closed', id);
 +  private async syncSleepingTabs_() {
 +    const {ids} =
 +        await browserProxyFactory.getInstance().handler.getSleepingTabs();
@@ -6268,9 +6287,8 @@ index aa4e0fe69e..7790be929f 100644
      }
    }
  
--  private removeItem(id: NodeId) {
--    const itemToRemove = this.findItem_<TabStripItem>(id);
--    this.setItems_(this.items_.filter(item => item.id !== id));
+-  protected onNewTabButtonClick_() {
+-    this.tabStripService_.createTabAt(null, null);
 +  private async syncOpeners_() {
 +    if (!this.spaces_.hasOpeners()) {
 +      return;
@@ -6280,27 +6298,31 @@ index aa4e0fe69e..7790be929f 100644
 +    if (this.spaces_.retainOpeners(pairs)) {
 +      this.refreshSections_();
 +    }
-+  }
- 
--    if (itemToRemove && itemToRemove.type === 'tab') {
--      this.fire<TabClosed>('tab-closed', id);
-+  private async toggleMute_(tabId: NodeId) {
-+    if (!tabId) {
-+      return;
-     }
-+    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
-   }
- 
--  protected onNewTabButtonClick_() {
--    this.tabStripService_.createTabAt(null, null);
-+  protected onTabAudioClick_(e: CustomEvent<{id: string}>) {
-+    this.toggleMute_(e.detail.id);
    }
  
 -  // Utility helpers:
 -  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
 -    return this.items_.findIndex(
 -        item => item.id === id && (!type || item.type === type));
++  private async toggleMute_(tabId: NodeId) {
++    if (!tabId) {
++      return;
++    }
++    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
+   }
+ 
+-  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
+-      |undefined {
+-    return this.items_.find(
+-               item => item.id === id && (!type || item.type === type)) as T |
+-        undefined;
++  protected onTabAudioClick_(e: CustomEvent<{id: string}>) {
++    this.toggleMute_(e.detail.id);
+   }
+ 
+-  protected getTabElement_(id: string): TabElement|null {
+-    return this.shadowRoot.querySelector<TabElement>(
+-        `webui-browser-tab#${this.tabIdToDomId(id)}`);
 +  private async resolveOpener_(
 +      tabId: NodeId, foreground: boolean, placed: boolean) {
 +    const {opener} =
@@ -6318,18 +6340,14 @@ index aa4e0fe69e..7790be929f 100644
 +    this.refreshSections_();
    }
  
--  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
--      |undefined {
--    return this.items_.find(
--               item => item.id === id && (!type || item.type === type)) as T |
--        undefined;
+-  private setActiveTab_(id: string) {
+-    this.activeTab_ = id;
 +  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
 +    this.closeTarget_(e.detail.id);
    }
  
--  protected getTabElement_(id: string): TabElement|null {
--    return this.shadowRoot.querySelector<TabElement>(
--        `webui-browser-tab#${this.tabIdToDomId(id)}`);
+-  protected setItems_(items: TabStripItem[]) {
+-    this.items_ = items;
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -6354,8 +6372,10 @@ index aa4e0fe69e..7790be929f 100644
 +    this.activateTab(id);
    }
  
--  private setActiveTab_(id: string) {
--    this.activeTab_ = id;
+-  private updateItemAt_(index: number, item: TabStripItem) {
+-    const newItems = [...this.items_];
+-    newItems[index] = item;
+-    this.setItems_(newItems);
 +  private rowOrder_(): string[] {
 +    return [
 +      ...this.favoriteRows_.map(row => row.item.id),
@@ -6364,33 +6384,36 @@ index aa4e0fe69e..7790be929f 100644
 +    ];
    }
  
--  protected setItems_(items: TabStripItem[]) {
--    this.items_ = items;
-+  private syncSelection_() {
-+    const order = this.rowOrder_();
-+    this.selection_.retain(order);
-+    this.selectedIds_ =
-+        this.selection_.size > 1 ? this.selection_.ids(order) : [];
-   }
- 
--  private updateItemAt_(index: number, item: TabStripItem) {
--    const newItems = [...this.items_];
--    newItems[index] = item;
--    this.setItems_(newItems);
-+  protected isSelected_(id: string): boolean {
-+    return this.selectedIds_.includes(id);
-   }
- 
 -  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
 -      boolean {
 -    const index = this.findItemIndex_(id, type);
 -    if (index === -1) {
 -      return false;
+-    }
++  private syncSelection_() {
++    const order = this.rowOrder_();
++    this.selection_.retain(order);
++    this.selectedIds_ =
++        this.selection_.size > 1 ? this.selection_.ids(order) : [];
++  }
+ 
+-    this.updateItemAt_(index, newItem);
+-    return true;
++  protected isSelected_(id: string): boolean {
++    return this.selectedIds_.includes(id);
+   }
+ 
+-  // Tab IDs contain ":" characters which are not valid when used as DOM node
+-  // IDs, and also an ID must contain at least one non-special and non-numeric
+-  // character.
+-  protected tabIdToDomId(id: NodeId): string {
+-    return 'id_' + id.replaceAll(':', '_');
 +  private collapseSelection_(id: string) {
 +    this.selection_.reset(id);
 +    this.syncSelection_();
-+  }
-+
+   }
+ 
+-  // TabDragHost impl:
 +  protected async onTabContextMenu_(
 +      e: CustomEvent<TabMenuTarget&{x: number, y: number}>) {
 +    const {id} = e.detail;
@@ -6406,7 +6429,7 @@ index aa4e0fe69e..7790be929f 100644
 +      const {muted} = await browserProxyFactory.getInstance().handler.getTabMuted(
 +          target.tabId);
 +      target.muted = muted;
-     }
++    }
 +    const {windows} =
 +        await browserProxyFactory.getInstance().handler.listWindows();
 +    openTabMenu(
@@ -6423,18 +6446,15 @@ index aa4e0fe69e..7790be929f 100644
 +        });
 +  }
  
--    this.updateItemAt_(index, newItem);
--    return true;
+-  get itemsForDrag() {
+-    return this.items_;
 +  openSpaceMenu(x: number, y: number) {
 +    this.shadowRoot.querySelector<SpaceBarElement>('#spaceTitle')
 +        ?.openMenuAt(x, y);
    }
  
--  // Tab IDs contain ":" characters which are not valid when used as DOM node
--  // IDs, and also an ID must contain at least one non-special and non-numeric
--  // character.
--  protected tabIdToDomId(id: NodeId): string {
--    return 'id_' + id.replaceAll(':', '_');
+-  getTabElementForDrag(id: string) {
+-    return this.getTabElement_(id);
 +  protected onStripContextmenu_(e: MouseEvent) {
 +    if (e.defaultPrevented) {
 +      return;
@@ -6443,7 +6463,8 @@ index aa4e0fe69e..7790be929f 100644
 +    this.openSpaceMenu(e.clientX, e.clientY);
    }
  
--  // TabDragHost impl:
+-  setItemsForDrag(items: TabStripItem[]) {
+-    this.setItems_(items);
 +  private runMenuCommand_(detail: TabCommandDetail) {
 +    const {command, target, spaceId, windowId, folderId} = detail;
 +    const targets = this.commandTargets_(command, target);
@@ -6462,10 +6483,10 @@ index aa4e0fe69e..7790be929f 100644
 +    for (const one of targets) {
 +      this.runTabCommand(command, one, spaceId, folderId);
 +    }
-+  }
+   }
  
--  get itemsForDrag() {
--    return this.items_;
+-  activateTabForDrag(id: string) {
+-    this.activateTab(id);
 +  private commandTargets_(command: TabCommand, target: TabMenuTarget):
 +      TabMenuTarget[] {
 +    if (!actsOnSelection(command) || this.selectedIds_.length < 2 ||
@@ -6476,8 +6497,8 @@ index aa4e0fe69e..7790be929f 100644
 +        .filter((one): one is TabMenuTarget => one !== null);
    }
  
--  getTabElementForDrag(id: string) {
--    return this.getTabElement_(id);
+-  setDragInProgressForDrag(value: boolean) {
+-    this.dragInProgress_ = value;
 +  private async moveToNewWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6489,8 +6510,8 @@ index aa4e0fe69e..7790be929f 100644
 +    await browserProxyFactory.getInstance().handler.moveTabsToNewWindow(ids);
    }
  
--  setItemsForDrag(items: TabStripItem[]) {
--    this.setItems_(items);
+-  setTabStripNoDrag(noDrag: boolean) {
+-    this.$.tabstrip.classList.toggle('nodrag', noDrag);
 +  private async moveToMiniWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6502,8 +6523,8 @@ index aa4e0fe69e..7790be929f 100644
 +    await browserProxyFactory.getInstance().handler.moveTabsToMiniWindow(ids);
    }
  
--  activateTabForDrag(id: string) {
--    this.activateTab(id);
+-  dragMouseDown(e: MouseEvent) {
+-    this.dragDelegate_.onMouseDown(e);
 +  private async moveToWindow_(targets: TabMenuTarget[], windowId: number) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6514,10 +6535,8 @@ index aa4e0fe69e..7790be929f 100644
 +    this.fire('tab-closing', {ids});
 +    await browserProxyFactory.getInstance().handler.moveTabsToWindow(
 +        windowId, ids);
-   }
- 
--  setDragInProgressForDrag(value: boolean) {
--    this.dragInProgress_ = value;
++  }
++
 +  runTabCommand(
 +      command: TabCommand, target: TabMenuTarget, spaceId = '',
 +      folderId = '') {
@@ -6586,8 +6605,8 @@ index aa4e0fe69e..7790be929f 100644
 +    }
    }
  
--  setTabStripNoDrag(noDrag: boolean) {
--    this.$.tabstrip.classList.toggle('nodrag', noDrag);
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  private closeToRight_(targetId: string) {
 +    const loose = this.looseTabIds_();
 +    const index = loose.indexOf(targetId);
@@ -6598,12 +6617,12 @@ index aa4e0fe69e..7790be929f 100644
 +    }
    }
  
--  dragMouseDown(e: MouseEvent) {
--    this.dragDelegate_.onMouseDown(e);
+-  closeDragElement() {
+-    this.dragDelegate_.onMouseUp();
 +  // Pinned rows are left alone: closing them is what the pin was meant to
 +  // prevent, and a dormant row has no tab to close in the first place.
 +  private closeMany_(ids: string[]) {
-+    const live = ids.filter(id => !this.spaces_.drop(id));
++    const live = ids.filter(id => !this.dropRow_(id));
 +    if (live.length) {
 +      this.closeTabs_(live);
 +      return;
@@ -6611,16 +6630,12 @@ index aa4e0fe69e..7790be929f 100644
 +    if (ids.length) {
 +      this.refreshSections_();
 +    }
-   }
- 
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
++  }
++
 +  protected looseTabCount_(): number {
 +    return this.looseTabIds_().length;
-   }
- 
--  closeDragElement() {
--    this.dragDelegate_.onMouseUp();
++  }
++
 +  protected onClearTabsClick_() {
 +    this.closeMany_(this.looseTabIds_());
 +  }
@@ -6997,7 +7012,10 @@ index aa4e0fe69e..7790be929f 100644
 +    }
 +    this.ensureProfile_(tabId);
 +    if (this.activeTab_ === tabId && this.spaces_.activeId !== spaceId) {
-+      this.selectSpace_(spaceId);
++      this.transitionSpace_(spaceId, () => {
++        this.spaces_.noteActive(tabId);
++        this.refreshSections_();
++      });
 +      return;
 +    }
 +    this.refreshSections_();
@@ -7094,6 +7112,31 @@ index aa4e0fe69e..7790be929f 100644
 +
 +  private closeTabs_(ids: string[]) {
 +    this.tabStripService_.closeNodes(ids);
++  }
++
++  private async takeTab_(key: string, remote: string) {
++    if (this.taking_.has(remote)) {
++      return;
++    }
++    this.taking_.add(remote);
++    const {moved} =
++        await browserProxyFactory.getInstance().handler.takeTab(remote);
++    if (moved || !this.taking_.delete(remote)) {
++      return;
++    }
++    this.spaces_.disown(key);
++    this.activateTab(key);
++  }
++
++  private dropRow_(id: string): boolean {
++    const remote = this.spaces_.remoteOf(id);
++    if (!this.spaces_.drop(id)) {
++      return false;
++    }
++    if (remote) {
++      browserProxyFactory.getInstance().handler.closeRemoteTab(remote);
++    }
++    return true;
 +  }
 +
 +  private async wakeRow_(row: TabRow) {
@@ -7197,7 +7240,7 @@ index aa4e0fe69e..7790be929f 100644
 +      this.refreshSections_();
 +      return;
 +    }
-+    if (this.spaces_.drop(id)) {
++    if (this.dropRow_(id)) {
 +      this.refreshSections_();
 +      return;
 +    }
@@ -7310,6 +7353,12 @@ index aa4e0fe69e..7790be929f 100644
 +        return;
 +      }
 +      tabId = dormant.tabId;
++    }
++
++    const remote = this.spaces_.remoteOf(tabId);
++    if (remote) {
++      this.takeTab_(tabId, remote);
++      return;
 +    }
 +
 +    const sleeping = this.spaces_.wake(tabId);
@@ -8841,7 +8890,7 @@ index 3d4fe27f4f..2029b374e0 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..b31dba9ee3 100644
+index 15a65f7152..c466355072 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -8961,7 +9010,7 @@ index 15a65f7152..b31dba9ee3 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +162,69 @@ interface PageHandler {
+@@ -90,6 +162,73 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -9006,6 +9055,10 @@ index 15a65f7152..b31dba9ee3 100644
 +
 +  MoveTabsToWindow(int32 window_id, array<tabs_api.mojom.NodeId> ids)
 +      => (bool moved);
++
++  TakeTab(tabs_api.mojom.NodeId id) => (bool moved);
++
++  CloseRemoteTab(tabs_api.mojom.NodeId id) => (bool closed);
 +
 +  SleepTab(tabs_api.mojom.NodeId id) => (bool asleep);
 +
@@ -9220,7 +9273,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..98d2bc2518 100644
+index 3ba14e7289..900c474d82 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -9353,7 +9406,7 @@ index 3ba14e7289..98d2bc2518 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +411,208 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +411,218 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -9536,6 +9589,16 @@ index 3ba14e7289..98d2bc2518 100644
 +      rail::MoveTabsToWindow(GetBrowser(), window_id, ids));
 +}
 +
++void WebUIBrowserPageHandler::TakeTab(const tabs_api::NodeId& id,
++                                      TakeTabCallback callback) {
++  std::move(callback).Run(rail::TakeTab(GetBrowser(), id));
++}
++
++void WebUIBrowserPageHandler::CloseRemoteTab(const tabs_api::NodeId& id,
++                                             CloseRemoteTabCallback callback) {
++  std::move(callback).Run(rail::CloseRemoteTab(GetBrowser(), id));
++}
++
 +void WebUIBrowserPageHandler::SleepTab(const tabs_api::NodeId& id,
 +                                       SleepTabCallback callback) {
 +  std::move(callback).Run(rail::SleepTab(GetBrowser(), id));
@@ -9562,7 +9625,7 @@ index 3ba14e7289..98d2bc2518 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -339,7 +620,15 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -339,7 +630,15 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -9580,7 +9643,7 @@ index 3ba14e7289..98d2bc2518 100644
  Browser* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..1b6dbe4047 100644
+index 859da4ef00..523e339c78 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -9,8 +9,10 @@
@@ -9605,7 +9668,7 @@ index 859da4ef00..1b6dbe4047 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +62,66 @@ class WebUIBrowserPageHandler
+@@ -56,8 +62,69 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -9644,6 +9707,9 @@ index 859da4ef00..1b6dbe4047 100644
 +  void MoveTabsToWindow(int32_t window_id,
 +                        const std::vector<tabs_api::NodeId>& ids,
 +                        MoveTabsToWindowCallback callback) override;
++  void TakeTab(const tabs_api::NodeId& id, TakeTabCallback callback) override;
++  void CloseRemoteTab(const tabs_api::NodeId& id,
++                      CloseRemoteTabCallback callback) override;
 +  void SleepTab(const tabs_api::NodeId& id, SleepTabCallback callback) override;
 +  void GetSleepingTabs(GetSleepingTabsCallback callback) override;
 +  void ShowRailMenu(
@@ -9672,7 +9738,7 @@ index 859da4ef00..1b6dbe4047 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +133,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +136,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -9681,7 +9747,7 @@ index 859da4ef00..1b6dbe4047 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -77,11 +143,16 @@ class WebUIBrowserPageHandler
+@@ -77,11 +146,16 @@ class WebUIBrowserPageHandler
    std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
  
    std::unique_ptr<content::WebContents> glic_contents_;
