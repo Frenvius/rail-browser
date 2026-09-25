@@ -230,6 +230,9 @@ interface RowFields {
   remote?: string;
 }
 
+export type DormantFields =
+    Pick<RowFields, 'url'|'title'|'favicon'|'owner'|'remote'>;
+
 export function isNewTabUrl(url: string): boolean {
   return !url || url.startsWith('chrome://newtab');
 }
@@ -248,7 +251,6 @@ export class Spaces {
   private creating_ = 0;
   private profiles_: SpaceProfile[] = [];
   private material_: SystemBackdropMaterial = DEFAULT_MATERIAL;
-  private nextKey_ = 0;
 
   constructor(private onChange_: () => void) {}
 
@@ -305,7 +307,6 @@ export class Spaces {
     this.rows_ = [];
     this.claims_.clear();
     this.creating_ = 0;
-    this.nextKey_ = 0;
   }
 
   restore(
@@ -316,7 +317,7 @@ export class Spaces {
         new Map(this.spaces_.map(space => [space.id, space.activeKey]));
     const homes = new Map(
         previous.filter(row => row.tabId).map(row => [row.tabId, row]));
-    const waiting = previous.filter(row => row.pending && !row.tabId);
+    const waiting = previous.filter(row => !row.tabId && !row.remote);
     const reuse = (space: string, tabId: string, url: string) => {
       const row = tabId ?
           homes.get(tabId) :
@@ -327,6 +328,9 @@ export class Spaces {
       }
       return row;
     };
+    const used = new Set<string>();
+    const unique = (...keys: Array<string|undefined>) =>
+        keys.find(key => key && !used.has(key));
     this.rows_ = [];
     this.spaces_ = [];
     this.material_ = state?.material ?? DEFAULT_MATERIAL;
@@ -342,13 +346,12 @@ export class Spaces {
       };
       this.spaces_.push(space);
       for (const entry of stored.tabs ?? []) {
-        const {url, title, favicon, group, ...origin} = storedTab(entry);
+        const {id, url, title, favicon, group, ...origin} = storedTab(entry);
         const owner = byUrl ? '' : origin.owner ?? '';
         const remote = byUrl ? '' : origin.tab ?? '';
         const tab = MINI ? undefined : tabs.find(
             candidate => !claimed.has(candidate.id) &&
-                (byUrl ? candidate.url === url : candidate.id === remote) &&
-                (homes.get(candidate.id)?.space ?? space.id) === space.id);
+                (byUrl ? candidate.url === url : candidate.id === remote));
         if (tab) {
           claimed.add(tab.id);
         } else if (remote && tabs.some(one => one.id === remote)) {
@@ -362,7 +365,7 @@ export class Spaces {
           continue;
         }
         const row = this.push_({
-          key: kept?.key,
+          key: unique(id, kept?.key),
           pending: kept?.pending,
           space: space.id,
           tabId: tab ? tab.id : '',
@@ -373,6 +376,7 @@ export class Spaces {
           owner: foreign ? owner : '',
           remote: foreign ? remote : '',
         });
+        used.add(row.key);
         if (url === stored.activeUrl && !space.activeKey) {
           space.activeKey = row.key;
         }
@@ -395,7 +399,7 @@ export class Spaces {
         continue;
       }
       const row = this.push_({
-        key: home.key,
+        key: unique(home.key),
         space: home.space,
         tabId: tab.id,
         url: tab.url,
@@ -827,7 +831,23 @@ export class Spaces {
     return true;
   }
 
-  addDormant(spaceId: string, tab: StoredTab): TabRow|undefined {
+  remotes(): string[] {
+    return this.rows_.filter(row => row.remote).map(row => row.remote);
+  }
+
+  releaseRemotes(dead: ReadonlySet<string>): boolean {
+    const rows = this.rows_.filter(row => row.remote && dead.has(row.remote));
+    for (const row of rows) {
+      row.owner = '';
+      row.remote = '';
+    }
+    if (rows.length) {
+      this.onChange_();
+    }
+    return rows.length > 0;
+  }
+
+  addDormant(spaceId: string, tab: DormantFields): TabRow|undefined {
     if (!this.byId(spaceId)) {
       return undefined;
     }
@@ -1086,7 +1106,7 @@ export class Spaces {
   }
 
   private mintKey_(): string {
-    return `row${this.nextKey_++}`;
+    return `row-${crypto.randomUUID()}`;
   }
 
   private mint_(): Space {
@@ -1116,7 +1136,18 @@ export class Spaces {
 function storePin(entry: PinnedEntry): StoredPin {
   const {key, home, homeTitle, homeFavicon, url, title, favicon, folder} =
       entry;
-  return {id: key, home, homeTitle, homeFavicon, url, title, favicon, folder};
+  return {
+    id: key,
+    home,
+    homeTitle,
+    homeFavicon,
+    url,
+    title,
+    favicon,
+    folder,
+    owner: entry.tabId ? WINDOW_ID : entry.owner || undefined,
+    tab: entry.tabId || entry.remote || undefined,
+  };
 }
 
 export function serializeSidebar(
@@ -1134,7 +1165,8 @@ export function serializeSidebar(
     tidyGroups: tidyGroups.storedIn(space.id),
     tabs: spaces.rowsIn(space.id)
               .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
-              .map(({url, title, favicon, group, tabId, owner, remote}) => ({
+              .map(({key, url, title, favicon, group, tabId, owner, remote}) => ({
+                     id: key,
                      url,
                      title,
                      favicon,

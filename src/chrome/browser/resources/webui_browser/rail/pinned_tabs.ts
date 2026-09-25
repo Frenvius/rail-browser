@@ -3,6 +3,7 @@ import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 import {TabNetworkState} from '../tabs.mojom-webui.js';
 
 import type {SidebarState, StoredPin} from './sidebar_state.js';
+import {WINDOW_ID} from './sidebar_state.js';
 
 const FAVORITES_PREFIX = 'fav:';
 
@@ -28,6 +29,8 @@ export interface PinnedEntry {
   title: string;
   favicon: string;
   tabId: string;
+  owner: string;
+  remote: string;
   folder: string;
 }
 
@@ -57,7 +60,9 @@ export class PinnedTabs {
             .map(entry => favoritesProfile(entry.space)))];
   }
 
-  restore(state: SidebarState|null, tabs: Tab[], claimed: Set<string>) {
+  restore(
+      state: SidebarState|null, tabs: Tab[], claimed: Set<string>,
+      byUrl: boolean) {
     const previous = new Map(this.entries_.map(entry => [entry.key, entry]));
     this.entries_ = [];
     const groups: Array<[string, StoredPin[]]> =
@@ -78,13 +83,17 @@ export class PinnedTabs {
         if (existing) {
           previous.delete(existing.key);
         }
+        const remote = byUrl ? '' : pin.tab ?? '';
         const tab = tabs.find(
             candidate => !claimed.has(candidate.id) &&
-                (existing ? candidate.id === existing.tabId :
-                            !this.restored_ && candidate.url === pin.url));
+                (candidate.id === existing?.tabId ||
+                 (remote ? candidate.id === remote :
+                           !this.restored_ && candidate.url === pin.url)));
         if (tab) {
           claimed.add(tab.id);
         }
+        const foreign = !tab && !!remote && pin.owner !== WINDOW_ID &&
+            !tabs.some(one => one.id === remote);
         this.entries_.push({
           key: pin.id ?? existing?.key ?? this.mintKey_(),
           space: spaceId,
@@ -95,6 +104,8 @@ export class PinnedTabs {
           title: pin.title,
           favicon: pin.favicon,
           tabId: tab ? tab.id : '',
+          owner: foreign ? pin.owner ?? '' : '',
+          remote: foreign ? remote : '',
           folder: pin.folder ?? '',
         });
       }
@@ -126,6 +137,8 @@ export class PinnedTabs {
       title: tab.title,
       favicon: tab.favicon.dataUrl,
       tabId: tab.id,
+      owner: '',
+      remote: '',
       folder: '',
     });
   }
@@ -140,8 +153,46 @@ export class PinnedTabs {
       title: row.title,
       favicon: row.favicon,
       tabId: '',
+      owner: row.remote ? row.owner ?? '' : '',
+      remote: row.remote ?? '',
       folder: '',
     });
+  }
+
+  adoptRemote(tabId: string): PinnedEntry|undefined {
+    const entry = this.entries_.find(one => !one.tabId && one.remote === tabId);
+    if (!entry) {
+      return undefined;
+    }
+    entry.tabId = tabId;
+    entry.owner = '';
+    entry.remote = '';
+    this.onChange_();
+    return entry;
+  }
+
+  disown(key: string) {
+    const entry = this.byKey(key);
+    if (!entry?.remote) {
+      return;
+    }
+    this.detach_(entry);
+    this.onChange_();
+  }
+
+  remotes(): string[] {
+    return this.entries_.filter(entry => entry.remote)
+        .map(entry => entry.remote);
+  }
+
+  releaseRemotes(dead: ReadonlySet<string>): boolean {
+    const entries =
+        this.entries_.filter(entry => entry.remote && dead.has(entry.remote));
+    entries.forEach(entry => this.detach_(entry));
+    if (entries.length) {
+      this.onChange_();
+    }
+    return entries.length > 0;
   }
 
   unpin(key: string) {
@@ -263,6 +314,8 @@ export class PinnedTabs {
 
   private detach_(entry: PinnedEntry) {
     entry.tabId = '';
+    entry.owner = '';
+    entry.remote = '';
     entry.url = entry.home;
     entry.title = entry.homeTitle;
     entry.favicon = entry.homeFavicon;
@@ -278,6 +331,8 @@ export interface DormantRow {
   url: string;
   title: string;
   favicon: string;
+  owner?: string;
+  remote?: string;
 }
 
 export function dormantTabData(entry: DormantRow): Tab {

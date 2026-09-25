@@ -207,4 +207,16 @@ bool CloseRemoteTab(Browser* caller, const tabs_api::NodeId& id) {
   return true;
 }
 
+std::vector<tabs_api::NodeId> LiveTabs(
+    const std::vector<tabs_api::NodeId>& ids) {
+  std::vector<tabs_api::NodeId> live;
+  for (const tabs_api::NodeId& id : ids) {
+    std::optional<tabs::TabHandle> handle = id.ToTabHandle();
+    if (handle && handle->Get()) {
+      live.push_back(id);
+    }
+  }
+  return live;
+}
+
 }

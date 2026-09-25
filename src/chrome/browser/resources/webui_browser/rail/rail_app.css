@@ -488,6 +488,31 @@ content-region[hidden],
   display: none;
 }
 
+content-region[showing-side-panel] ~ side-panel {
+  background: var(--rail-surface);
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgb(0 0 0 / 50%);
+  display: block;
+  flex: 0 0 var(--rail-side-panel-width, 360px);
+  overflow: hidden;
+}
+
+#sidePanelResizer {
+  display: none;
+}
+
+content-region[showing-side-panel] ~ #sidePanelResizer {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+  cursor: ew-resize;
+  display: block;
+  flex: 0 0 6px;
+}
+
+:host([side-panel-resizing]) {
+  cursor: ew-resize;
+}
+
 #emptyState {
   align-items: center;
   background: var(--rail-surface);

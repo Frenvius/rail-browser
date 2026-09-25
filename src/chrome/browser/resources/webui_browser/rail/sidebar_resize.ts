@@ -9,16 +9,44 @@ const SLIDE_MS = 180;
 const SLIDE_EASING = 'cubic-bezier(.2, 0, 0, 1)';
 
 function slidingElements(host: HTMLElement): HTMLElement[] {
-  const root = host.shadowRoot;
-  const region = root?.getElementById('contentRegion');
-  const titlebar = root?.querySelector('.titlebarDiv');
-  return [
-    ...(region ? [region] : []),
-    ...(titlebar ? Array.from(titlebar.children) as HTMLElement[] : []),
-  ];
+  const titlebar = host.shadowRoot?.querySelector('.titlebarDiv');
+  return titlebar ? Array.from(titlebar.children) as HTMLElement[] : [];
+}
+
+let settleRegionSlide: (() => void)|null = null;
+
+function clipLeft(inset: number): Keyframe {
+  return {clipPath: `inset(0 0 0 ${inset}px round 8px)`};
+}
+
+function slideRegionEdge(region: HTMLElement, beforeLeft: number) {
+  const shift = region.getBoundingClientRect().left - beforeLeft;
+  if (!shift || !region.offsetWidth) {
+    return;
+  }
+  region.style.zIndex = '1';
+  if (shift > 0) {
+    region.style.marginLeft = `${-shift}px`;
+  }
+  const from = Math.max(0, -shift);
+  const to = Math.max(0, shift);
+  const slide = region.animate(
+      [clipLeft(from), clipLeft(to)],
+      {duration: SLIDE_MS, easing: SLIDE_EASING});
+  const settle = () => {
+    slide.cancel();
+    region.style.marginLeft = '';
+    region.style.zIndex = '';
+    settleRegionSlide = null;
+  };
+  slide.onfinish = settle;
+  settleRegionSlide = settle;
 }
 
 export function toggleSidebarCollapsed(host: HTMLElement) {
+  settleRegionSlide?.();
+  const region = host.shadowRoot?.getElementById('contentRegion');
+  const regionLeft = region?.getBoundingClientRect().left ?? 0;
   const sliding = slidingElements(host);
   const before = sliding.map(element => element.getBoundingClientRect().left);
 
@@ -26,6 +54,9 @@ export function toggleSidebarCollapsed(host: HTMLElement) {
   host.toggleAttribute(COLLAPSED_ATTRIBUTE, collapsed);
   localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
 
+  if (region) {
+    slideRegionEdge(region, regionLeft);
+  }
   sliding.forEach((element, index) => {
     const shift = before[index]! - element.getBoundingClientRect().left;
     if (shift) {

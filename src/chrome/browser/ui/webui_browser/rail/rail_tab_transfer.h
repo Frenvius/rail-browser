@@ -43,6 +43,9 @@ bool TakeTab(Browser* target, const tabs_api::NodeId& id);
 
 bool CloseRemoteTab(Browser* caller, const tabs_api::NodeId& id);
 
+std::vector<tabs_api::NodeId> LiveTabs(
+    const std::vector<tabs_api::NodeId>& ids);
+
 }
 
 #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_TAB_TRANSFER_H_

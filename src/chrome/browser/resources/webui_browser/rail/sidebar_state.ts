@@ -11,6 +11,7 @@ export const MINI = new URLSearchParams(location.search).has('mini');
 export const WINDOW_ID = crypto.randomUUID();
 
 const SAVE_DELAY_MS = 0;
+const HISTORY_LIMIT = 16;
 
 export interface StoredPin {
   id?: string;
@@ -21,6 +22,8 @@ export interface StoredPin {
   title: string;
   favicon: string;
   folder?: string;
+  owner?: string;
+  tab?: string;
 }
 
 export interface StoredFolder {
@@ -31,6 +34,7 @@ export interface StoredFolder {
 }
 
 export interface StoredTab {
+  id?: string;
   url: string;
   title: string;
   favicon: string;
@@ -59,6 +63,8 @@ export interface SidebarState {
   favoritesByProfile?: Record<string, StoredPin[]>;
   favorites?: StoredPin[];
   essentials?: StoredPin[];
+  rev?: string;
+  parent?: string;
 }
 
 export function parseSidebarState(value: string): SidebarState|null {
@@ -82,34 +88,173 @@ export async function readSidebarState(): Promise<SidebarState|null> {
   return parseSidebarState(value);
 }
 
+function sharedPart(value: string): string {
+  const state = JSON.parse(value) as SidebarState;
+  return JSON.stringify({
+    ...state,
+    activeSpace: '',
+    spaces: state.spaces.map(space => ({...space, activeUrl: ''})),
+  });
+}
+
+function unstamped(state: SidebarState): SidebarState {
+  const rest = {...state};
+  delete rest.rev;
+  delete rest.parent;
+  return rest;
+}
+
+function same(one: unknown, other: unknown): boolean {
+  return JSON.stringify(one) === JSON.stringify(other);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function identity(item: unknown): string {
+  const id = isRecord(item) ? item['id'] : undefined;
+  return typeof id === 'string' && id ? id : JSON.stringify(item);
+}
+
+function pick(base: unknown, mine: unknown, theirs: unknown): unknown {
+  if (same(mine, theirs) || same(base, theirs)) {
+    return mine;
+  }
+  if (same(base, mine)) {
+    return theirs;
+  }
+  return (JSON.stringify(mine) ?? '') > (JSON.stringify(theirs) ?? '') ?
+      mine :
+      theirs;
+}
+
+function mergeList(
+    base: unknown[], mine: unknown[], theirs: unknown[]): unknown[] {
+  const index = (list: unknown[]) =>
+      new Map(list.map(item => [identity(item), item]));
+  const was = index(base);
+  const ours = index(mine);
+  const others = index(theirs);
+  const kept = (id: string) => (ours.has(id) && others.has(id)) || !was.has(id);
+  const common = (list: unknown[]) => list.map(identity).filter(
+      id => was.has(id) && ours.has(id) && others.has(id));
+  const reordered = !same(common(mine), common(base)) &&
+      same(common(theirs), common(base));
+  const [lead, follow] = reordered ? [mine, theirs] : [theirs, mine];
+  const order = [...new Set(lead.map(identity).filter(kept))];
+  follow.map(identity).forEach((id, position, ids) => {
+    if (!kept(id) || order.includes(id)) {
+      return;
+    }
+    const before =
+        ids.slice(0, position).reverse().find(other => order.includes(other));
+    order.splice(before === undefined ? 0 : order.indexOf(before) + 1, 0, id);
+  });
+  return order.map(
+      id => mergeState(
+          was.get(id), ours.get(id) ?? others.get(id),
+          others.get(id) ?? ours.get(id)));
+}
+
+export function mergeState(
+    base: unknown, mine: unknown, theirs: unknown): unknown {
+  if (Array.isArray(mine) && Array.isArray(theirs)) {
+    return mergeList(Array.isArray(base) ? base : [], mine, theirs);
+  }
+  if (isRecord(mine) && isRecord(theirs)) {
+    const old = isRecord(base) ? base : {};
+    const merged: Record<string, unknown> = {};
+    for (const key of new Set([...Object.keys(theirs), ...Object.keys(mine)])) {
+      const value = mergeState(old[key], mine[key], theirs[key]);
+      if (value !== undefined) {
+        merged[key] = value;
+      }
+    }
+    return merged;
+  }
+  return pick(base, mine, theirs);
+}
+
 export class SidebarStore {
   private timer_ = 0;
   private latest_: string|null = null;
-  private unechoed_: string[] = [];
+  private received_ = false;
+  private head_ = '';
+  private readonly history_ = new Map<string, SidebarState>();
+  private readonly own_ = new Set<string>();
 
   constructor(private serialize_: () => SidebarState) {}
+
+  seed(state: SidebarState|null) {
+    if (state?.rev) {
+      this.head_ = state.rev;
+      this.remember_(state.rev, unstamped(state));
+    }
+  }
 
   save() {
     if (INCOGNITO || MINI) {
       return;
     }
     clearTimeout(this.timer_);
-    this.timer_ = setTimeout(() => {
-      const value = JSON.stringify(this.serialize_());
-      if (value === this.latest_) {
-        return;
-      }
-      this.latest_ = value;
-      this.unechoed_.push(value);
-      browserProxyFactory.getInstance().handler.setSidebarState(value);
-    }, SAVE_DELAY_MS);
+    this.timer_ = setTimeout(() => this.publish_(), SAVE_DELAY_MS);
   }
 
-  accept(value: string): boolean {
-    const echoed = this.unechoed_.indexOf(value);
-    const fresh = echoed === -1 && value !== this.latest_;
-    this.unechoed_.splice(0, echoed + 1);
+  accept(value: string): SidebarState|null {
+    const incoming = parseSidebarState(value);
+    if (!incoming || value === this.latest_) {
+      return null;
+    }
+    if (INCOGNITO || MINI) {
+      this.latest_ = value;
+      return incoming;
+    }
+    const rev = incoming.rev ?? '';
+    const theirs = unstamped(incoming);
+    const base = this.history_.get(incoming.parent ?? '');
+    if (rev) {
+      this.head_ = rev;
+      this.remember_(rev, theirs);
+    }
+    if (this.own_.delete(rev)) {
+      this.received_ = false;
+      return null;
+    }
+    const text = JSON.stringify(theirs);
+    if (text === this.latest_) {
+      return null;
+    }
+    const mine = this.serialize_();
+    this.latest_ = text;
+    this.received_ = true;
+    return mergeState(base ?? mine, mine, theirs) as SidebarState;
+  }
+
+  private publish_() {
+    const state = this.serialize_();
+    const value = JSON.stringify(state);
+    if (value === this.latest_ ||
+        (this.received_ && this.latest_ &&
+         sharedPart(value) === sharedPart(this.latest_))) {
+      return;
+    }
     this.latest_ = value;
-    return fresh && !this.unechoed_.length;
+    this.received_ = false;
+    const rev = crypto.randomUUID();
+    this.remember_(rev, state);
+    if (this.own_.size >= HISTORY_LIMIT) {
+      this.own_.clear();
+    }
+    this.own_.add(rev);
+    browserProxyFactory.getInstance().handler.setSidebarState(
+        JSON.stringify({...state, rev, parent: this.head_}));
+  }
+
+  private remember_(rev: string, state: SidebarState) {
+    this.history_.set(rev, state);
+    if (this.history_.size > HISTORY_LIMIT) {
+      this.history_.delete(this.history_.keys().next().value!);
+    }
   }
 }
