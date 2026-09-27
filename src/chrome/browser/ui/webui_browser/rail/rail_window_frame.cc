@@ -135,6 +135,28 @@ wchar_t* ResizeCursorForComponent(int component) {
   }
 }
 
+void RaiseIfBuriedWhileForeground(HWND hwnd) {
+  if (::GetForegroundWindow() != hwnd || ::IsIconic(hwnd)) {
+    return;
+  }
+  const DWORD own_process = ::GetCurrentProcessId();
+  for (HWND above = ::GetWindow(hwnd, GW_HWNDPREV); above;
+       above = ::GetWindow(above, GW_HWNDPREV)) {
+    if (!::IsWindowVisible(above) ||
+        (::GetWindowLong(above, GWL_EXSTYLE) & WS_EX_TOPMOST)) {
+      continue;
+    }
+    DWORD above_process = 0;
+    ::GetWindowThreadProcessId(above, &above_process);
+    if (above_process == own_process) {
+      continue;
+    }
+    ::SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    return;
+  }
+}
+
 // Views answers WM_SETCURSOR asynchronously, which leaves the arrow cursor on
 // the edge until the next mouse move. This subclass answers synchronously.
 LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
@@ -174,11 +196,22 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
     return result;
   }
 
+  if (message == WM_ACTIVATE && LOWORD(w_param) != WA_INACTIVE) {
+    const LRESULT result = ::DefSubclassProc(hwnd, message, w_param, l_param);
+    RaiseIfBuriedWhileForeground(hwnd);
+    return result;
+  }
+
   if (message == WM_WINDOWPOSCHANGED || message == WM_SIZE ||
       message == WM_DWMCOMPOSITIONCHANGED || message == WM_THEMECHANGED) {
     const LRESULT result = ::DefSubclassProc(hwnd, message, w_param, l_param);
     EnsureBackdropStyles(hwnd,
                          reinterpret_cast<views::Widget*>(ref_data));
+    if (message == WM_WINDOWPOSCHANGED &&
+        !(reinterpret_cast<const WINDOWPOS*>(l_param)->flags &
+          SWP_NOZORDER)) {
+      RaiseIfBuriedWhileForeground(hwnd);
+    }
     return result;
   }
 
