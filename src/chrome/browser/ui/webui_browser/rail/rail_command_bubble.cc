@@ -1,5 +1,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_command_bubble.h"
 
+#include <windows.h>
+
 #include <algorithm>
 #include <string_view>
 #include <utility>
@@ -375,7 +377,23 @@ content::WebContents* RailCommandBubble::OpenURLFromTab(
 
 void RailCommandBubble::OnWidgetActivationChanged(views::Widget* widget,
                                                   bool active) {
-  if (!active) {
+  if (active) {
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&RailCommandBubble::HideUnlessOtherAppActive,
+                                weak_factory_.GetWeakPtr()));
+}
+
+void RailCommandBubble::HideUnlessOtherAppActive() {
+  if (!widget_ || widget_->IsActive()) {
+    return;
+  }
+  DWORD foreground_process = 0;
+  if (HWND foreground = ::GetForegroundWindow()) {
+    ::GetWindowThreadProcessId(foreground, &foreground_process);
+  }
+  if (foreground_process == ::GetCurrentProcessId()) {
     Hide();
   }
 }
