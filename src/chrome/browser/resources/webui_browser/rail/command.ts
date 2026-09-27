@@ -56,6 +56,8 @@ export class RailCommandElement extends CrLitElement {
   private profileTabs_ = new Set<string>();
   private text_ = '';
   private target_: TabMenuTarget|null = null;
+  private pointerX_ = -1;
+  private pointerY_ = -1;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -163,7 +165,9 @@ export class RailCommandElement extends CrLitElement {
       return;
     }
     if (e.key === 'Enter') {
-      if (this.selected_ >= 0) {
+      if (this.$.address.selectedMatchIndex >= 0) {
+        this.selected_ = -1;
+      } else if (this.selected_ >= 0) {
         this.consume_(e);
         this.run_(this.rows_[this.selected_]!);
       }
@@ -207,9 +211,13 @@ export class RailCommandElement extends CrLitElement {
     return matches === 0 || this.$.address.selectedMatchIndex >= matches - 1;
   }
 
-  protected onRowPointerenter_(e: Event) {
-    const index = (e.currentTarget as HTMLElement).dataset['index'];
-    this.enterRows_(Number(index));
+  protected onRowPointermove_(e: PointerEvent) {
+    if (e.screenX === this.pointerX_ && e.screenY === this.pointerY_) {
+      return;
+    }
+    this.pointerX_ = e.screenX;
+    this.pointerY_ = e.screenY;
+    this.enterRows_(Number((e.currentTarget as HTMLElement).dataset['index']));
   }
 
   protected onRowsPointerleave_() {

@@ -12,7 +12,7 @@ export function getHtml(this: RailCommandElement) {
     ${this.rows_.map((row, i) => html`
       <button class="row" tabindex="-1" data-index="${i}"
           ?selected="${i === this.selected_}"
-          @pointerenter="${this.onRowPointerenter_}"
+          @pointermove="${this.onRowPointermove_}"
           @click="${this.onRowClick_}">
         <span class="favicon"
           style="background-image: url(${row.favicon})"></span>
