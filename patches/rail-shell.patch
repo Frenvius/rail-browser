@@ -12217,6 +12217,29 @@ index b071895a60..452490f1f8 100644
        </message>
      </if>
    </if>
+diff --git a/content/browser/find_request_manager.cc b/content/browser/find_request_manager.cc
+index ae9eeb00ab..6688ae29b6 100644
+--- a/content/browser/find_request_manager.cc
++++ b/content/browser/find_request_manager.cc
+@@ -7,6 +7,7 @@
+ #include <algorithm>
+ #include <utility>
+ 
++#include "base/containers/flat_set.h"
+ #include "base/containers/queue.h"
+ #include "base/functional/bind.h"
+ #include "base/memory/raw_ptr.h"
+@@ -797,7 +798,9 @@ RenderFrameHost* FindRequestManager::Traverse(RenderFrameHost* from_rfh,
+ 
+   RenderFrameHostImpl* rfh = from_rfh_impl;
+   RenderFrameHostImpl* last_frame = rfh;
+-  while ((rfh = TraverseFrame(rfh, forward, wrap)) != nullptr) {
++  base::flat_set<RenderFrameHostImpl*> visited;
++  while ((rfh = TraverseFrame(rfh, forward, wrap)) != nullptr &&
++         visited.insert(rfh).second) {
+     if (!CheckFrame(rfh)) {
+       // If we're in the same frame as before, we might got into an infinite
+       // loop.
 diff --git a/content/browser/web_contents/web_contents_impl.cc b/content/browser/web_contents/web_contents_impl.cc
 index fe05eb81d5..48557ee3e2 100644
 --- a/content/browser/web_contents/web_contents_impl.cc
