@@ -451,8 +451,7 @@ webui-browser-tab-strip {
 :host([mini]) .tabstripDiv,
 :host([mini]) #sidebarResizer,
 :host([mini]) #railLogoHit,
-:host([mini]) #extensionsBar,
-:host([mini]) #appMenuButton {
+:host([mini]) #extensionsBar {
   display: none;
 }
 

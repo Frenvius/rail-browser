@@ -81,6 +81,14 @@ bool ParseAccelerator(const std::string& value, ui::Accelerator* out) {
     code = static_cast<ui::KeyboardCode>(ui::VKEY_A + (key[0] - 'A'));
   } else if (key == ",") {
     code = ui::VKEY_OEM_COMMA;
+  } else if (key == "Left") {
+    code = ui::VKEY_LEFT;
+  } else if (key == "Right") {
+    code = ui::VKEY_RIGHT;
+  } else if (key == "Esc") {
+    code = ui::VKEY_ESCAPE;
+  } else if (key == "Delete") {
+    code = ui::VKEY_DELETE;
   } else if (key.size() >= 2 && key[0] == 'F') {
     int number = 0;
     if (!base::StringToInt(key.substr(1), &number) || number < 1 ||

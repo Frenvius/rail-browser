@@ -1,7 +1,11 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_ACCELERATORS_H_
 #define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_ACCELERATORS_H_
 
+#include <string_view>
+
 #include "chrome/browser/ui/webui_browser/browser.mojom.h"
+
+class BrowserWindowInterface;
 
 namespace ui {
 class Accelerator;
@@ -20,6 +24,9 @@ bool HandleRailAccelerator(const ui::Accelerator& accelerator,
 bool IsCommandDisabledInShell(int command_id);
 
 const char* RailCommandForBrowserCommand(int command_id);
+
+void RunBrowserCommand(BrowserWindowInterface* browser,
+                       std::string_view command);
 
 }
 

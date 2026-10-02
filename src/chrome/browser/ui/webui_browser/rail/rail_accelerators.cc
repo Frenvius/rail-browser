@@ -1,6 +1,9 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_accelerators.h"
 
+#include <utility>
+
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/ui/browser_commands.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/keycodes/keyboard_codes.h"
@@ -28,6 +31,38 @@ constexpr Binding kMiniBindings[] = {
     {ui::VKEY_O, ui::EF_CONTROL_DOWN, "adopt-mini-window"},
 };
 
+constexpr std::pair<std::string_view, int> kMenuBrowserCommands[] = {
+    {"new-window", IDC_NEW_WINDOW},
+    {"new-incognito-window", IDC_NEW_INCOGNITO_WINDOW},
+    {"restore-tab", IDC_RESTORE_TAB},
+    {"import-settings", IDC_IMPORT_SETTINGS},
+    {"history", IDC_SHOW_HISTORY},
+    {"downloads", IDC_SHOW_DOWNLOADS},
+    {"extensions", IDC_MANAGE_EXTENSIONS},
+    {"passwords", IDC_SHOW_PASSWORD_MANAGER},
+    {"clear-browsing-data", IDC_CLEAR_BROWSING_DATA},
+    {"browser-settings", IDC_OPTIONS},
+    {"about", IDC_ABOUT},
+    {"dev-tools", IDC_DEV_TOOLS},
+    {"dev-tools-console", IDC_DEV_TOOLS_CONSOLE},
+    {"view-source", IDC_VIEW_SOURCE},
+    {"task-manager", IDC_TASK_MANAGER_APP_MENU},
+    {"print", IDC_PRINT},
+};
+
+}
+
+void RunBrowserCommand(BrowserWindowInterface* browser,
+                       std::string_view command) {
+  if (!browser) {
+    return;
+  }
+  for (const auto& [name, command_id] : kMenuBrowserCommands) {
+    if (name == command) {
+      chrome::ExecuteCommand(browser, command_id);
+      return;
+    }
+  }
 }
 
 bool IsCommandDisabledInShell(int command_id) {
