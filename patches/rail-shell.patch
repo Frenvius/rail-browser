@@ -5515,10 +5515,10 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..88741b40f3 100644
+index 65d7e76ce5..5fc58ecfb7 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -4,27 +4,194 @@
+@@ -4,27 +4,195 @@
  
  import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
  
@@ -5579,9 +5579,10 @@ index 65d7e76ce5..88741b40f3 100644
 +                <span class="folder-count">${entry.section.rows.length}</span>
 +              `}
 +            </div>
-+            ${entry.section.folder.expanded ? html`
++            ${entry.section.folder.expanded ||
++                this.folderHasActive_(entry.section) ? html`
 +              <div class="folder-children">
-+                ${entry.section.rows.map(row => html`
++                ${this.folderRows_(entry.section).map(row => html`
 +                  <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
 +                      .tabData="${row.item.tabData}"
 +                      .dragInProgress="${this.dragInProgress_}"
@@ -5724,7 +5725,7 @@ index 65d7e76ce5..88741b40f3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..745051df46 100644
+index aa4e0fe69e..9d5b4a5834 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6200,7 +6201,7 @@ index aa4e0fe69e..745051df46 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +575,1613 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +575,1621 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6982,6 +6983,12 @@ index aa4e0fe69e..745051df46 100644
 +        section.rows.some(row => row.item.id === this.activeTab_);
 +  }
 +
++  protected folderRows_(section: FolderSection): PinnedRow[] {
++    return section.folder.expanded ?
++        section.rows :
++        section.rows.filter(row => row.item.id === this.activeTab_);
++  }
++
 +  private toggleFavorite_(target: TabMenuTarget) {
 +    const entry = this.entryFor_(target.id) ?? this.pinTab_(target.id);
 +    if (!entry) {
@@ -7684,7 +7691,9 @@ index aa4e0fe69e..745051df46 100644
 +        pinnedSlots.push({
 +          id: folder.id,
 +          kind: 'header',
-+          group: folder.expanded ? folder.id : '',
++          group: folder.expanded || this.folderHasActive_(entry.section) ?
++              folder.id :
++              '',
 +        });
 +        for (const row of entry.section.rows) {
 +          pinnedSlots.push({id: row.item.id, kind: 'tab', group: folder.id});
