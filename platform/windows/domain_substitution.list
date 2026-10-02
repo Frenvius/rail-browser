@@ -1824,7 +1824,6 @@ chrome/browser/signin/process_dice_header_delegate_impl_unittest.cc
 chrome/browser/signin/signin_promo_unittest.cc
 chrome/browser/signin/signin_ui_util.cc
 chrome/browser/signin/signin_ui_util_browsertest.cc
-chrome/browser/signin/signin_util.cc
 chrome/browser/signin/signin_util_unittest.cc
 chrome/browser/signin/signin_util_win_browsertest.cc
 chrome/browser/skills/skills_interactive_uitest_base.cc
