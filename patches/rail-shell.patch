@@ -12368,6 +12368,39 @@ index 1056869c2f..45c634eefe 100644
  
  BASE_FEATURE(kExtensionsMenuAccessControlWithPermittedSites,
               "ExtensionsMenuAccessControlWithPermittedSitesName",
+diff --git a/mojo/public/js/interface_support.js b/mojo/public/js/interface_support.js
+index 4a941797eb..72e75f9f20 100644
+--- a/mojo/public/js/interface_support.js
++++ b/mojo/public/js/interface_support.js
+@@ -51,6 +51,9 @@ mojo.internal.interfaceSupport.Router = class {
+     /** @const {!Map<number, !mojo.internal.interfaceSupport.Endpoint>} */
+     this.endpoints_ = new Map();
+ 
++    /** @const {!Set<number>} */
++    this.closedEndpoints_ = new Set();
++
+     /** @private {number} */
+     this.nextInterfaceId_ = 1;
+ 
+@@ -109,6 +112,7 @@ mojo.internal.interfaceSupport.Router = class {
+     if (interfaceId === 0) {
+       this.close();
+     } else {
++      this.closedEndpoints_.add(interfaceId);
+       this.pipeControlHandler_.notifyEndpointClosed(interfaceId);
+     }
+   }
+@@ -198,6 +202,10 @@ mojo.internal.interfaceSupport.Router = class {
+   dispatch_(msg) {
+     const endpoint = this.endpoints_.get(msg.header.interfaceId);
+     if (!endpoint) {
++      if (this.closedEndpoints_.has(msg.header.interfaceId)) {
++        msg.handles.forEach(handle => handle.close());
++        return true;
++      }
+       console.error(
+           `Received message for unknown endpoint ${msg.header.interfaceId}`);
+ 
 diff --git a/tools/gritsettings/resource_ids.spec b/tools/gritsettings/resource_ids.spec
 index 9d8b4ade5a..e840a1e6f1 100644
 --- a/tools/gritsettings/resource_ids.spec
