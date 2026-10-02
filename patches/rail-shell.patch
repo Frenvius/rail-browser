@@ -4574,7 +4574,7 @@ index 8ebad94626..a86d0a7b8f 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..16baba6bad 100644
+index caed98ffda..ae60354ac3 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4755,7 +4755,7 @@ index caed98ffda..16baba6bad 100644
    }
  
    protected onMinimizeClick_(_: Event) {
-@@ -232,15 +286,87 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,15 +286,86 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -4816,7 +4816,6 @@ index caed98ffda..16baba6bad 100644
 +  }
 +
 +  protected onSpaceProfileChanged_(e: CustomEvent<{profile: string}>) {
-+    this.$.extensionsBar.toggleAttribute('foreign-profile', !!e.detail.profile);
 +    this.activeProfile_.apply(
 +        e.detail.profile, () => {});
 +  }
@@ -4843,7 +4842,7 @@ index caed98ffda..16baba6bad 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -252,6 +378,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -252,6 +377,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -4851,7 +4850,7 @@ index caed98ffda..16baba6bad 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -270,7 +397,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -270,7 +396,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // is typing and the tab navigates.
      const isNTP = activeTabUrl.startsWith('chrome://newtab');
      if (!isNTP) {
@@ -4860,7 +4859,7 @@ index caed98ffda..16baba6bad 100644
  
        const tabWebView = this.$.contentRegion.activeWebview;
        if (tabWebView) {
-@@ -287,7 +414,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +413,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -4873,7 +4872,7 @@ index caed98ffda..16baba6bad 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +436,88 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +435,88 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4989,7 +4988,7 @@ index caed98ffda..16baba6bad 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +536,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +535,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5006,7 +5005,7 @@ index caed98ffda..16baba6bad 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +575,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +574,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -5094,22 +5093,6 @@ index 8ad3ede567..5e6cafd65b 100644
      webview.remove();
      this.requestUpdate();
    }
-diff --git a/chrome/browser/resources/webui_browser/extensions_bar.css b/chrome/browser/resources/webui_browser/extensions_bar.css
-index 8ee44235b6..fc2b5e5e49 100644
---- a/chrome/browser/resources/webui_browser/extensions_bar.css
-+++ b/chrome/browser/resources/webui_browser/extensions_bar.css
-@@ -15,6 +15,11 @@
-   display: flex;
- }
- 
-+:host([foreign-profile]) #extensionsMenuButton {
-+  pointer-events: none;
-+  visibility: hidden;
-+}
-+
- cr-icon-button {
-   --cr-icon-button-icon-size: 20px;
-   --cr-icon-button-margin-end: 0;
 diff --git a/chrome/browser/resources/webui_browser/icons.html.ts b/chrome/browser/resources/webui_browser/icons.html.ts
 index 0c8c126729..3eeb0c2049 100644
 --- a/chrome/browser/resources/webui_browser/icons.html.ts
@@ -8442,6 +8425,205 @@ index 26fd80c026..7349a463a1 100644
    chrome::ScopedTabbedBrowserDisplayer displayer(profile);
    Browser* browser = displayer.browser();
    if (browser->tab_strip_model()->count() == 0) {
+diff --git a/chrome/browser/ui/extensions/extensions_menu_view_model.cc b/chrome/browser/ui/extensions/extensions_menu_view_model.cc
+index 8d722096e2..d02df984bf 100644
+--- a/chrome/browser/ui/extensions/extensions_menu_view_model.cc
++++ b/chrome/browser/ui/extensions/extensions_menu_view_model.cc
+@@ -535,13 +535,15 @@ ExtensionsMenuViewModel::MenuEntryState::~MenuEntryState() = default;
+ 
+ ExtensionsMenuViewModel::ExtensionsMenuViewModel(
+     BrowserWindowInterface* browser,
+-    Delegate* delegate)
++    Delegate* delegate,
++    Profile* profile)
+     : browser_(browser),
++      profile_(profile ? profile : browser->GetProfile()),
+       delegate_(delegate),
+-      toolbar_model_(ToolbarActionsModel::Get(browser_->GetProfile())) {
++      toolbar_model_(ToolbarActionsModel::Get(profile_)) {
+   content::WebContentsObserver::Observe(GetActiveWebContents());
+   permissions_manager_observation_.Observe(
+-      extensions::PermissionsManager::Get(browser_->GetProfile()));
++      extensions::PermissionsManager::Get(profile_.get()));
+   toolbar_model_observation_.Observe(toolbar_model_.get());
+   auto* tab_list = TabListInterface::From(browser);
+   tab_list_interface_observation_.Observe(tab_list);
+@@ -573,7 +575,7 @@ void ExtensionsMenuViewModel::UpdateSiteAccess(
+     PermissionsManager::UserSiteAccess site_access) {
+   LogSiteAccessUpdate(site_access);
+ 
+-  Profile* profile = browser_->GetProfile();
++  Profile* profile = profile_.get();
+   const extensions::Extension* extension = GetExtension(*profile, extension_id);
+   auto url = GetActiveWebContents()->GetLastCommittedURL();
+   if (extension->permissions_data()->IsRestrictedUrl(url, nullptr)) {
+@@ -595,7 +597,7 @@ void ExtensionsMenuViewModel::AllowHostAccessRequest(
+   }
+ 
+   // Accepting a host access request grants always access to the site.
+-  Profile* profile = browser_->GetProfile();
++  Profile* profile = profile_.get();
+   extensions::SitePermissionsHelper(profile).UpdateSiteAccess(
+       *GetExtension(*profile, extension_id), web_contents,
+       extensions::PermissionsManager::UserSiteAccess::kOnSite,
+@@ -607,7 +609,7 @@ void ExtensionsMenuViewModel::AllowHostAccessRequest(
+ 
+ void ExtensionsMenuViewModel::DismissHostAccessRequest(
+     const extensions::ExtensionId& extension_id) {
+-  auto* permissions_manager = PermissionsManager::Get(browser_->GetProfile());
++  auto* permissions_manager = PermissionsManager::Get(profile_.get());
+   CHECK(permissions_manager);
+   content::WebContents* web_contents = GetActiveWebContents();
+   int tab_id = extensions::ExtensionTabUtil::GetTabId(web_contents);
+@@ -621,7 +623,7 @@ void ExtensionsMenuViewModel::DismissHostAccessRequest(
+ void ExtensionsMenuViewModel::ShowHostAccessRequestsInToolbar(
+     const extensions::ExtensionId& extension_id,
+     bool show) {
+-  extensions::SitePermissionsHelper(browser_->GetProfile())
++  extensions::SitePermissionsHelper(profile_.get())
+       .SetShowAccessRequestsInToolbar(extension_id, show);
+ 
+   LogShowHostAccessRequestInToolbar(show);
+@@ -630,7 +632,7 @@ void ExtensionsMenuViewModel::ShowHostAccessRequestsInToolbar(
+ void ExtensionsMenuViewModel::GrantSiteAccess(
+     const extensions::ExtensionId& extension_id,
+     const url::Origin& target_origin) {
+-  auto* profile = browser_->GetProfile();
++  auto* profile = profile_.get();
+   const extensions::Extension* extension = GetExtension(*profile, extension_id);
+   content::WebContents* web_contents = GetActiveWebContents();
+ 
+@@ -693,7 +695,7 @@ void ExtensionsMenuViewModel::GrantSiteAccess(
+ void ExtensionsMenuViewModel::RevokeSiteAccess(
+     const extensions::ExtensionId& extension_id,
+     const url::Origin& target_origin) {
+-  auto* profile = browser_->GetProfile();
++  auto* profile = profile_.get();
+   const extensions::Extension* extension = GetExtension(*profile, extension_id);
+   content::WebContents* web_contents = GetActiveWebContents();
+ 
+@@ -771,7 +773,7 @@ void ExtensionsMenuViewModel::UpdateSiteSetting(
+ 
+   extensions::TabHelper::FromWebContents(web_contents)
+       ->SetReloadRequired(site_setting);
+-  PermissionsManager::Get(browser_->GetProfile())
++  PermissionsManager::Get(profile_.get())
+       ->UpdateUserSiteSetting(origin, site_setting);
+ 
+   LogSiteSettingsUpdate(site_setting);
+@@ -785,7 +787,7 @@ void ExtensionsMenuViewModel::ReloadWebContents() {
+ bool ExtensionsMenuViewModel::CanShowSitePermissionsPage(
+     const extensions::ExtensionId& extension_id) {
+   content::WebContents* web_contents = GetActiveWebContents();
+-  Profile* profile = browser_->GetProfile();
++  Profile* profile = profile_.get();
+   ExtensionActionViewModel* action_model = GetActionViewModel(extension_id);
+   CHECK(action_model);
+   const extensions::Extension* extension = action_model->GetExtension();
+@@ -872,7 +874,7 @@ ExtensionsMenuViewModel::ExtensionSitePermissionsState
+ ExtensionsMenuViewModel::GetExtensionSitePermissionsState(
+     const extensions::ExtensionId& extension_id,
+     const gfx::Size& icon_size) {
+-  Profile* profile = browser_->GetProfile();
++  Profile* profile = profile_.get();
+   auto* permissions_manager = PermissionsManager::Get(profile);
+ 
+   ExtensionActionViewModel* action_model = GetActionViewModel(extension_id);
+@@ -933,7 +935,7 @@ ExtensionsMenuViewModel::GetExtensionSitePermissionsState(
+ ExtensionsMenuViewModel::ControlState
+ ExtensionsMenuViewModel::GetExtensionShowRequestsToggleState(
+     const extensions::ExtensionId& extension_id) {
+-  SitePermissionsHelper permissions_helper(browser_->GetProfile());
++  SitePermissionsHelper permissions_helper(profile_.get());
+   bool is_toggle_on =
+       permissions_helper.ShowAccessRequestsInToolbar(extension_id);
+ 
+@@ -949,7 +951,7 @@ ExtensionsMenuViewModel::MenuEntryState
+ ExtensionsMenuViewModel::GetMenuEntryState(
+     const extensions::ExtensionId& extension_id,
+     const gfx::Size& action_icon_size) {
+-  Profile* profile = browser_->GetProfile();
++  Profile* profile = profile_.get();
+   ExtensionActionViewModel* action_model = GetActionViewModel(extension_id);
+   const extensions::Extension* extension = action_model->GetExtension();
+   CHECK(extension);
+@@ -982,7 +984,7 @@ ExtensionsMenuViewModel::GetOptionalSection() {
+   };
+ 
+   MainPageState state =
+-      GetMainPageState(*browser_->GetProfile(), *toolbar_model_, *web_contents);
++      GetMainPageState(*profile_.get(), *toolbar_model_, *web_contents);
+ 
+   if (state == MainPageState::kUserBlockedSite) {
+     return reload_required()
+@@ -1002,7 +1004,7 @@ ExtensionsMenuViewModel::GetOptionalSection() {
+ ExtensionsMenuViewModel::SiteSettingsState
+ ExtensionsMenuViewModel::GetSiteSettingsState() {
+   content::WebContents* web_contents = GetActiveWebContents();
+-  Profile* profile = browser_->GetProfile();
++  Profile* profile = profile_.get();
+   ExtensionsMenuViewModel::SiteSettingsState site_settings;
+   if (!web_contents) {
+     site_settings.toggle.status = ControlState::Status::kHidden;
+@@ -1079,7 +1081,7 @@ void ExtensionsMenuViewModel::OnHostAccessRequestAdded(
+ 
+   // Ignore requests that are not active.
+   auto* permissions_manager =
+-      extensions::PermissionsManager::Get(browser_->GetProfile());
++      extensions::PermissionsManager::Get(profile_.get());
+   if (!permissions_manager->HasActiveHostAccessRequest(tab_id, extension_id)) {
+     return;
+   }
+@@ -1104,7 +1106,7 @@ void ExtensionsMenuViewModel::OnHostAccessRequestUpdated(
+   }
+ 
+   auto* permissions_manager =
+-      extensions::PermissionsManager::Get(browser_->GetProfile());
++      extensions::PermissionsManager::Get(profile_.get());
+   bool is_active =
+       permissions_manager->HasActiveHostAccessRequest(tab_id, extension_id);
+   bool is_on_menu_model =
+@@ -1390,7 +1392,7 @@ void ExtensionsMenuViewModel::UpdateHostAccessRequests() {
+   // Since action_models_ is sorted, iterating through it ensures
+   // host_access_requests_ is also sorted.
+   auto* permissions_manager =
+-      extensions::PermissionsManager::Get(browser_->GetProfile());
++      extensions::PermissionsManager::Get(profile_.get());
+   int tab_id = extensions::ExtensionTabUtil::GetTabId(GetActiveWebContents());
+ 
+   for (const auto& action_model : action_models()) {
+diff --git a/chrome/browser/ui/extensions/extensions_menu_view_model.h b/chrome/browser/ui/extensions/extensions_menu_view_model.h
+index 65e40b94a9..8147c01d8f 100644
+--- a/chrome/browser/ui/extensions/extensions_menu_view_model.h
++++ b/chrome/browser/ui/extensions/extensions_menu_view_model.h
+@@ -29,6 +29,7 @@ class WebContents;
+ }  // namespace content
+ 
+ class BrowserWindowInterface;
++class Profile;
+ 
+ // The platform agnostic model for the extensions menu.
+ class ExtensionsMenuViewModel : public extensions::PermissionsManager::Observer,
+@@ -235,7 +236,9 @@ class ExtensionsMenuViewModel : public extensions::PermissionsManager::Observer,
+     url::Origin origin;
+   };
+ 
+-  ExtensionsMenuViewModel(BrowserWindowInterface* browser, Delegate* delegate);
++  ExtensionsMenuViewModel(BrowserWindowInterface* browser,
++                          Delegate* delegate,
++                          Profile* profile = nullptr);
+   ExtensionsMenuViewModel(const ExtensionsMenuViewModel&) = delete;
+   const ExtensionsMenuViewModel& operator=(const ExtensionsMenuViewModel&) =
+       delete;
+@@ -421,6 +424,8 @@ class ExtensionsMenuViewModel : public extensions::PermissionsManager::Observer,
+   // The browser window that the extensions menu is in.
+   raw_ptr<BrowserWindowInterface> browser_;
+ 
++  raw_ptr<Profile> profile_;
++
+   // The observers that handles platform-specific UI.
+   base::ObserverList<Observer> observers_;
+ 
 diff --git a/chrome/browser/ui/navigator/BUILD.gn b/chrome/browser/ui/navigator/BUILD.gn
 index dd6a523d45..bbb4c2257f 100644
 --- a/chrome/browser/ui/navigator/BUILD.gn
@@ -8619,6 +8801,122 @@ index e17b41f80f..e7fddbb661 100644
    // Set is_attempting_to_close_browser_ here, so that extensions, etc, do not
    // attempt to add tabs to the browser before it closes.
    is_attempting_to_close_browser_ = true;
+diff --git a/chrome/browser/ui/views/extensions/extensions_menu_coordinator.cc b/chrome/browser/ui/views/extensions/extensions_menu_coordinator.cc
+index 62ecb764b6..e0fc08e148 100644
+--- a/chrome/browser/ui/views/extensions/extensions_menu_coordinator.cc
++++ b/chrome/browser/ui/views/extensions/extensions_menu_coordinator.cc
+@@ -111,7 +111,7 @@ ExtensionsMenuCoordinator::CreateExtensionsMenuBubbleDialogDelegate(
+ 
+   menu_delegate_ = std::make_unique<ExtensionsMenuDelegateDesktop>(
+       browser_, &extensions_container_.get(), extensions_container_views,
+-      bubble_contents);
++      bubble_contents, profile_);
+   menu_delegate_->OpenMainPage();
+ 
+   return bubble_delegate;
+diff --git a/chrome/browser/ui/views/extensions/extensions_menu_coordinator.h b/chrome/browser/ui/views/extensions/extensions_menu_coordinator.h
+index 5dc85a6e29..7e87747575 100644
+--- a/chrome/browser/ui/views/extensions/extensions_menu_coordinator.h
++++ b/chrome/browser/ui/views/extensions/extensions_menu_coordinator.h
+@@ -15,6 +15,7 @@
+ class BrowserWindowInterface;
+ class ExtensionsMenuDelegateDesktop;
+ class ExtensionsContainerViews;
++class Profile;
+ 
+ namespace views {
+ class BubbleDialogDelegate;
+@@ -38,6 +39,8 @@ class ExtensionsMenuCoordinator : public views::ViewObserver {
+   // Hides the currently-showing extensions menu, if it exists.
+   void Hide();
+ 
++  void SetProfile(Profile* profile) { profile_ = profile; }
++
+   // Returns true if the extensions menu is showing.
+   bool IsShowing() const;
+ 
+@@ -64,6 +67,7 @@ class ExtensionsMenuCoordinator : public views::ViewObserver {
+   void OnViewIsDeleting(views::View* observed_view) override;
+ 
+   const raw_ptr<BrowserWindowInterface> browser_;
++  raw_ptr<Profile> profile_ = nullptr;
+   views::ViewTracker bubble_tracker_;
+ 
+   // The `ExtensionsContainer` to use. It must outlive `this`.
+diff --git a/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.cc b/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.cc
+index fc2080daf6..637d37b845 100644
+--- a/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.cc
++++ b/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.cc
+@@ -91,14 +91,17 @@ ExtensionsMenuDelegateDesktop::ExtensionsMenuDelegateDesktop(
+     BrowserWindowInterface* browser,
+     ExtensionsContainer* extensions_container,
+     ExtensionsContainerViews* extensions_container_views,
+-    views::View* bubble_contents)
++    views::View* bubble_contents,
++    Profile* profile)
+     : browser_(browser),
++      profile_(profile ? profile : browser->GetProfile()),
+       extensions_container_(CHECK_DEREF(extensions_container)),
+       extensions_container_views_(extensions_container_views),
+       bubble_contents_(bubble_contents),
+       menu_model_(std::make_unique<ExtensionsMenuViewModel>(browser_,
+-                                                            /*delegate=*/this)),
+-      toolbar_model_(ToolbarActionsModel::Get(browser_->GetProfile())) {
++                                                            /*delegate=*/this,
++                                                            profile_)),
++      toolbar_model_(ToolbarActionsModel::Get(profile_)) {
+   menu_model_observation_.Observe(menu_model_.get());
+ }
+ 
+@@ -110,7 +113,8 @@ ExtensionsMenuDelegateDesktop::CreateActionViewModel(
+   return ExtensionActionViewModel::Create(
+       extension_id, browser_,
+       std::make_unique<ExtensionActionDelegateDesktop>(
+-          browser_, &extensions_container_.get(), extensions_container_views_));
++          browser_, &extensions_container_.get(), extensions_container_views_),
++      profile_);
+ }
+ 
+ void ExtensionsMenuDelegateDesktop::OnPageNavigation() {
+@@ -381,7 +385,7 @@ void ExtensionsMenuDelegateDesktop::OnUserPermissionsSettingsChanged() {
+     // Site permissions page can only be opened when site setting is set to
+     // "customize by extension". Thus, when site settings changed, we have to
+     // return to main page.
+-    DCHECK_NE(PermissionsManager::Get(browser_->GetProfile())
++    DCHECK_NE(PermissionsManager::Get(profile_)
+                   ->GetUserSiteSetting(browser_->GetTabStripModel()
+                                            ->GetActiveWebContents()
+                                            ->GetPrimaryMainFrame()
+diff --git a/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.h b/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.h
+index 310623277c..bcd90478cf 100644
+--- a/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.h
++++ b/chrome/browser/ui/views/extensions/extensions_menu_delegate_desktop.h
+@@ -24,6 +24,7 @@ class BrowserWindowInterface;
+ class ExtensionsContainerViews;
+ class ExtensionsMenuMainPageView;
+ class ExtensionsMenuSitePermissionsPageView;
++class Profile;
+ class ToolbarActionsModel;
+ 
+ // TODO(crbug.com/449814184): Separate extensions UI business logic (e.g what
+@@ -37,7 +38,8 @@ class ExtensionsMenuDelegateDesktop : public ExtensionsMenuViewModel::Delegate,
+       BrowserWindowInterface* browser,
+       ExtensionsContainer* extensions_container,
+       ExtensionsContainerViews* extensions_container_views,
+-      views::View* bubble_contents);
++      views::View* bubble_contents,
++      Profile* profile = nullptr);
+   ExtensionsMenuDelegateDesktop(const ExtensionsMenuDelegateDesktop&) = delete;
+   const ExtensionsMenuDelegateDesktop& operator=(
+       const ExtensionsMenuDelegateDesktop&) = delete;
+@@ -120,6 +122,7 @@ class ExtensionsMenuDelegateDesktop : public ExtensionsMenuViewModel::Delegate,
+                        int index);
+ 
+   const raw_ptr<BrowserWindowInterface> browser_;
++  const raw_ptr<Profile> profile_;
+   const raw_ref<ExtensionsContainer> extensions_container_;
+   const raw_ptr<ExtensionsContainerViews> extensions_container_views_;
+   const raw_ptr<views::View> bubble_contents_;
 diff --git a/chrome/browser/ui/views/frame/browser_window_factory.cc b/chrome/browser/ui/views/frame/browser_window_factory.cc
 index 7a0111c300..5c73765231 100644
 --- a/chrome/browser/ui/views/frame/browser_window_factory.cc
@@ -8690,7 +8988,7 @@ index bced2aebb3..6f46b98a02 100644
    map.AddWebUIConfig(std::make_unique<WebuiGalleryUIConfig>());
    map.AddWebUIConfig(std::make_unique<WebUIJsErrorUIConfig>());
 diff --git a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
-index 42725ab442..0aff170cdc 100644
+index 42725ab442..3382f6b9d4 100644
 --- a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 +++ b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 @@ -11,6 +11,7 @@
@@ -8701,7 +8999,7 @@ index 42725ab442..0aff170cdc 100644
  #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window.h"
-@@ -174,14 +175,44 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
+@@ -174,14 +175,45 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
      : browser_(browser),
        widget_(widget),
        web_contents_(web_contents),
@@ -8736,6 +9034,7 @@ index 42725ab442..0aff170cdc 100644
 +
 +  observe_actions_.Reset();
 +  profile_ = profile;
++  extensions_menu_coordinator_->SetProfile(profile);
 +  model_ = ToolbarActionsModel::Get(profile);
 +  CreateActions();
 +  observe_actions_.Observe(model_);
@@ -8748,7 +9047,7 @@ index 42725ab442..0aff170cdc 100644
    for (const auto& [_, action] : actions_) {
      action->model()->UnregisterCommand();
    }
-@@ -293,7 +324,10 @@ views::BubbleAnchor WebUIToolbarExtensionsContainer::GetReferenceButtonForPopup(
+@@ -293,7 +325,10 @@ views::BubbleAnchor WebUIToolbarExtensionsContainer::GetReferenceButtonForPopup(
      const extensions::ExtensionId& action_id) {
    auto it = actions_.find(action_id);
    CHECK(it != actions_.end());
@@ -8760,7 +9059,7 @@ index 42725ab442..0aff170cdc 100644
  }
  
  void WebUIToolbarExtensionsContainer::CollapseConfirmation() {
-@@ -437,7 +471,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
+@@ -437,7 +472,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
        ExtensionActionViewModel::Create(
            action_id, &browser_.get(),
            std::make_unique<ExtensionActionDelegateDesktop>(&browser_.get(),
