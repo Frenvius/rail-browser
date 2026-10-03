@@ -188,7 +188,8 @@ h2.section {
   margin: 18px 0 8px;
 }
 
-#engine {
+#engine,
+#sidebarcollapse {
   background: rgb(255 255 255 / 8%);
   border: 0;
   border-radius: 6px;

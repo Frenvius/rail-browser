@@ -75,26 +75,54 @@
   app-region: no-drag;
   -webkit-app-region: no-drag;
   display: flex;
+  gap: 2px;
   height: 100%;
   left: 0;
+  padding-left: 8px;
   position: absolute;
   top: 0;
-  width: 56px;
 }
 
-#railLogo {
+#railLogo,
+#sidebarToggle {
   align-items: center;
   border-radius: 6px;
   display: flex;
   height: 28px;
   justify-content: center;
-  margin-left: 8px;
   transition: background-color 80ms ease;
   width: 28px;
 }
 
-#railLogo:hover {
+#railLogo:hover,
+#sidebarToggle:hover {
   background: var(--rail-hover);
+}
+
+#sidebarToggle {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+#sidebarToggle:focus-visible {
+  outline: 2px solid var(--rail-accent);
+  outline-offset: -3px;
+}
+
+#sidebarToggle::before {
+  background-color: var(--rail-text-dim);
+  content: '';
+  height: 16px;
+  mask-image: url('/rail/rail_sidebar.svg');
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  width: 16px;
+}
+
+#sidebarToggle:hover::before {
+  background-color: var(--rail-text);
 }
 
 #railLogo::before {
@@ -108,7 +136,7 @@
   width: 16px;
 }
 
-:host([sidebar-collapsed]) #railLogoHit {
+:host([sidebar-collapsed]) #railLogo {
   display: none;
 }
 
@@ -361,23 +389,41 @@ webui-browser-tab-strip {
       transform 180ms cubic-bezier(.2, 0, 0, 1);
 }
 
-:host([sidebar-collapsed]) #main {
+:host([sidebar-collapsed]:not([sidebar-icons-only])) #main {
   padding-left: 6px;
 }
 
-:host([sidebar-collapsed]) .titlebarDiv {
-  padding-left: 6px;
+:host([sidebar-collapsed]:not([sidebar-icons-only], [mini])) .titlebarDiv {
+  padding-left: 42px;
 }
 
-:host([sidebar-collapsed]) .tabstripDiv {
+:host([sidebar-collapsed]:not([sidebar-icons-only])) .tabstripDiv {
   margin-right: calc(-1 * var(--rail-sidebar-width));
   opacity: 0;
   transform: translateX(-100%);
 }
 
-:host([sidebar-collapsed]) #sidebarResizer {
+:host([sidebar-collapsed]:not([sidebar-icons-only])) #sidebarResizer {
   left: 0;
   pointer-events: none;
+}
+
+:host([sidebar-collapsed][sidebar-icons-only]:not([mini])) .titlebarDiv {
+  padding-left: var(--rail-sidebar-icons-width);
+}
+
+:host([sidebar-collapsed][sidebar-icons-only]) #railLogoHit {
+  padding-left: 10px;
+}
+
+:host([sidebar-collapsed][sidebar-icons-only]) .tabstripDiv {
+  --rail-sidebar-icons: 1;
+  flex-basis: var(--rail-sidebar-icons-width);
+  width: var(--rail-sidebar-icons-width);
+}
+
+:host([sidebar-collapsed][sidebar-icons-only]) #sidebarResizer {
+  display: none;
 }
 
 #miniProfile,

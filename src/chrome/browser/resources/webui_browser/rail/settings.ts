@@ -63,6 +63,7 @@ export class RailSettingsElement extends CrLitElement {
       confirmingDelete_: {type: Boolean, state: true},
       hasKey_: {type: Boolean, state: true},
       model_: {type: String, state: true},
+      sidebarIconsOnly_: {type: Boolean, state: true},
     };
   }
 
@@ -74,6 +75,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor confirmingDelete_ = false;
   protected accessor hasKey_ = false;
   protected accessor model_ = '';
+  protected accessor sidebarIconsOnly_ = false;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -88,6 +90,7 @@ export class RailSettingsElement extends CrLitElement {
     const organize = await handler.getOrganizeSettings();
     this.hasKey_ = organize.hasKey;
     this.model_ = organize.model;
+    this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -111,6 +114,12 @@ export class RailSettingsElement extends CrLitElement {
     const model = (e.target as HTMLInputElement).value.trim();
     browserProxyFactory.getInstance().handler.setOrganizeModel(model);
     this.model_ = model;
+  }
+
+  protected onSidebarCollapseChange_(e: Event) {
+    const iconsOnly = (e.target as HTMLSelectElement).value === 'icons';
+    browserProxyFactory.getInstance().handler.setSidebarIconsOnly(iconsOnly);
+    this.sidebarIconsOnly_ = iconsOnly;
   }
 
   protected onCreditsClick_() {

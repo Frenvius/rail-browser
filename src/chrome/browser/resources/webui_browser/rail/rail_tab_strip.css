@@ -492,3 +492,42 @@ webui-browser-tab {
 .folder-icon[state='open'] :is(.front, .dots) {
   transform: skewX(-16deg) translate(3px, 1px) scale(0.85);
 }
+
+@container style(--rail-sidebar-icons: 1) {
+  #spaceTitle,
+  #spaceBar,
+  #dividerActions,
+  #newTabButton span,
+  .folder-name,
+  .folder-count,
+  .folder-name-input,
+  .tidygroup-row {
+    display: none;
+  }
+
+  #favoritesList {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #newTabButton {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .folder-row {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .folder-children,
+  .tidygroup-children {
+    padding-inline-start: 0;
+  }
+
+  .tidygroup:not([data-expanded]) .tidygroup-children {
+    height: auto;
+    opacity: 1;
+    visibility: visible;
+  }
+}

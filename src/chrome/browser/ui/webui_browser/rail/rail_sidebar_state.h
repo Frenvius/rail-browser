@@ -12,6 +12,7 @@ class PrefRegistrySyncable;
 namespace rail {
 
 extern const char kSidebarStatePref[];
+extern const char kSidebarIconsOnlyPref[];
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
@@ -19,6 +20,10 @@ void RegisterSidebarStateProfilePrefs(
 std::string GetSidebarState(PrefService* prefs);
 
 void SetSidebarState(PrefService* prefs, const std::string& value);
+
+bool GetSidebarIconsOnly(PrefService* prefs);
+
+void SetSidebarIconsOnly(PrefService* prefs, bool icons_only);
 
 }
 

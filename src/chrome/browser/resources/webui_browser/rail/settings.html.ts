@@ -80,6 +80,21 @@ ${this.openRow_ ? html`
       <cr-icon class="chevron" icon="cr:chevron-right"></cr-icon>
     </div>
   `)}
+  <h2 class="section">Sidebar</h2>
+  <div class="card">
+    <div class="rowtext">
+      <span class="cardtitle">When collapsed</span>
+      <span class="cardhint">Ctrl+S or the sidebar button collapses it</span>
+    </div>
+    <select id="sidebarcollapse" @change="${this.onSidebarCollapseChange_}">
+      <option value="hidden" ?selected="${!this.sidebarIconsOnly_}">
+        Hide completely
+      </option>
+      <option value="icons" ?selected="${this.sidebarIconsOnly_}">
+        Show icons only
+      </option>
+    </select>
+  </div>
   <h2 class="section">Tab Organizer</h2>
   <p class="sectionhint">
     Tidy sends the titles and hostnames of the open tabs in a Space to

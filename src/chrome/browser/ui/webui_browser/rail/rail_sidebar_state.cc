@@ -6,10 +6,12 @@
 namespace rail {
 
 const char kSidebarStatePref[] = "rail.sidebar_state";
+const char kSidebarIconsOnlyPref[] = "rail.sidebar_icons_only";
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterStringPref(kSidebarStatePref, std::string());
+  registry->RegisterBooleanPref(kSidebarIconsOnlyPref, false);
 }
 
 std::string GetSidebarState(PrefService* prefs) {
@@ -19,6 +21,16 @@ std::string GetSidebarState(PrefService* prefs) {
 void SetSidebarState(PrefService* prefs, const std::string& value) {
   if (prefs) {
     prefs->SetString(kSidebarStatePref, value);
+  }
+}
+
+bool GetSidebarIconsOnly(PrefService* prefs) {
+  return prefs && prefs->GetBoolean(kSidebarIconsOnlyPref);
+}
+
+void SetSidebarIconsOnly(PrefService* prefs, bool icons_only) {
+  if (prefs) {
+    prefs->SetBoolean(kSidebarIconsOnlyPref, icons_only);
   }
 }
 

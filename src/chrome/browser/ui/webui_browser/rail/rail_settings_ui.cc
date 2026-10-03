@@ -272,6 +272,15 @@ void RailSettingsUI::SetOrganizeModel(const std::string& model) {
   rail::SetOrganizeModel(PrefsFor(web_ui()), model);
 }
 
+void RailSettingsUI::GetSidebarIconsOnly(
+    GetSidebarIconsOnlyCallback callback) {
+  std::move(callback).Run(rail::GetSidebarIconsOnly(PrefsFor(web_ui())));
+}
+
+void RailSettingsUI::SetSidebarIconsOnly(bool icons_only) {
+  rail::SetSidebarIconsOnly(PrefsFor(web_ui()), icons_only);
+}
+
 void RailSettingsUI::OpenCredits() {
   rail::CreateTabInProfile(BrowserFor(web_ui()), std::string(),
                            GURL(kRailCreditsURL), base::DoNothing());

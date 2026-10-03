@@ -1,9 +1,13 @@
+import {browserProxyFactory} from '../browser.mojom-webui.js';
+
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 420;
 const DEFAULT_WIDTH = 208;
 const STORAGE_KEY = 'rail.sidebarWidth';
 const COLLAPSED_KEY = 'rail.sidebarCollapsed';
 const COLLAPSED_ATTRIBUTE = 'sidebar-collapsed';
+const ICONS_ONLY_KEY = 'rail.sidebarIconsOnly';
+const ICONS_ONLY_ATTRIBUTE = 'sidebar-icons-only';
 const WIDTH_PROPERTY = '--rail-sidebar-width';
 const SLIDE_MS = 180;
 const SLIDE_EASING = 'cubic-bezier(.2, 0, 0, 1)';
@@ -67,6 +71,21 @@ export function toggleSidebarCollapsed(host: HTMLElement) {
   });
 }
 
+function applyIconsOnly(host: HTMLElement, iconsOnly: boolean) {
+  host.toggleAttribute(ICONS_ONLY_ATTRIBUTE, iconsOnly);
+  localStorage.setItem(ICONS_ONLY_KEY, iconsOnly ? '1' : '0');
+}
+
+function initIconsOnly(host: HTMLElement) {
+  host.toggleAttribute(
+      ICONS_ONLY_ATTRIBUTE, localStorage.getItem(ICONS_ONLY_KEY) === '1');
+  const proxy = browserProxyFactory.getInstance();
+  proxy.callbackRouter.onSidebarIconsOnlyChanged.addListener(
+      (iconsOnly: boolean) => applyIconsOnly(host, iconsOnly));
+  proxy.handler.getSidebarIconsOnly().then(
+      ({iconsOnly}) => applyIconsOnly(host, iconsOnly));
+}
+
 function clampWidth(width: number): number {
   if (!Number.isFinite(width)) {
     return DEFAULT_WIDTH;
@@ -91,6 +110,7 @@ export function initSidebarResize(host: HTMLElement) {
 
   host.toggleAttribute(
       COLLAPSED_ATTRIBUTE, localStorage.getItem(COLLAPSED_KEY) === '1');
+  initIconsOnly(host);
   requestAnimationFrame(() => host.setAttribute('sidebar-animate', ''));
 
   let width = 0;

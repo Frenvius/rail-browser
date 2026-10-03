@@ -4152,10 +4152,10 @@ index f4c33684da..2fc51e082b 100644
    // OCCLUDED. Will require checking that the tab reload correctly when it
    // becomes VISIBLE.
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..ba2c1f3ce0 100644
+index a75d80b00c..116db90b3e 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
-@@ -9,7 +9,15 @@ assert(!is_android)
+@@ -9,7 +9,16 @@ assert(!is_android)
  build_webui("build") {
    grd_prefix = "webui_browser"
  
@@ -4165,6 +4165,7 @@ index a75d80b00c..ba2c1f3ce0 100644
 +    "rail/credits.html",
 +    "rail/rail_link.svg",
 +    "rail/rail_logo.svg",
++    "rail/rail_sidebar.svg",
 +    "rail/settings.html",
 +    "rail/space_panel.html",
 +    "webui_browser.html",
@@ -4172,7 +4173,7 @@ index a75d80b00c..ba2c1f3ce0 100644
  
    ts_files = [
      "app.html.ts",
-@@ -23,6 +31,38 @@ build_webui("build") {
+@@ -23,6 +32,38 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4211,7 +4212,7 @@ index a75d80b00c..ba2c1f3ce0 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +88,15 @@ build_webui("build") {
+@@ -48,6 +89,15 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4227,7 +4228,7 @@ index a75d80b00c..ba2c1f3ce0 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -62,6 +111,9 @@ build_webui("build") {
+@@ -62,6 +112,9 @@ build_webui("build") {
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/browser.mojom-webui.ts",
@@ -4440,10 +4441,10 @@ index 08978c8e14..4c3672a256 100644
 -  border-radius: 0 16px 0 0;
 -}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 8ebad94626..a86d0a7b8f 100644
+index 8ebad94626..182a9b0806 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
-@@ -11,33 +11,10 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -11,33 +11,13 @@ export function getHtml(this: WebuiBrowserAppElement) {
    return html`<!--_html_template_start_-->
  <div class="activeFrame" id="rootContainer">
    <div id="topContainer">
@@ -4458,6 +4459,9 @@ index 8ebad94626..a86d0a7b8f 100644
 +    <div class="titlebarDiv">
 +      <div id="railLogoHit">
 +        <div id="railLogo" @click="${this.onRailLogoClick_}"></div>
++        <button id="sidebarToggle" title="Toggle sidebar (Ctrl+S)"
++          aria-label="Toggle sidebar"
++          @click="${this.onSidebarToggleClick_}"></button>
        </div>
 -      <if expr="not is_macosx">
 -        <div class="captionButtonsDiv">
@@ -4480,7 +4484,7 @@ index 8ebad94626..a86d0a7b8f 100644
        <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
          ?disabled="${this.backButtonDisabled_}"
          @click="${this.onBackClick_}"
-@@ -49,8 +26,11 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -49,8 +29,11 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button class="${this.reloadOrStopIcon_}"
          title="${this.reloadOrStopTooltip_()}"
          @click="${this.onReloadOrStopClick_}"></cr-icon-button>
@@ -4494,7 +4498,7 @@ index 8ebad94626..a86d0a7b8f 100644
          <cr-button id="locationIconButton" type="button"
            ?hidden="${!this.showLocationIconButton_}"
            @click="${this.onLocationIconClick_}">
-@@ -58,25 +38,70 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -58,25 +41,70 @@ export function getHtml(this: WebuiBrowserAppElement) {
              icon="webui-browser:${this.locationIcon_}Icon"></cr-icon>
          </cr-button>
        </div>
@@ -4574,7 +4578,7 @@ index 8ebad94626..a86d0a7b8f 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..ae60354ac3 100644
+index caed98ffda..b6f07f662a 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4740,22 +4744,24 @@ index caed98ffda..ae60354ac3 100644
    }
  
    // TabStripControllerDelegate:
-@@ -143,12 +201,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -143,12 +201,12 @@ export class WebuiBrowserAppElement extends CrLitElement {
      [SecurityIcon.OfflinePin, 'OfflinePin'],
    ]);
  
 -  protected onAppMenuClick_(_: Event) {
 -    browserProxyFactory.getInstance().handler.openAppMenu();
--  }
--
--  protected onAvatarClick_(_: Event) {
--    browserProxyFactory.getInstance().handler.openProfileMenu();
 +  protected onRailLogoClick_(_: Event) {
 +    openLogoMenu(this.commandBarHost_());
    }
  
+-  protected onAvatarClick_(_: Event) {
+-    browserProxyFactory.getInstance().handler.openProfileMenu();
++  protected onSidebarToggleClick_(_: Event) {
++    toggleSidebarCollapsed(this);
+   }
+ 
    protected onMinimizeClick_(_: Event) {
-@@ -232,15 +286,86 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,15 +290,86 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -4842,7 +4848,7 @@ index caed98ffda..ae60354ac3 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -252,6 +377,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -252,6 +381,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -4850,7 +4856,7 @@ index caed98ffda..ae60354ac3 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -270,7 +396,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -270,7 +400,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // is typing and the tab navigates.
      const isNTP = activeTabUrl.startsWith('chrome://newtab');
      if (!isNTP) {
@@ -4859,7 +4865,7 @@ index caed98ffda..ae60354ac3 100644
  
        const tabWebView = this.$.contentRegion.activeWebview;
        if (tabWebView) {
-@@ -287,7 +413,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +417,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -4872,7 +4878,7 @@ index caed98ffda..ae60354ac3 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +435,88 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +439,88 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -4988,7 +4994,7 @@ index caed98ffda..ae60354ac3 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +535,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +539,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5005,7 +5011,7 @@ index caed98ffda..ae60354ac3 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +574,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +578,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -9262,7 +9268,7 @@ index 3d4fe27f4f..aa15a65410 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..7e88c6671b 100644
+index 15a65f7152..f3d917d545 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -9341,7 +9347,7 @@ index 15a65f7152..7e88c6671b 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,31 @@ interface Page {
+@@ -44,6 +91,33 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -9364,6 +9370,8 @@ index 15a65f7152..7e88c6671b 100644
 +
 +  OnSidebarStateChanged(string value);
 +
++  OnSidebarIconsOnlyChanged(bool icons_only);
++
 +  OnSidebarContextMenu(gfx.mojom.Point point);
 +
 +  OnTabDragMoved(gfx.mojom.Point point);
@@ -9373,7 +9381,7 @@ index 15a65f7152..7e88c6671b 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -55,7 +127,7 @@ interface PageHandler {
+@@ -55,7 +129,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -9382,13 +9390,14 @@ index 15a65f7152..7e88c6671b 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +162,78 @@ interface PageHandler {
+@@ -90,6 +164,79 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
 +
 +  GetSidebarState() => (string value);
 +  SetSidebarState(string value);
++  GetSidebarIconsOnly() => (bool icons_only);
 +
 +  StartTabDragGhost(gfx.mojom.Rect row,
 +                    gfx.mojom.Point grab_offset,
@@ -9650,7 +9659,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..a0434e5194 100644
+index 3ba14e7289..9f7d85cf8c 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -9776,7 +9785,7 @@ index 3ba14e7289..a0434e5194 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +415,224 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +415,239 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -9799,6 +9808,21 @@ index 3ba14e7289..a0434e5194 100644
 +  if (browser && controller_) {
 +    controller_->page()->OnSidebarStateChanged(
 +        rail::GetSidebarState(browser->profile()->GetPrefs()));
++  }
++}
++
++void WebUIBrowserPageHandler::GetSidebarIconsOnly(
++    GetSidebarIconsOnlyCallback callback) {
++  Browser* browser = GetBrowser();
++  std::move(callback).Run(rail::GetSidebarIconsOnly(
++      browser ? browser->profile()->GetPrefs() : nullptr));
++}
++
++void WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged() {
++  Browser* browser = GetBrowser();
++  if (browser && controller_) {
++    controller_->page()->OnSidebarIconsOnlyChanged(
++        rail::GetSidebarIconsOnly(browser->profile()->GetPrefs()));
 +  }
 +}
 +
@@ -10001,7 +10025,7 @@ index 3ba14e7289..a0434e5194 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -339,7 +640,15 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -339,7 +655,20 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -10013,13 +10037,18 @@ index 3ba14e7289..a0434e5194 100644
 +        rail::kSidebarStatePref,
 +        base::BindRepeating(&WebUIBrowserPageHandler::OnSidebarStateChanged,
 +                            weak_factory_.GetWeakPtr()));
++    sidebar_state_registrar_.Add(
++        rail::kSidebarIconsOnlyPref,
++        base::BindRepeating(
++            &WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged,
++            weak_factory_.GetWeakPtr()));
 +  }
 +}
  
  Browser* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..b1e333dee2 100644
+index 859da4ef00..a972df9489 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -9,8 +9,10 @@
@@ -10044,12 +10073,13 @@ index 859da4ef00..b1e333dee2 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +62,72 @@ class WebUIBrowserPageHandler
+@@ -56,8 +62,74 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
 +  void GetSidebarState(GetSidebarStateCallback callback) override;
 +  void SetSidebarState(const std::string& value) override;
++  void GetSidebarIconsOnly(GetSidebarIconsOnlyCallback callback) override;
 +  void StartTabDragGhost(const gfx::Rect& row,
 +                         const gfx::Point& grab_offset,
 +                         const std::vector<tabs_api::NodeId>& ids) override;
@@ -10110,6 +10140,7 @@ index 859da4ef00..b1e333dee2 100644
 +  void OnRailMenuCommand(const std::string& command);
 +  void OnRailMenuClosed();
 +  void OnSidebarStateChanged();
++  void OnSidebarIconsOnlyChanged();
 +
 +  void OnTabDragMoved(const gfx::Point& point);
 +  void OnTabDragEnded(const gfx::Point& point, bool inside);
@@ -10117,7 +10148,7 @@ index 859da4ef00..b1e333dee2 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +139,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +141,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -10126,7 +10157,7 @@ index 859da4ef00..b1e333dee2 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -77,11 +149,16 @@ class WebUIBrowserPageHandler
+@@ -77,11 +151,16 @@ class WebUIBrowserPageHandler
    std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
  
    std::unique_ptr<content::WebContents> glic_contents_;

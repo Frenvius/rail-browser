@@ -47,6 +47,10 @@ interface PageHandler {
 
   SetOrganizeModel(string model);
 
+  GetSidebarIconsOnly() => (bool icons_only);
+
+  SetSidebarIconsOnly(bool icons_only);
+
   OpenCredits();
 
   Close();
