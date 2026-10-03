@@ -30,7 +30,24 @@ if (-not $SkipBuild) {
 
 if ($Package) {
     $installer = Join-Path $projectRoot "build\src\out\Release\mini_installer.exe"
+    $iscc = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $iscc) {
+        throw "Inno Setup 6 not found. Install it with: winget install JRSoftware.InnoSetup"
+    }
+
+    & $iscc /Q "/DMiniInstaller=$installer" "/DOutputDir=$(Join-Path $projectRoot 'build')" `
+        (Join-Path $projectRoot "platform\windows\installer\rail_setup.iss")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Setup compilation failed with exit code $LASTEXITCODE."
+    }
+
+    $setup = Get-ChildItem (Join-Path $projectRoot "build\RailSetup-*.exe") |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
     Write-Host "Installer: $installer"
+    Write-Host "Setup: $($setup.FullName)"
     return
 }
 

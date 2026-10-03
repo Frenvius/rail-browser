@@ -46,11 +46,14 @@ Rail is Chromium-branded, so the target does not exist in this build and the
 upstream file never reaches `<out>`. Writing the file directly also keeps the
 extension list in Rail's own tree rather than in an upstream patch.
 
-The installer already ships `default_apps\*.crx` and
-`default_apps\external_extensions.json` through
-`chrome/installer/mini_installer/chrome.release`.
-`patches/preinstall-ublock-origin.patch` adds `default_apps/*` to
-`chrome/tools/build/win/FILES.cfg` so the zip package carries them too.
+Upstream `chrome/installer/mini_installer/chrome.release` lists
+`default_apps\*.crx` and `default_apps\external_extensions.json` only under
+`[GOOGLE_CHROME]`, a section `create_installer_archive.py` stages only for
+Chrome-branded builds, so a Rail installer used to ship without them and the
+extension never reached any machine but the one that built it.
+`patches/preinstall-ublock-origin.patch` adds both lines to `[GENERAL]`, and
+adds `default_apps/*` to `chrome/tools/build/win/FILES.cfg` so the zip package
+carries them too.
 
 The extension is user-visible in `chrome://extensions` and the user can disable
 or remove it. It installs on profile creation only: on any later run

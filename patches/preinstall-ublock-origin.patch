@@ -1,3 +1,14 @@
+--- a/chrome/installer/mini_installer/chrome.release
++++ b/chrome/installer/mini_installer/chrome.release
+@@ -41,6 +41,8 @@
+ #
+ Extensions\*.*: %(VersionDir)s\Extensions\
+ locales\*.pak: %(VersionDir)s\Locales
++default_apps\*.crx: %(VersionDir)s\default_apps\
++default_apps\external_extensions.json: %(VersionDir)s\default_apps\
+
+ #
+ # VisualElements sub-dir.
 --- a/chrome/tools/build/win/FILES.cfg
 +++ b/chrome/tools/build/win/FILES.cfg
 @@ -83,6 +83,10 @@
