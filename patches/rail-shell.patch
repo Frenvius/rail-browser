@@ -4152,7 +4152,7 @@ index f4c33684da..2fc51e082b 100644
    // OCCLUDED. Will require checking that the tab reload correctly when it
    // becomes VISIBLE.
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..116db90b3e 100644
+index a75d80b00c..0b578311b1 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,16 @@ assert(!is_android)
@@ -4173,7 +4173,7 @@ index a75d80b00c..116db90b3e 100644
  
    ts_files = [
      "app.html.ts",
-@@ -23,6 +32,38 @@ build_webui("build") {
+@@ -23,6 +32,39 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4188,6 +4188,7 @@ index a75d80b00c..116db90b3e 100644
 +    "rail/logo_menu.ts",
 +    "rail/menu_overlay.ts",
 +    "rail/mini_window.ts",
++    "rail/native_groups.ts",
 +    "rail/native_menu.ts",
 +    "rail/pinned_tabs.ts",
 +    "rail/sections.ts",
@@ -4212,7 +4213,7 @@ index a75d80b00c..116db90b3e 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +89,15 @@ build_webui("build") {
+@@ -48,6 +90,15 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4228,7 +4229,7 @@ index a75d80b00c..116db90b3e 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -62,6 +112,9 @@ build_webui("build") {
+@@ -62,6 +113,9 @@ build_webui("build") {
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/browser.mojom-webui.ts",
@@ -5715,7 +5716,7 @@ index 65d7e76ce5..5fc58ecfb7 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..9d5b4a5834 100644
+index aa4e0fe69e..1a2ad403d5 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -5727,16 +5728,18 @@ index aa4e0fe69e..9d5b4a5834 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -11,7 +13,7 @@ import '//resources/cr_elements/icons.html.js';
+@@ -11,20 +13,44 @@ import '//resources/cr_elements/icons.html.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 -import {TabStripService} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
 +import {TabsObserverReceiver, TabStripService} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
  import type {TabStripServiceRemote} from '/tab_strip_api/tab_strip_api.mojom-webui.js';
- import type {Container, Tab, TabCreatedContainer, TabGroup} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
+-import type {Container, Tab, TabCreatedContainer, TabGroup} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
++import type {Container, Tab, TabCreatedContainer, TabGroup, TabGroupVisualData} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
  import {OnDataChangedEventFieldTags, whichOnDataChangedEvent} from '/tab_strip_api/tab_strip_api_events.mojom-webui.js';
-@@ -20,11 +22,34 @@ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
+ import type {OnCollectionCreatedEvent, OnDataChangedEvent, OnNodeMovedEvent, OnNodesClosedEvent, OnTabsCreatedEvent} from '/tab_strip_api/tab_strip_api_events.mojom-webui.js';
+ import type {NodeId} from '/tab_strip_api/tab_strip_api_types.mojom-webui.js';
  import {TabStripObservation} from '/tab_strip_api/tab_strip_observation.js';
  import type {TabStripObserver} from '/tab_strip_api/tab_strip_observer.js';
  
@@ -5744,6 +5747,7 @@ index aa4e0fe69e..9d5b4a5834 100644
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
 +import {Folders} from '../rail/folders.js';
 +import {miniMatchProfile} from '../rail/mini_window.js';
++import {NativeGroupLinks, readNativeGroups} from '../rail/native_groups.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
 +import {favoritesKey, isFavorites, PinnedTabs} from '../rail/pinned_tabs.js';
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow} from '../rail/sections.js';
@@ -5773,7 +5777,7 @@ index aa4e0fe69e..9d5b4a5834 100644
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-@@ -36,6 +61,8 @@ export interface TabStripElement {
+@@ -36,6 +62,8 @@ export interface TabStripElement {
    };
  }
  
@@ -5782,7 +5786,7 @@ index aa4e0fe69e..9d5b4a5834 100644
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -64,7 +91,7 @@ class TabStripItemFactory {
+@@ -64,7 +92,7 @@ class TabStripItemFactory {
  }
  
  export class TabStripElement extends CrLitElement implements TabStripObserver,
@@ -5791,7 +5795,7 @@ index aa4e0fe69e..9d5b4a5834 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -82,6 +109,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -82,6 +110,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        items_: {
          type: Array,
        },
@@ -5834,7 +5838,7 @@ index aa4e0fe69e..9d5b4a5834 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -90,21 +153,86 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,21 +154,87 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -5898,6 +5902,7 @@ index aa4e0fe69e..9d5b4a5834 100644
 +  private readonly spaces_ = new Spaces(() => this.store_.save());
 +  private readonly folders_ = new Folders(() => this.store_.save());
 +  private readonly tidyGroups_ = new Folders(() => this.store_.save());
++  private readonly nativeGroups_ = new NativeGroupLinks();
 +
 +  private slidingSpace_ = false;
 +  private backdropKey_ = '';
@@ -5922,7 +5927,7 @@ index aa4e0fe69e..9d5b4a5834 100644
    }
  
    override connectedCallback() {
-@@ -112,11 +240,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -112,11 +242,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -5939,7 +5944,7 @@ index aa4e0fe69e..9d5b4a5834 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +271,101 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +273,102 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -5963,6 +5968,7 @@ index aa4e0fe69e..9d5b4a5834 100644
 +        this.ensureProfile_(item.id);
 +      }
 +    }
++    this.syncNativeGroups_();
 +  }
 +
 +  private async restoreSidebar_(tabs: Tab[]): Promise<boolean> {
@@ -6041,7 +6047,7 @@ index aa4e0fe69e..9d5b4a5834 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +387,27 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +390,29 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6055,6 +6061,7 @@ index aa4e0fe69e..9d5b4a5834 100644
 -      this.addTab(container.tab);
 +      this.addTab(container.tab, container.position.index);
      });
++    this.syncNativeGroups_();
    }
  
    onNodesClosed(nodesClosedEvent: OnNodesClosedEvent) {
@@ -6067,10 +6074,11 @@ index aa4e0fe69e..9d5b4a5834 100644
 +      this.activateTab(successor);
 +    }
 +    this.refreshSections_();
++    this.syncNativeGroups_();
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +423,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +428,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6085,11 +6093,15 @@ index aa4e0fe69e..9d5b4a5834 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -236,21 +479,95 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -234,23 +482,138 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+     }
+   }
  
-   onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {}
- 
--  onNodeMoved(_onNodeMoved: OnNodeMovedEvent) {}
+-  onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {}
++  onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {
++    this.syncNativeGroups_();
++  }
++
 +  onNodeMoved(onNodeMoved: OnNodeMovedEvent) {
 +    const pending = this.ownMoves_.get(onNodeMoved.id) ?? 0;
 +    if (pending > 1) {
@@ -6099,6 +6111,45 @@ index aa4e0fe69e..9d5b4a5834 100644
 +    } else {
 +      this.queueNativeOrder_();
 +    }
++    this.syncNativeGroups_();
++  }
++
++  private syncNativeGroups_() {
++    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
++      const groups = readNativeGroups(await this.readTabStrip_());
++      if (this.nativeGroups_.reconcile(
++              groups, this.spaces_, this.tidyGroups_)) {
++        this.refreshSections_();
++      }
++    }).catch(error => {
++      console.error('Failed to synchronize tab groups', error);
++    });
++  }
++
++  private updateNativeGroup_(
++      tidyId: string, change: Partial<TabGroupVisualData>) {
++    if (!this.nativeGroups_.nativeFor(tidyId)) {
++      return;
++    }
++    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
++      await this.nativeGroups_.update(
++          tidyId, change, this.tabStripService_, await this.readTabStrip_());
++    }).catch(error => {
++      console.error('Failed to update tab group', error);
++    });
++  }
++
++  private ungroupNative_(tidyId: string) {
++    const nativeId = this.nativeGroups_.release(tidyId);
++    if (!nativeId) {
++      return;
++    }
++    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
++      await this.nativeGroups_.ungroup(
++          nativeId, this.tabStripService_, await this.readTabStrip_());
++    }).catch(error => {
++      console.error('Failed to ungroup tabs', error);
++    });
 +  }
 +
 +  syncTabOrder() {
@@ -6140,7 +6191,8 @@ index aa4e0fe69e..9d5b4a5834 100644
 +      console.error('Failed to synchronize tab order', error);
 +    });
 +  }
-+
+ 
+-  onNodeMoved(_onNodeMoved: OnNodeMovedEvent) {}
 +  private async readTabStrip_(): Promise<Container> {
 +    const snapshot = await this.tabStripService_.getTabs();
 +    const receiver = new TabsObserverReceiver({onTabEvents: () => {}});
@@ -6191,7 +6243,7 @@ index aa4e0fe69e..9d5b4a5834 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +575,1621 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +621,1633 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6247,12 +6299,12 @@ index aa4e0fe69e..9d5b4a5834 100644
 +      tabId: NodeId, index: number, neighbors: TabStripItem[]): boolean {
 +    if (index >= neighbors.length) {
 +      return false;
-     }
++    }
 +    const before = index > 0 ? neighbors[index - 1] : undefined;
 +    if (before) {
 +      return before.type === 'tab' && this.canAnchor_(before.id) &&
 +          this.spaces_.placeAfter(tabId, before.id);
-+    }
+     }
 +    const after = neighbors[0];
 +    return after !== undefined && after.type === 'tab' &&
 +        this.canAnchor_(after.id) &&
@@ -6676,8 +6728,11 @@ index aa4e0fe69e..9d5b4a5834 100644
 +    if (this.dragDelegate_.consumeSuppressedClick()) {
 +      return;
 +    }
-+    this.tidyGroups_.toggle(this.groupIdFrom_(e));
++    const id = this.groupIdFrom_(e);
++    this.tidyGroups_.toggle(id);
 +    this.refreshSections_();
++    this.updateNativeGroup_(
++        id, {isCollapsed: !this.tidyGroups_.byId(id)?.expanded});
 +  }
 +
 +  protected onTidyGroupSaveClick_(e: Event) {
@@ -6729,9 +6784,14 @@ index aa4e0fe69e..9d5b4a5834 100644
 +
 +  protected onTidyGroupNameBlur_(e: Event) {
 +    const input = e.target as HTMLInputElement;
-+    this.tidyGroups_.rename(this.editingGroup_, input.value.trim());
++    const id = this.editingGroup_;
++    this.tidyGroups_.rename(id, input.value.trim());
 +    this.editingGroup_ = '';
 +    this.refreshSections_();
++    const name = this.tidyGroups_.byId(id)?.name;
++    if (name) {
++      this.updateNativeGroup_(id, {title: name});
++    }
 +  }
 +
 +  private async startGroupRename_(id: string) {
@@ -6755,17 +6815,20 @@ index aa4e0fe69e..9d5b4a5834 100644
 +        this.pinnedTabs_.setFolder(entry.key, folder.id);
 +      }
 +    }
++    this.nativeGroups_.release(group.id);
 +    this.tidyGroups_.remove(group.id);
 +    this.refreshSections_();
 +  }
 +
 +  private closeGroup_(id: string) {
 +    const keys = this.spaces_.keysInGroup(id);
++    this.nativeGroups_.release(id);
 +    this.tidyGroups_.remove(id);
 +    this.closeMany_(keys);
 +  }
 +
 +  private ungroupGroup_(id: string) {
++    this.ungroupNative_(id);
 +    this.spaces_.clearGroup(id);
 +    this.tidyGroups_.remove(id);
 +    this.refreshSections_();
@@ -7443,6 +7506,7 @@ index aa4e0fe69e..9d5b4a5834 100644
 +      this.updateItem_(
 +          group.id, 'group', {...groupItem, groupData: group.data});
 +    }
++    this.syncNativeGroups_();
 +  }
 +
 +  private updateTab(tab: Tab) {
@@ -12574,6 +12638,184 @@ index ae9eeb00ab..6688ae29b6 100644
      if (!CheckFrame(rfh)) {
        // If we're in the same frame as before, we might got into an infinite
        // loop.
+diff --git a/content/browser/renderer_host/cross_process_frame_connector.cc b/content/browser/renderer_host/cross_process_frame_connector.cc
+index ecedc44d38..cafd0411cb 100644
+--- a/content/browser/renderer_host/cross_process_frame_connector.cc
++++ b/content/browser/renderer_host/cross_process_frame_connector.cc
+@@ -26,6 +26,7 @@
+ #include "third_party/blink/public/mojom/frame/intrinsic_sizing_info.mojom.h"
+ #include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
+ #include "ui/base/cursor/cursor.h"
++#include "ui/compositor/compositor.h"
+ #include "ui/gfx/geometry/dip_util.h"
+ 
+ namespace content {
+@@ -90,6 +91,7 @@ void CrossProcessFrameConnector::SetView(RenderWidgetHostViewChildFrame* view,
+     view_->SetFrameConnector(nullptr);
+   }
+ 
++  keep_surface_alive_.RunAndReset();
+   ResetRectInParentView();
+   view_ = view;
+ 
+@@ -673,12 +675,39 @@ Visibility CrossProcessFrameConnector::EmbedderVisibility() {
+ }
+ 
+ void CrossProcessFrameConnector::SetKeepSurfaceAlive(bool keep_alive) {
+-  // Not needed here; since the necessary work will be done on the parent
+-  // view (unless people start capturing frames or such).
++  should_keep_alive_ = keep_alive && IsInnerWebContentsRoot();
++  if (!should_keep_alive_ || !view_) {
++    keep_surface_alive_.RunAndReset();
++    return;
++  }
++  viz::SurfaceId surface_id = view_->GetCurrentSurfaceId();
++  ui::Compositor* compositor = view_->GetCompositor();
++  if (compositor && surface_id.is_valid()) {
++    keep_surface_alive_ =
++        compositor->TakeScopedKeepSurfaceAliveCallback(surface_id);
++  } else {
++    keep_surface_alive_.RunAndReset();
++  }
+ }
+ 
+ bool CrossProcessFrameConnector::IsKeepingAlive() const {
+-  return false;
++  return should_keep_alive_;
++}
++
++void CrossProcessFrameConnector::FirstSurfaceActivation(
++    const viz::SurfaceInfo& surface_info) {
++  MaybeRefreshKeepSurfaceAlive();
++}
++
++void CrossProcessFrameConnector::MaybeRefreshKeepSurfaceAlive() {
++  if (should_keep_alive_) {
++    SetKeepSurfaceAlive(true);
++  }
++}
++
++bool CrossProcessFrameConnector::IsInnerWebContentsRoot() const {
++  return frame_proxy_in_parent_renderer_ &&
++         frame_proxy_in_parent_renderer_->frame_tree_node()->IsMainFrame();
+ }
+ 
+ RenderFrameHostImpl* CrossProcessFrameConnector::current_child_frame_host()
+diff --git a/content/browser/renderer_host/cross_process_frame_connector.h b/content/browser/renderer_host/cross_process_frame_connector.h
+index ff499defbc..6a5b57e746 100644
+--- a/content/browser/renderer_host/cross_process_frame_connector.h
++++ b/content/browser/renderer_host/cross_process_frame_connector.h
+@@ -7,6 +7,7 @@
+ 
+ #include <stdint.h>
+ 
++#include "base/functional/callback_helpers.h"
+ #include "base/gtest_prod_util.h"
+ #include "base/memory/raw_ptr.h"
+ #include "cc/input/touch_action.h"
+@@ -111,7 +112,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector : public FrameConnector {
+ 
+   void RenderProcessGone() override;
+ 
+-  void FirstSurfaceActivation(const viz::SurfaceInfo& surface_info) override {}
++  void FirstSurfaceActivation(const viz::SurfaceInfo& surface_info) override;
+ 
+   void SendIntrinsicSizingInfoToParent(
+       blink::mojom::IntrinsicSizingInfoPtr) override;
+@@ -278,6 +279,12 @@ class CONTENT_EXPORT CrossProcessFrameConnector : public FrameConnector {
+   // Can be nullptr in tests.
+   raw_ptr<RenderFrameProxyHost> frame_proxy_in_parent_renderer_;
+ 
++  bool IsInnerWebContentsRoot() const;
++  void MaybeRefreshKeepSurfaceAlive();
++
++  bool should_keep_alive_ = false;
++  base::ScopedClosureRunner keep_surface_alive_;
++
+   bool is_inert_ = false;
+   cc::TouchAction inherited_effective_touch_action_ = cc::TouchAction::kAuto;
+ 
+diff --git a/content/browser/renderer_host/render_widget_host_impl.cc b/content/browser/renderer_host/render_widget_host_impl.cc
+index acebec7332..0dd3d420f5 100644
+--- a/content/browser/renderer_host/render_widget_host_impl.cc
++++ b/content/browser/renderer_host/render_widget_host_impl.cc
+@@ -1642,7 +1642,8 @@ void RenderWidgetHostImpl::ForwardWheelEventWithLatencyInfo(
+   }
+ 
+   auto* touch_emulator = GetTouchEmulator(/*create_if_necessary=*/false);
+-  if (touch_emulator && touch_emulator->HandleMouseWheelEvent(wheel_event)) {
++  if (touch_emulator &&
++      touch_emulator->HandleMouseWheelEvent(wheel_event, GetView())) {
+     return;
+   }
+ 
+@@ -1788,7 +1789,8 @@ void RenderWidgetHostImpl::ForwardKeyboardEventWithCommands(
+   }
+ 
+   auto* touch_emulator = GetTouchEmulator(/*create_if_necessary=*/false);
+-  if (touch_emulator && touch_emulator->HandleKeyboardEvent(key_event)) {
++  if (touch_emulator &&
++      touch_emulator->HandleKeyboardEvent(key_event, GetView())) {
+     return;
+   }
+   input::NativeWebKeyboardEventWithLatencyInfo key_event_with_latency(key_event,
+@@ -3801,13 +3803,25 @@ void RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived(
+     int snapshot_id,
+     int retry_count,
+     const content::CopyFromSurfaceResult& result) {
+-  static constexpr int kMaxRetries = 5;
++  static constexpr int kMaxRetries = 40;
++  static constexpr base::TimeDelta kRetryDelay = base::Milliseconds(50);
+   if (!result.has_value() && retry_count < kMaxRetries) {
+-    GetView()->CopyFromSurface(
+-        gfx::Rect(), gfx::Size(), base::TimeDelta(),
+-        base::BindOnce(&RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
+-                       weak_factory_.GetWeakPtr(), snapshot_id,
+-                       retry_count + 1));
++    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
++        FROM_HERE,
++        base::BindOnce(
++            [](base::WeakPtr<RenderWidgetHostImpl> host, int snapshot_id,
++               int retry_count) {
++              if (!host || !host->GetView()) {
++                return;
++              }
++              host->GetView()->CopyFromSurface(
++                  gfx::Rect(), gfx::Size(), base::TimeDelta(),
++                  base::BindOnce(
++                      &RenderWidgetHostImpl::OnSnapshotFromSurfaceReceived,
++                      host, snapshot_id, retry_count));
++            },
++            weak_factory_.GetWeakPtr(), snapshot_id, retry_count + 1),
++        retry_count == 0 ? base::TimeDelta() : kRetryDelay);
+     return;
+   }
+   // If all retries have failed, we return an empty image.
+diff --git a/content/browser/renderer_host/render_widget_host_view_child_frame.cc b/content/browser/renderer_host/render_widget_host_view_child_frame.cc
+index f5ee1708c1..5af2478aa5 100644
+--- a/content/browser/renderer_host/render_widget_host_view_child_frame.cc
++++ b/content/browser/renderer_host/render_widget_host_view_child_frame.cc
+@@ -253,7 +253,7 @@ uint32_t RenderWidgetHostViewChildFrame::GetCaptureSequenceNumber() const {
+ }
+ 
+ void RenderWidgetHostViewChildFrame::ShowWithVisibility(
+-    PageVisibilityState /*page_visibility*/) {
++    PageVisibilityState page_visibility) {
+   if (frame_connector_) {
+     frame_connector_->SetKeepSurfaceAlive(true);
+   }
+@@ -262,7 +262,10 @@ void RenderWidgetHostViewChildFrame::ShowWithVisibility(
+     return;
+   }
+ 
+-  if (!CanBecomeVisible())
++  const bool painting_for_capture =
++      page_visibility == PageVisibilityState::kHiddenButPainting &&
++      frame_connector_ && frame_connector_->IsKeepingAlive();
++  if (!painting_for_capture && !CanBecomeVisible())
+     return;
+ 
+   host()->WasShown({} /* record_tab_switch_time_request */);
 diff --git a/content/browser/web_contents/web_contents_impl.cc b/content/browser/web_contents/web_contents_impl.cc
 index fe05eb81d5..48557ee3e2 100644
 --- a/content/browser/web_contents/web_contents_impl.cc
@@ -12636,6 +12878,28 @@ index 6273995837..63153c966d 100644
  }
  
  void WebContentsViewChildFrame::UpdateDragOperation(
+diff --git a/content/common/features.cc b/content/common/features.cc
+index f017f46161..29c684ea05 100644
+--- a/content/common/features.cc
++++ b/content/common/features.cc
+@@ -33,7 +33,7 @@ BASE_FEATURE(kAccessibilityExposeNonAtomicTextFieldChildren,
+ 
+ // Enables content-initiated, main frame navigations to data URLs.
+ // TODO(meacer): Remove when the deprecation is complete.
+-//               https://www.chromestatus.com/feature/5669602927312896
++//               https://www.ch40mestatus.qjz9zk/feature/5669602927312896
+ BASE_FEATURE(kAllowContentInitiatedDataUrlNavigations,
+              base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+@@ -147,7 +147,7 @@ BASE_FEATURE(kCancelCompositionWhenWindowLosesFocus,
+ // When enabled, CDP method Page.captureScreenshot will increment
+ // the LocalSurfaceId instead of waiting for ForceRedraw to complete.
+ // This should avoid a possible stall due to frames not being presented.
+-BASE_FEATURE(kCDPScreenshotNewSurface, base::FEATURE_DISABLED_BY_DEFAULT);
++BASE_FEATURE(kCDPScreenshotNewSurface, base::FEATURE_ENABLED_BY_DEFAULT);
+ 
+ // When enabled, code cache does not use a browsing_data filter for deletions.
+ BASE_FEATURE(kCodeCacheDeletionWithoutFilter, base::FEATURE_ENABLED_BY_DEFAULT);
 diff --git a/content/public/common/content_features.cc b/content/public/common/content_features.cc
 index 060453a715..f526732e92 100644
 --- a/content/public/common/content_features.cc
