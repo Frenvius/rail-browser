@@ -13160,6 +13160,19 @@ index 00a8789f59..a5ca48a9ba 100644
    mixer[kColorNotificationActionsBackground] = {
        kColorNotificationBackgroundActive};
    mixer[kColorNotificationBackgroundActive] = {kColorSubtleEmphasisBackground};
+diff --git a/ui/native_theme/features/native_theme_features.cc b/ui/native_theme/features/native_theme_features.cc
+index a3be3180bb..49ce107102 100644
+--- a/ui/native_theme/features/native_theme_features.cc
++++ b/ui/native_theme/features/native_theme_features.cc
+@@ -14,7 +14,7 @@ constexpr base::FeatureState kOverlayScrollbarFeatureState =
+     base::FEATURE_ENABLED_BY_DEFAULT;
+ #else
+ constexpr base::FeatureState kOverlayScrollbarFeatureState =
+-    base::FEATURE_DISABLED_BY_DEFAULT;
++    base::FEATURE_ENABLED_BY_DEFAULT;
+ #endif
+ // Enables or disables overlay scrollbars in Blink (i.e. web content) on Aura
+ // or Linux.  The status of native UI overlay scrollbars is determined in
 diff --git a/ui/views/controls/menu/menu_config_win.cc b/ui/views/controls/menu/menu_config_win.cc
 index a2dae078cc..7e297c8d81 100644
 --- a/ui/views/controls/menu/menu_config_win.cc
