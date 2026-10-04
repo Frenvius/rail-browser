@@ -183,7 +183,9 @@ cr-icon-button:focus-visible,
 }
 
 .caption-button:last-child:hover {
+  --iron-icon-stroke-color: #fff;
   background: #e81123;
+  color: #fff;
 }
 
 cr-icon-button {
@@ -723,10 +725,12 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   clip-path: inset(0 -8px -8px -8px);
 }
 
-:host([titlebar-themed]:is([page-color-light], [page-color-dark]))
-    .titlebarDiv > :not(#railLogoHit),
-:host([titlebar-themed]:is([page-color-light], [page-color-dark])
-    [sidebar-collapsed]:not([sidebar-icons-only])) #railLogoHit {
+:host([titlebar-themed][page-color-light]) .titlebarDiv > :not(#railLogoHit),
+:host([titlebar-themed][page-color-dark]) .titlebarDiv > :not(#railLogoHit),
+:host([titlebar-themed][page-color-light][sidebar-collapsed]:not(
+    [sidebar-icons-only])) #railLogoHit,
+:host([titlebar-themed][page-color-dark][sidebar-collapsed]:not(
+    [sidebar-icons-only])) #railLogoHit {
   --color-toolbar-button-icon: rgb(var(--rail-page-ink) / 70%);
   --rail-border: rgb(var(--rail-page-ink) / 14%);
   --rail-hover: rgb(var(--rail-page-ink) / 8%);

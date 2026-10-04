@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "base/numerics/safe_conversions.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/platform/task_type.h"
@@ -29,24 +30,48 @@ namespace {
 constexpr base::TimeDelta kDetectionInterval = base::Milliseconds(100);
 constexpr int kProbeY = 1;
 constexpr int kMinBandHeight = 10;
+constexpr float kOpaqueAlpha = 0.999f;
 
-std::optional<uint32_t> OpaqueColor(const Color& color) {
-  return color.IsOpaque() ? std::optional<uint32_t>(color.Rgb())
-                          : std::nullopt;
-}
+class LayerStack {
+ public:
+  bool Add(const Color& color, float opacity) {
+    float layer = color.Alpha() * opacity;
+    float weight = (1 - alpha_) * layer;
+    red_ += weight * color.Red();
+    green_ += weight * color.Green();
+    blue_ += weight * color.Blue();
+    alpha_ += weight;
+    return alpha_ >= kOpaqueAlpha;
+  }
+
+  uint32_t Rgb() const {
+    return Color::FromRGB(base::ClampRound(red_), base::ClampRound(green_),
+                          base::ClampRound(blue_))
+        .Rgb();
+  }
+
+ private:
+  float red_ = 0;
+  float green_ = 0;
+  float blue_ = 0;
+  float alpha_ = 0;
+};
 
 std::optional<uint32_t> ProbeColor(LocalFrameView& view, int x) {
   HitTestRequest request(HitTestRequest::kReadOnly |
                          HitTestRequest::kIgnorePointerEventsNone |
-                         HitTestRequest::kIgnoreZeroOpacityObjects);
+                         HitTestRequest::kIgnoreZeroOpacityObjects |
+                         HitTestRequest::kListBased |
+                         HitTestRequest::kPenetratingList);
   HitTestLocation location{PhysicalOffset(LayoutUnit(x), LayoutUnit(kProbeY))};
   HitTestResult result(request, location);
   view.GetLayoutView()->HitTestNoLifecycleUpdate(location, result);
-  Node* node = result.InnerNode();
   int min_width = view.Size().width() / 3;
-  for (LayoutObject* object = node ? node->GetLayoutObject() : nullptr;
-       object && !object->IsLayoutView(); object = object->Parent()) {
-    if (object->IsAnonymous() || object->IsText()) {
+  LayerStack stack;
+  for (const auto& node : result.ListBasedTestResult()) {
+    LayoutObject* object = node->GetLayoutObject();
+    if (!object || object->IsLayoutView() || object->IsAnonymous() ||
+        object->IsText()) {
       continue;
     }
     const ComputedStyle& style = object->StyleRef();
@@ -62,11 +87,17 @@ std::optional<uint32_t> ProbeColor(LocalFrameView& view, int x) {
     }
     Color background =
         style.VisitedDependentColor(GetCSSPropertyBackgroundColor());
-    if (!background.IsFullyTransparent()) {
-      return OpaqueColor(background);
+    if (!background.IsFullyTransparent() &&
+        stack.Add(background, style.Opacity())) {
+      return stack.Rgb();
     }
   }
-  return OpaqueColor(view.DocumentBackgroundColor());
+  Color document = view.DocumentBackgroundColor();
+  if (!document.IsOpaque()) {
+    return std::nullopt;
+  }
+  stack.Add(document, 1);
+  return stack.Rgb();
 }
 
 class TopBandColorTracker final
