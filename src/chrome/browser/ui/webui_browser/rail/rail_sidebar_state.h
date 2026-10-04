@@ -13,6 +13,7 @@ namespace rail {
 
 extern const char kSidebarStatePref[];
 extern const char kSidebarIconsOnlyPref[];
+extern const char kThemedTitlebarPref[];
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
@@ -24,6 +25,10 @@ void SetSidebarState(PrefService* prefs, const std::string& value);
 bool GetSidebarIconsOnly(PrefService* prefs);
 
 void SetSidebarIconsOnly(PrefService* prefs, bool icons_only);
+
+bool GetThemedTitlebar(PrefService* prefs);
+
+void SetThemedTitlebar(PrefService* prefs, bool themed);
 
 }
 

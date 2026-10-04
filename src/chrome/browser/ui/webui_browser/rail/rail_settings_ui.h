@@ -74,6 +74,8 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetOrganizeModel(const std::string& model) override;
   void GetSidebarIconsOnly(GetSidebarIconsOnlyCallback callback) override;
   void SetSidebarIconsOnly(bool icons_only) override;
+  void GetThemedTitlebar(GetThemedTitlebarCallback callback) override;
+  void SetThemedTitlebar(bool themed) override;
   void OpenCredits() override;
   void Close() override;
 

@@ -7,6 +7,8 @@
  * #css_wrapper_metadata_end */
 
 :host {
+  --rail-content-left: var(--rail-sidebar-width);
+  --rail-content-right: 6px;
   color-scheme: dark;
   display: flex;
   flex-direction: column;
@@ -163,6 +165,10 @@
   min-width: 46px;
   padding: 0;
   shape-rendering: crispEdges;
+}
+
+cr-button > cr-icon {
+  display: block;
 }
 
 .caption-button:focus-visible,
@@ -596,6 +602,123 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
 #emptyHint {
   color: var(--rail-text-label);
   font-size: 12px;
+}
+
+:host([sidebar-collapsed]:not([sidebar-icons-only])),
+:host([mini]) {
+  --rail-content-left: 6px;
+}
+
+:host([sidebar-collapsed][sidebar-icons-only]:not([mini])) {
+  --rail-content-left: var(--rail-sidebar-icons-width);
+}
+
+#rootContainer:has(content-region[showing-side-panel]) {
+  --rail-content-right: calc(12px + var(--rail-side-panel-width, 360px));
+}
+
+:host([titlebar-themed]) .titlebarDiv {
+  isolation: isolate;
+  padding-right: 6px;
+  padding-top: 6px;
+}
+
+:host([titlebar-themed]) .titlebarDiv::before,
+:host([titlebar-themed]) .titlebarDiv::after {
+  border-radius: 8px 8px 0 0;
+  bottom: 0;
+  content: '';
+  left: var(--rail-content-left);
+  pointer-events: none;
+  position: absolute;
+  right: var(--rail-content-right);
+  top: 6px;
+  z-index: -1;
+}
+
+:host([titlebar-themed]) .titlebarDiv::before {
+  background: var(--rail-page-color, transparent);
+  box-shadow: 0 0 8px rgb(0 0 0 / 50%);
+  clip-path: inset(-8px -8px 0 -8px);
+}
+
+:host([titlebar-themed]) .titlebarDiv::after {
+  background: var(--rail-page-color-from, transparent);
+  opacity: 0;
+}
+
+:host([titlebar-themed][page-color-fade='out-a']) .titlebarDiv::after {
+  animation: rail-page-color-fade-a 220ms ease-out;
+}
+
+:host([titlebar-themed][page-color-fade='out-b']) .titlebarDiv::after {
+  animation: rail-page-color-fade-b 220ms ease-out;
+}
+
+:host([titlebar-themed][page-color-fade='in-a']) .titlebarDiv::before {
+  animation: rail-page-color-fade-a 220ms ease-out reverse;
+}
+
+:host([titlebar-themed][page-color-fade='in-b']) .titlebarDiv::before {
+  animation: rail-page-color-fade-b 220ms ease-out reverse;
+}
+
+@keyframes rail-page-color-fade-a {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes rail-page-color-fade-b {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+:host([titlebar-themed][sidebar-animate]:not([sidebar-resizing]))
+    .titlebarDiv::before,
+:host([titlebar-themed][sidebar-animate]:not([sidebar-resizing]))
+    .titlebarDiv::after {
+  transition: left 180ms cubic-bezier(.2, 0, 0, 1);
+}
+
+:host([titlebar-themed]) #railLogoHit {
+  height: auto;
+  bottom: 0;
+  top: 6px;
+}
+
+:host([titlebar-themed])
+    #rootContainer:not(:has(content-region[showing-side-panel]))
+    .caption-button:last-child {
+  border-top-right-radius: 8px;
+}
+
+:host([titlebar-themed]) content-region,
+:host([titlebar-themed]) #emptyState {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  clip-path: inset(0 -8px -8px -8px);
+}
+
+:host([titlebar-themed][page-color-light]) .titlebarDiv > :not(#railLogoHit),
+:host([titlebar-themed][page-color-light][sidebar-collapsed]:not(
+    [sidebar-icons-only])) #railLogoHit {
+  --color-toolbar-button-icon: #3d3d3d;
+  --rail-border: rgb(0 0 0 / 14%);
+  --rail-hover: rgb(0 0 0 / 8%);
+  --rail-hover-strong: rgb(0 0 0 / 14%);
+  --rail-text: #1b1b1b;
+  --rail-text-dim: #3d3d3d;
+  color-scheme: light;
 }
 
 @media (prefers-reduced-motion: reduce) {

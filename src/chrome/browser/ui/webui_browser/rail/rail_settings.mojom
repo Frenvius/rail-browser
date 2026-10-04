@@ -51,6 +51,10 @@ interface PageHandler {
 
   SetSidebarIconsOnly(bool icons_only);
 
+  GetThemedTitlebar() => (bool themed);
+
+  SetThemedTitlebar(bool themed);
+
   OpenCredits();
 
   Close();

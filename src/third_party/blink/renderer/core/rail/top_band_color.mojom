@@ -1,0 +1,5 @@
+module rail.mojom;
+
+interface TopBandColorHost {
+  SetTopBandColor(uint32? color);
+};

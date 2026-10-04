@@ -19,8 +19,8 @@ function slidingElements(host: HTMLElement): HTMLElement[] {
 
 let settleRegionSlide: (() => void)|null = null;
 
-function clipLeft(inset: number): Keyframe {
-  return {clipPath: `inset(0 0 0 ${inset}px round 8px)`};
+function clipLeft(inset: number, radius: string): Keyframe {
+  return {clipPath: `inset(0 0 0 ${inset}px round ${radius})`};
 }
 
 function slideRegionEdge(region: HTMLElement, beforeLeft: number) {
@@ -34,8 +34,9 @@ function slideRegionEdge(region: HTMLElement, beforeLeft: number) {
   }
   const from = Math.max(0, -shift);
   const to = Math.max(0, shift);
+  const radius = getComputedStyle(region).borderRadius;
   const slide = region.animate(
-      [clipLeft(from), clipLeft(to)],
+      [clipLeft(from, radius), clipLeft(to, radius)],
       {duration: SLIDE_MS, easing: SLIDE_EASING});
   const settle = () => {
     slide.cancel();

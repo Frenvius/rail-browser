@@ -95,6 +95,17 @@ ${this.openRow_ ? html`
       </option>
     </select>
   </div>
+  <h2 class="section">Top Bar</h2>
+  <div class="card">
+    <div class="rowtext">
+      <span class="cardtitle">Match the site's color</span>
+      <span class="cardhint">
+        The top bar joins the page and takes the color of the site
+      </span>
+    </div>
+    <cr-toggle ?checked="${this.themedTitlebar_}"
+      @change="${this.onThemedTitlebarChange_}"></cr-toggle>
+  </div>
   <h2 class="section">Tab Organizer</h2>
   <p class="sectionhint">
     Tidy sends the titles and hostnames of the open tabs in a Space to

@@ -64,6 +64,7 @@ export class RailSettingsElement extends CrLitElement {
       hasKey_: {type: Boolean, state: true},
       model_: {type: String, state: true},
       sidebarIconsOnly_: {type: Boolean, state: true},
+      themedTitlebar_: {type: Boolean, state: true},
     };
   }
 
@@ -76,6 +77,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor hasKey_ = false;
   protected accessor model_ = '';
   protected accessor sidebarIconsOnly_ = false;
+  protected accessor themedTitlebar_ = true;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -91,6 +93,7 @@ export class RailSettingsElement extends CrLitElement {
     this.hasKey_ = organize.hasKey;
     this.model_ = organize.model;
     this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
+    this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -120,6 +123,11 @@ export class RailSettingsElement extends CrLitElement {
     const iconsOnly = (e.target as HTMLSelectElement).value === 'icons';
     browserProxyFactory.getInstance().handler.setSidebarIconsOnly(iconsOnly);
     this.sidebarIconsOnly_ = iconsOnly;
+  }
+
+  protected onThemedTitlebarChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setThemedTitlebar(e.detail);
+    this.themedTitlebar_ = e.detail;
   }
 
   protected onCreditsClick_() {

@@ -104,7 +104,12 @@ export class SpaceBarElement extends CrLitElement {
 
   override updated(changedProperties: PropertyValues<this>) {
     super.updated(changedProperties);
-    this.updateSpaceLayout_();
+    const changedPrivateProperties =
+        changedProperties as Map<PropertyKey, unknown>;
+    if (changedProperties.has('spaces') || changedProperties.has('variant') ||
+        changedPrivateProperties.has('editing_')) {
+      this.updateSpaceLayout_();
+    }
   }
 
   protected activeSpace_(): Space|undefined {

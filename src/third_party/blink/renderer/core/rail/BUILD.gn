@@ -1,0 +1,14 @@
+import("//mojo/public/tools/bindings/mojom.gni")
+import("//third_party/blink/renderer/core/core.gni")
+
+mojom("mojom") {
+  sources = [ "top_band_color.mojom" ]
+}
+
+blink_core_sources("rail") {
+  sources = [
+    "top_band_color_tracker.cc",
+    "top_band_color_tracker.h",
+  ]
+  deps = [ ":mojom_blink" ]
+}
