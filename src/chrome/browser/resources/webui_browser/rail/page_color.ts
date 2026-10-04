@@ -6,10 +6,11 @@ import type {TabActivated, TabClosed} from '../tab_strip/events.js';
 const THEMED_KEY = 'rail.titlebarThemed';
 const THEMED_ATTRIBUTE = 'titlebar-themed';
 const LIGHT_ATTRIBUTE = 'page-color-light';
+const DARK_ATTRIBUTE = 'page-color-dark';
 const FADE_ATTRIBUTE = 'page-color-fade';
 const COLOR_PROPERTY = '--rail-page-color';
 const FROM_PROPERTY = '--rail-page-color-from';
-const DARK_TEXT_LUMINANCE = 0.179;
+const DARK_TEXT_LUMINANCE = 0.55;
 
 interface PageColor {
   css: string;
@@ -86,6 +87,7 @@ class PageColorController {
       this.host_.style.removeProperty(COLOR_PROPERTY);
     }
     this.host_.toggleAttribute(LIGHT_ATTRIBUTE, !!color?.light);
+    this.host_.toggleAttribute(DARK_ATTRIBUTE, !!color && !color.light);
     if (previous === undefined ||
         matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return;
