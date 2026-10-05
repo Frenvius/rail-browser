@@ -1,18 +1,15 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_menu.h"
 
-#include <algorithm>
 #include <map>
 #include <set>
 #include <utility>
 
 #include "base/functional/bind.h"
-#include "base/location.h"
-#include "base/task/single_thread_task_runner.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "cc/paint/paint_flags.h"
-#include "chrome/browser/ui/webui_browser/rail/rail_acrylic.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_menu_skin.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -29,13 +26,10 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/menus/simple_menu_model.h"
-#include "ui/views/background.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
 #include "ui/views/controls/menu/menu_runner.h"
-#include "ui/views/controls/menu/menu_scroll_view_container.h"
-#include "ui/views/controls/menu/submenu_view.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/widget/widget.h"
 
@@ -50,8 +44,7 @@ constexpr float kSwatchRingGap = 3.5f;
 constexpr float kSwatchRingWidth = 1.5f;
 constexpr int kSwatchGap = 4;
 constexpr int kSwatchRowVerticalInset = 4;
-constexpr int kSwatchRowHorizontalInset = 8;
-constexpr int kSlideAnchorSlack = 4;
+constexpr int kSwatchRowHorizontalInset = 11;
 
 bool ParseAccelerator(const std::string& value, ui::Accelerator* out) {
   if (value.empty()) {
@@ -243,22 +236,11 @@ class RailMenu::Delegate : public ui::SimpleMenuModel::Delegate {
 
 class RailMenu::Adapter : public views::MenuModelAdapter {
  public:
-  using MenuCallback = base::RepeatingCallback<void(views::MenuItemView*)>;
+  using views::MenuModelAdapter::MenuModelAdapter;
 
-  Adapter(ui::MenuModel* model,
-          base::RepeatingClosure on_closed,
-          MenuCallback on_will_show)
-      : views::MenuModelAdapter(model, std::move(on_closed)),
-        on_will_show_(std::move(on_will_show)) {}
-
-  void WillShowMenu(views::MenuItemView* menu) override {
-    views::MenuModelAdapter::WillShowMenu(menu);
-    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
-        FROM_HERE, base::BindOnce(on_will_show_, menu));
+  int GetMaxWidthForMenu(views::MenuItemView* menu) override {
+    return kMenuMaxWidth;
   }
-
- private:
-  MenuCallback on_will_show_;
 };
 
 RailMenu::RailMenu(base::RepeatingCallback<void(const std::string&)> on_command,
@@ -276,126 +258,31 @@ void RailMenu::ShowAtCursor(
   if (!parent) {
     return;
   }
-  parent_ = parent;
   Fill(model_.get(), items);
 
   adapter_ = std::make_unique<Adapter>(
       model_.get(),
-      base::BindRepeating(&RailMenu::OnClosed, weak_factory_.GetWeakPtr()),
-      base::BindRepeating(&RailMenu::StyleSubmenu, weak_factory_.GetWeakPtr()));
+      base::BindRepeating(&RailMenu::OnClosed, weak_factory_.GetWeakPtr()));
   std::unique_ptr<views::MenuItemView> root = adapter_->CreateMenu();
   root_ = root.get();
+  skin_ = std::make_unique<MenuSkin>(
+      parent, root_, display::Screen::Get()->GetCursorScreenPoint(), true);
   Decorate();
   runner_ = std::make_unique<views::MenuRunner>(
       std::move(root), views::MenuRunner::CONTEXT_MENU);
 
-  cursor_ = display::Screen::Get()->GetCursorScreenPoint();
-  runner_->RunMenuAt(parent, nullptr, gfx::Rect(cursor_, gfx::Size()),
+  skin_->Attach();
+  runner_->RunMenuAt(parent, nullptr, gfx::Rect(skin_->anchor(), gfx::Size()),
                      views::MenuAnchorPosition::kBubbleTopLeft,
                      ui::mojom::MenuSourceType::kMouse);
 
-  StyleSubmenu(root_);
-}
-
-void RailMenu::StyleSubmenu(views::MenuItemView* item) {
-  views::SubmenuView* submenu = item ? item->GetSubmenu() : nullptr;
-  if (!submenu || !submenu->IsShowing()) {
-    return;
-  }
-  views::MenuScrollViewContainer* container = submenu->GetScrollViewContainer();
-  views::Widget* menu_widget = submenu->GetWidget();
-  if (!menu_widget) {
-    return;
-  }
-  container->SetBackground(views::CreateSolidBackground(SK_ColorTRANSPARENT));
-  if (!backdrops_.count(menu_widget)) {
-    backdrops_[menu_widget] =
-        ApplyAcrylicBackdrop(menu_widget, container->outside_border_insets());
-  }
-  if (!observations_.IsObservingSource(menu_widget)) {
-    observations_.AddObservation(menu_widget);
-  }
-  submenu_items_[menu_widget] = item;
-
-  const gfx::Rect menu_bounds = menu_widget->GetWindowBoundsInScreen();
-  const gfx::Rect window_bounds = parent_->GetWindowBoundsInScreen();
-  const int anchor_y =
-      item == root_ ? cursor_.y() : item->GetBoundsInScreen().y();
-  const int anchor_bottom = item == root_
-                                ? cursor_.y()
-                                : item->GetBoundsInScreen().bottom();
-  gfx::Rect bounds = item == root_
-                         ? menu_bounds
-                         : gfx::Rect(menu_bounds.origin(),
-                                     container->GetPreferredSize({}));
-  const bool constrained_upward = bounds.bottom() > window_bounds.bottom();
-  if (constrained_upward) {
-    bounds.set_y(std::max(window_bounds.y(), anchor_y - bounds.height()));
-  } else if (item != root_) {
-    bounds.set_y(item->GetBoundsInScreen().y() -
-                 container->GetInsets().top());
-  }
-  if (bounds.y() < window_bounds.y()) {
-    bounds.set_y(window_bounds.y());
-  }
-  if (bounds != menu_bounds) {
-    menu_widget->SetBounds(bounds);
-    RefreshClip(menu_widget);
-  }
-  const bool opens_upward =
-      constrained_upward ||
-      bounds.bottom() <= anchor_bottom + kSlideAnchorSlack;
-  RefreshClip(menu_widget);
-  RevealAcrylic(menu_widget, nullptr, backdrops_[menu_widget].get(),
-                opens_upward ? kAcrylicSlideDistance : -kAcrylicSlideDistance,
-                item == root_);
-}
-
-void RailMenu::OnWidgetVisibilityChanged(views::Widget* widget, bool visible) {
-  if (visible) {
-    return;
-  }
-  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
-      FROM_HERE, base::BindOnce(&RailMenu::CloseHiddenSubmenu,
-                                weak_factory_.GetWeakPtr(), widget));
-}
-
-void RailMenu::CloseHiddenSubmenu(views::Widget* widget) {
-  const auto entry = submenu_items_.find(widget);
-  if (entry == submenu_items_.end() || entry->second == root_ || !runner_) {
-    return;
-  }
-  views::SubmenuView* submenu = entry->second->GetSubmenu();
-  if (submenu && submenu->GetWidget() == widget && !submenu->IsShowing()) {
-    submenu->Close();
-  }
-}
-
-void RailMenu::RefreshClip(views::Widget* widget) {
-  const auto entry = backdrops_.find(widget);
-  if (entry != backdrops_.end() && entry->second) {
-    entry->second->UpdateClip();
-  }
-}
-
-void RailMenu::OnWidgetBoundsChanged(views::Widget* widget,
-                                     const gfx::Rect& new_bounds) {
-  RefreshClip(widget);
-  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
-      FROM_HERE, base::BindOnce(&RailMenu::RefreshClip,
-                                weak_factory_.GetWeakPtr(), widget));
-}
-
-void RailMenu::OnWidgetDestroying(views::Widget* widget) {
-  observations_.RemoveObservation(widget);
-  backdrops_.erase(widget);
-  submenu_items_.erase(widget);
+  skin_->Style(root_);
 }
 
 void RailMenu::OnClosed() {
-  observations_.RemoveAllObservations();
-  backdrops_.clear();
-  submenu_items_.clear();
+  if (skin_) {
+    skin_->Release();
+  }
   on_closed_.Run();
 }
 

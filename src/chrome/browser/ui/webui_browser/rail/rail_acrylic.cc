@@ -13,6 +13,8 @@
 #include "base/time/time.h"
 #include "cc/paint/paint_canvas.h"
 #include "cc/paint/paint_flags.h"
+#include "components/viz/common/frame_sinks/copy_output_request.h"
+#include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/viz/common/frame_timing_details.h"
 #include "third_party/skia/include/core/SkRRect.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -41,6 +43,9 @@ constexpr int kShadowBlur = 16;
 constexpr int kShadowOffsetY = 3;
 constexpr SkAlpha kShadowAlpha = 0x33;
 constexpr base::TimeDelta kSlideDuration = base::Milliseconds(100);
+constexpr base::TimeDelta kMenuRevealDuration = base::Milliseconds(250);
+constexpr float kMenuHiddenFraction = 0.5f;
+constexpr float kSubmenuHiddenFraction = 0.67f;
 constexpr float kHiddenOpacity = 0.01f;
 
 void NeutralizeDwmFrame(HWND hwnd) {
@@ -55,12 +60,24 @@ void NeutralizeDwmFrame(HWND hwnd) {
                           sizeof(no_backdrop));
 }
 
+void PrepareAcrylicFrame(HWND hwnd) {
+  NeutralizeDwmFrame(hwnd);
+  const DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_DONOTROUND;
+  ::DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner,
+                          sizeof(corner));
+}
+
+void SetCloaked(HWND hwnd, bool cloaked) {
+  const BOOL value = cloaked;
+  ::DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &value, sizeof(value));
+}
+
 SystemBackdropConfig PopupBackdropConfig() {
   SystemBackdropConfig config;
   config.material = SystemBackdropMaterial::kAcrylic;
-  config.tint_color = SkColorSetRGB(0x14, 0x14, 0x14);
-  config.fallback_color = SkColorSetRGB(0x1c, 0x1c, 0x1c);
-  config.tint_opacity = 0.55f;
+  config.tint_color = SkColorSetRGB(0x1f, 0x1f, 0x1f);
+  config.fallback_color = SkColorSetRGB(0x1f, 0x1f, 0x1f);
+  config.tint_opacity = 0.85f;
   config.luminosity_opacity = 0.85f;
   config.popup = true;
   config.corner_radius = kAcrylicCornerRadius;
@@ -115,11 +132,7 @@ std::unique_ptr<SystemBackdropController> ApplyAcrylicBackdrop(
   if (!hwnd) {
     return nullptr;
   }
-  NeutralizeDwmFrame(hwnd);
-
-  const DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_DONOTROUND;
-  ::DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner,
-                          sizeof(corner));
+  PrepareAcrylicFrame(hwnd);
 
   SystemBackdropConfig config = PopupBackdropConfig();
   config.popup_insets = insets;
@@ -202,7 +215,63 @@ void StartReveal(base::WeakPtr<views::Widget> target,
   AnimateLayer(shadow.get());
 }
 
+void ShowLayer(views::Widget* widget) {
+  if (ui::Layer* layer = widget ? widget->GetLayer() : nullptr) {
+    layer->SetOpacity(1.0f);
+  }
+}
+
+void ClearDrawer(base::WeakPtr<SystemBackdropController> backdrop,
+                 const viz::FrameTimingDetails&) {
+  if (backdrop) {
+    backdrop->ClearDrawerContent();
+  }
+}
+
+void FinishMenuReveal(base::WeakPtr<views::Widget> target,
+                      base::WeakPtr<SystemBackdropController> backdrop) {
+  ui::Compositor* compositor = target ? target->GetCompositor() : nullptr;
+  if (!compositor) {
+    return;
+  }
+  ShowLayer(target.get());
+  compositor->RequestSuccessfulPresentationTimeForNextFrame(
+      base::BindOnce(&ClearDrawer, backdrop));
+}
+
+void StartMenuReveal(base::WeakPtr<views::Widget> target,
+                     base::WeakPtr<SystemBackdropController> backdrop,
+                     float hidden_fraction,
+                     bool from_bottom,
+                     std::unique_ptr<viz::CopyOutputResult> result) {
+  if (!target) {
+    return;
+  }
+  if (!backdrop || result->IsEmpty() ||
+      !backdrop->PlayDrawerReveal(result->ScopedAccessSkBitmap().bitmap(),
+                                  hidden_fraction, from_bottom,
+                                  kMenuRevealDuration)) {
+    ShowLayer(target.get());
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, base::BindOnce(&FinishMenuReveal, target, backdrop),
+      kMenuRevealDuration);
+}
+
 }  // namespace
+
+void PrepareMenuWindow(gfx::AcceleratedWidget hwnd, views::Widget* widget) {
+  NeutralizeDwmFrame(hwnd);
+  SetCloaked(hwnd, true);
+  HideLayer(widget, 0);
+}
+
+void ConcealMenuWindow(views::Widget* widget) {
+  if (HWND hwnd = widget ? views::HWNDForWidget(widget) : nullptr) {
+    SetCloaked(hwnd, true);
+  }
+}
 
 void WarmAcrylic(views::Widget* target, SystemBackdropController* backdrop) {
   if (!target) {
@@ -254,6 +323,31 @@ void RevealAcrylic(views::Widget* target,
   compositor->RequestSuccessfulPresentationTimeForNextFrame(
       base::BindOnce(&StartReveal, target->GetWeakPtr(), shadow_weak,
                      backdrop_weak, start_offset));
+}
+
+void RevealMenu(views::Widget* target,
+                SystemBackdropController* backdrop,
+                bool submenu,
+                bool from_bottom) {
+  if (!target) {
+    return;
+  }
+  HideLayer(target, 0);
+  if (HWND hwnd = views::HWNDForWidget(target)) {
+    SetCloaked(hwnd, false);
+  }
+  ui::Layer* layer = target->GetLayer();
+  if (!backdrop || !layer || !target->GetCompositor()) {
+    ShowLayer(target);
+    return;
+  }
+  layer->RequestCopyOfOutput(std::make_unique<viz::CopyOutputRequest>(
+      viz::CopyOutputRequest::ResultFormat::RGBA,
+      viz::CopyOutputRequest::ResultDestination::kSystemMemory,
+      base::BindOnce(&StartMenuReveal, target->GetWeakPtr(),
+                     backdrop->GetWeakPtr(),
+                     submenu ? kSubmenuHiddenFraction : kMenuHiddenFraction,
+                     from_bottom)));
 }
 
 }  // namespace rail

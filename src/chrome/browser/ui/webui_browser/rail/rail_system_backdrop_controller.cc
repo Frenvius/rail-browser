@@ -6,9 +6,11 @@
 
 #include <DispatcherQueue.h>
 #include <d2d1effects.h>
+#include <d3d11.h>
 #include <dwmapi.h>
 #include <roapi.h>
 #include <windows.foundation.h>
+#include <windows.graphics.directx.h>
 #include <windows.graphics.effects.h>
 #include <windows.graphics.effects.interop.h>
 #include <windows.system.h>
@@ -28,6 +30,7 @@
 #include "base/no_destructor.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
 #include "chrome/browser/win/mica_titlebar.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/color/color_provider_key.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/win/hwnd_util.h"
@@ -36,6 +39,7 @@ namespace rail {
 
 namespace {
 
+namespace wdx = ABI::Windows::Graphics::DirectX;
 namespace wgfx = ABI::Windows::Graphics::Effects;
 namespace wuc = ABI::Windows::UI::Composition;
 
@@ -311,7 +315,141 @@ class SystemBackdropController::Impl {
                          easing.Get());
   }
 
+  bool PlayDrawerReveal(const SkBitmap& content,
+                        float hidden_fraction,
+                        bool from_bottom,
+                        base::TimeDelta duration) {
+    ComPtr<wuc::ICompositionObject> target;
+    ComPtr<wuc::IVisual> visual;
+    if (!sprite_ || FAILED(sprite_.As(&target)) ||
+        FAILED(sprite_.As(&visual))) {
+      return false;
+    }
+    visual->put_Opacity(1.0f);
+    ComPtr<wuc::ICubicBezierEasingFunction> bezier;
+    ComPtr<wuc::ICompositionEasingFunction> easing;
+    ComPtr<wuc::ICompositionObject> content_target;
+    if (FAILED(compositor_->CreateCubicBezierEasingFunction(
+            {0.0f, 0.0f}, {0.0f, 1.0f}, &bezier)) ||
+        FAILED(bezier.As(&easing)) || !ShowDrawerContent(content) ||
+        FAILED(content_.As(&content_target))) {
+      ClearDrawerContent();
+      return false;
+    }
+    RECT client = {};
+    ::GetClientRect(hwnd_, &client);
+    const float height =
+        client.bottom - config_.popup_insets.height() * DpiScale();
+    const float shift = height * hidden_fraction;
+    visual->put_CenterPoint({0.0f, from_bottom ? height : 0.0f, 0.0f});
+    StartScalarAnimation(target.Get(), L"Scale.Y", 1.0f - hidden_fraction, 1.0f,
+                         duration, easing.Get());
+    StartScalarAnimation(content_target.Get(), L"Offset.Y",
+                         from_bottom ? shift : -shift, 0.0f, duration,
+                         easing.Get());
+    return true;
+  }
+
+  void ClearDrawerContent() {
+    ComPtr<wuc::IVisualCollection> children;
+    ComPtr<wuc::IVisual> visual;
+    if (content_ && root_ && SUCCEEDED(root_->get_Children(&children)) &&
+        SUCCEEDED(content_.As(&visual))) {
+      children->Remove(visual.Get());
+    }
+    content_.Reset();
+  }
+
  private:
+  bool ShowDrawerContent(const SkBitmap& content) {
+    ClearDrawerContent();
+    ComPtr<wuc::ICompositionGraphicsDevice> device =
+        SharedGraphicsDevice(compositor_.Get());
+    ComPtr<wuc::IVisualCollection> children;
+    SkBitmap pixels;
+    if (!device || !root_ || content.drawsNothing() ||
+        !pixels.tryAllocPixels(content.info()
+                                   .makeColorType(kBGRA_8888_SkColorType)
+                                   .makeAlphaType(kPremul_SkAlphaType)) ||
+        !content.readPixels(pixels.pixmap()) ||
+        FAILED(root_->get_Children(&children))) {
+      return false;
+    }
+    const UINT width = pixels.width();
+    const UINT height = pixels.height();
+    ComPtr<wuc::ICompositionDrawingSurface> surface;
+    ComPtr<wuc::ICompositionDrawingSurfaceInterop> drawing;
+    if (FAILED(device->CreateDrawingSurface(
+            {static_cast<float>(width), static_cast<float>(height)},
+            wdx::DirectXPixelFormat_B8G8R8A8UIntNormalized,
+            wdx::DirectXAlphaMode_Premultiplied, &surface)) ||
+        FAILED(surface.As(&drawing))) {
+      return false;
+    }
+    ComPtr<ID3D11Texture2D> texture;
+    POINT offset = {};
+    if (FAILED(drawing->BeginDraw(nullptr, IID_PPV_ARGS(&texture), &offset))) {
+      return false;
+    }
+    ComPtr<ID3D11Device> d3d;
+    ComPtr<ID3D11DeviceContext> context;
+    texture->GetDevice(&d3d);
+    d3d->GetImmediateContext(&context);
+    const D3D11_BOX box = {static_cast<UINT>(offset.x),
+                           static_cast<UINT>(offset.y),
+                           0,
+                           static_cast<UINT>(offset.x) + width,
+                           static_cast<UINT>(offset.y) + height,
+                           1};
+    context->UpdateSubresource(texture.Get(), 0, &box, pixels.getPixels(),
+                               pixels.rowBytes(), 0);
+    if (FAILED(drawing->EndDraw())) {
+      return false;
+    }
+
+    ComPtr<wuc::ICompositionSurface> source;
+    ComPtr<wuc::ICompositionSurfaceBrush> surface_brush;
+    ComPtr<wuc::ICompositionBrush> brush;
+    ComPtr<wuc::ISpriteVisual> sprite;
+    ComPtr<wuc::IVisual> visual;
+    if (FAILED(surface.As(&source)) ||
+        FAILED(compositor_->CreateSurfaceBrushWithSurface(source.Get(),
+                                                          &surface_brush)) ||
+        FAILED(surface_brush->put_Stretch(wuc::CompositionStretch_None)) ||
+        FAILED(surface_brush.As(&brush)) ||
+        FAILED(compositor_->CreateSpriteVisual(&sprite)) ||
+        FAILED(sprite->put_Brush(brush.Get())) || FAILED(sprite.As(&visual)) ||
+        FAILED(visual->put_Size(
+            {static_cast<float>(width), static_cast<float>(height)})) ||
+        FAILED(children->InsertAtTop(visual.Get()))) {
+      return false;
+    }
+    content_ = sprite;
+    return true;
+  }
+
+  static ComPtr<wuc::ICompositionGraphicsDevice> SharedGraphicsDevice(
+      wuc::ICompositor* compositor) {
+    static base::NoDestructor<ComPtr<wuc::ICompositionGraphicsDevice>> device;
+    if (*device) {
+      return *device;
+    }
+    ComPtr<ID3D11Device> d3d;
+    ComPtr<wuc::ICompositorInterop> interop;
+    const HRESULT hr =
+        ::D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr,
+                            D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0,
+                            D3D11_SDK_VERSION, &d3d, nullptr, nullptr);
+    if (FAILED(hr) ||
+        FAILED(compositor->QueryInterface(IID_PPV_ARGS(&interop))) ||
+        FAILED(interop->CreateGraphicsDevice(d3d.Get(), &*device))) {
+      VLOG(1) << "Composition graphics device creation failed: 0x" << std::hex
+              << hr;
+      device->Reset();
+    }
+    return *device;
+  }
+
   void StartScalarAnimation(wuc::ICompositionObject* target,
                             const wchar_t* property,
                             float from,
@@ -379,9 +517,21 @@ class SystemBackdropController::Impl {
     if (config_.corner_radius > 0.0f) {
       ApplyRoundedClip(visual.Get());
     }
+    ComPtr<wuc::IVisual> root = visual;
+    if (config_.popup) {
+      ComPtr<wuc::IVisual2> root_sizing;
+      ComPtr<wuc::IVisualCollection> children;
+      if (FAILED(compositor_->CreateContainerVisual(&root_)) ||
+          FAILED(root_.As(&root)) || FAILED(root.As(&root_sizing)) ||
+          FAILED(root_sizing->put_RelativeSizeAdjustment({1.0f, 1.0f})) ||
+          FAILED(root_->get_Children(&children)) ||
+          FAILED(children->InsertAtTop(visual.Get()))) {
+        return false;
+      }
+    }
     ComPtr<wuc::ICompositionTarget> target;
     if (FAILED(desktop_target_.As(&target)) ||
-        FAILED(target->put_Root(visual.Get()))) {
+        FAILED(target->put_Root(root.Get()))) {
       return false;
     }
 
@@ -613,7 +763,9 @@ class SystemBackdropController::Impl {
   bool composition_ = false;
   ComPtr<wuc::ICompositor> compositor_;
   ComPtr<wuc::Desktop::IDesktopWindowTarget> desktop_target_;
+  ComPtr<wuc::IContainerVisual> root_;
   ComPtr<wuc::ISpriteVisual> sprite_;
+  ComPtr<wuc::ISpriteVisual> content_;
   ComPtr<wuc::ICompositionBackdropBrush> backdrop_;
   ComPtr<wuc::ICompositionBrush> effect_brush_;
   ComPtr<wuc::ICompositionBrush> fallback_brush_;
@@ -650,6 +802,18 @@ void SystemBackdropController::SetDarkMode(bool dark_mode) {
 void SystemBackdropController::PlayReveal(float offset_y,
                                           base::TimeDelta duration) {
   impl_->PlayReveal(offset_y, duration);
+}
+
+bool SystemBackdropController::PlayDrawerReveal(const SkBitmap& content,
+                                                float hidden_fraction,
+                                                bool from_bottom,
+                                                base::TimeDelta duration) {
+  return impl_->PlayDrawerReveal(content, hidden_fraction, from_bottom,
+                                 duration);
+}
+
+void SystemBackdropController::ClearDrawerContent() {
+  impl_->ClearDrawerContent();
 }
 
 void SystemBackdropController::HideReveal() {

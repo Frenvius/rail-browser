@@ -9032,6 +9032,61 @@ index 7a0111c300..5c73765231 100644
      return std::unique_ptr<BrowserWindow, BrowserWindowDeleter>(
          new WebUIBrowserWindow(browser));
    }
+diff --git a/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.cc b/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.cc
+index 625e3b90c0..6491b455cb 100644
+--- a/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.cc
++++ b/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.cc
+@@ -18,6 +18,7 @@
+ #include "chrome/app/chrome_command_ids.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/side_panel/side_panel_coordinator.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_menu_skin.h"
+ #include "chrome/common/chrome_switches.h"
+ #include "components/lens/buildflags.h"
+ #include "components/lens/lens_features.h"
+@@ -402,11 +403,15 @@ void RenderViewContextMenuViews::Show() {
+   // Enable recursive tasks on the message loop so we can get updates while
+   // the context menu is being displayed.
+   base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
++  views::MenuItemView* menu_view =
++      static_cast<ToolkitDelegateViews*>(toolkit_delegate())->menu_view();
++  rail_skin_ = std::make_unique<rail::MenuSkin>(top_level_widget, menu_view,
++                                                screen_point, false);
++  rail_skin_->Attach();
+   RunMenuAt(top_level_widget, screen_point, params().source_type);
++  rail_skin_->Style(menu_view);
+ 
+-  auto* submenu_view = static_cast<ToolkitDelegateViews*>(toolkit_delegate())
+-                           ->menu_view()
+-                           ->GetSubmenu();
++  auto* submenu_view = menu_view->GetSubmenu();
+   if (submenu_view) {
+     for (auto& observer : observers_) {
+       if (submenu_view->host()) {
+diff --git a/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.h b/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.h
+index b0619927b0..10797fba06 100644
+--- a/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.h
++++ b/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.h
+@@ -24,6 +24,10 @@ namespace ui {
+ class AcceleratorProvider;
+ }
+ 
++namespace rail {
++class MenuSkin;
++}
++
+ class RenderViewContextMenuViews : public RenderViewContextMenu {
+  public:
+   RenderViewContextMenuViews(const RenderViewContextMenuViews&) = delete;
+@@ -80,6 +84,8 @@ class RenderViewContextMenuViews : public RenderViewContextMenu {
+   // View observer of the submenu view and widget. SubmenuViewObserver is used
+   // to observe bounds changes.
+   std::unique_ptr<SubmenuViewObserver> submenu_view_observer_;
++
++  std::unique_ptr<rail::MenuSkin> rail_skin_;
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_VIEWS_RENDERER_CONTEXT_MENU_RENDER_VIEW_CONTEXT_MENU_VIEWS_H_
 diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
 index bced2aebb3..6f46b98a02 100644
 --- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
@@ -9194,15 +9249,16 @@ index 806ff8ed9e..739ef0e7ad 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..a1b6d0ee52 100644
+index 3d4fe27f4f..7f55117f6b 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,20 @@ source_set("headers") {
+@@ -13,6 +13,21 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
 +    "rail/rail_accelerators.h",
 +    "rail/rail_acrylic.h",
++    "rail/rail_menu_skin.h",
 +    "rail/rail_command_bubble.h",
 +    "rail/rail_command_ui.h",
 +    "rail/rail_space_panel.h",
@@ -9218,7 +9274,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -25,6 +39,8 @@ source_set("webui_browser") {
+@@ -25,6 +40,8 @@ source_set("webui_browser") {
      ":browser_mojo_bindings",
      ":headers",
      "//base",
@@ -9227,7 +9283,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -34,6 +50,7 @@ source_set("webui_browser") {
+@@ -34,6 +51,7 @@ source_set("webui_browser") {
      "//chrome/browser/ui/views/side_panel",
      "//chrome/browser/ui/webui/cr_components/searchbox",
      "//chrome/browser/ui/webui/metrics_reporter",
@@ -9235,7 +9291,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/tab_drag:mojom",
      "//components/browser_apis/tab_strip:mojom_experiment",
-@@ -52,6 +69,42 @@ source_set("impl") {
+@@ -52,6 +70,43 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -9255,6 +9311,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
 +    "rail/rail_space_panel_ui.cc",
 +    "rail/rail_menu.cc",
 +    "rail/rail_menu.h",
++    "rail/rail_menu_skin.cc",
 +    "rail/rail_mini_window.cc",
 +    "rail/rail_page_color.cc",
 +    "rail/rail_page_color.h",
@@ -9278,7 +9335,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -75,6 +128,15 @@ source_set("impl") {
+@@ -75,6 +130,15 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -9294,7 +9351,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -86,6 +148,7 @@ source_set("impl") {
+@@ -86,6 +150,7 @@ source_set("impl") {
      "//chrome/browser/devtools",
      "//chrome/browser/extensions",
      "//chrome/browser/profiles",
@@ -9302,7 +9359,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/themes",
      "//chrome/browser/ui/bookmarks",
-@@ -106,8 +169,11 @@ source_set("impl") {
+@@ -106,8 +171,11 @@ source_set("impl") {
      "//chrome/browser/ui/views/toolbar",
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
@@ -9314,7 +9371,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/zoom:browser_window_zoom_observer",
      "//chrome/common:chrome_features",
-@@ -118,8 +184,14 @@ source_set("impl") {
+@@ -118,8 +186,14 @@ source_set("impl") {
      "//components/omnibox/browser:vector_icons",
      "//components/sharing_message",
      "//components/surface_embed/common",
@@ -9329,7 +9386,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -140,6 +212,14 @@ source_set("impl") {
+@@ -140,6 +214,14 @@ source_set("impl") {
      ]
    }
  
@@ -9344,7 +9401,7 @@ index 3d4fe27f4f..a1b6d0ee52 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -149,11 +229,15 @@ mojom("browser_mojo_bindings") {
+@@ -149,11 +231,15 @@ mojom("browser_mojo_bindings") {
    sources = [
      "bookmark_bar.mojom",
      "browser.mojom",
@@ -12443,6 +12500,19 @@ index fc17b1472b..761869fea1 100644
            </message>
          </else>
        </if>
+diff --git a/components/renderer_context_menu/views/toolkit_delegate_views.cc b/components/renderer_context_menu/views/toolkit_delegate_views.cc
+index 0be2640c81..1d8ee13201 100644
+--- a/components/renderer_context_menu/views/toolkit_delegate_views.cc
++++ b/components/renderer_context_menu/views/toolkit_delegate_views.cc
+@@ -26,7 +26,7 @@ void ToolkitDelegateViews::RunMenuAt(views::Widget* parent,
+   Position anchor_position = (type == ui::mojom::MenuSourceType::kTouch ||
+                               type == ui::mojom::MenuSourceType::kTouchEditMenu)
+                                  ? Position::kBottomCenter
+-                                 : Position::kTopLeft;
++                                 : Position::kBubbleTopLeft;
+   menu_runner_->RunMenuAt(parent, nullptr, gfx::Rect(point, gfx::Size()),
+                           anchor_position, type);
+ }
 diff --git a/components/reset_password_strings.grdp b/components/reset_password_strings.grdp
 index 5f58c26466..9f80ca3e40 100644
 --- a/components/reset_password_strings.grdp
@@ -13141,7 +13211,7 @@ index 9d8b4ade5a..e840a1e6f1 100644
    },
    "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/webui_browser/internal/resources.grd": {
 diff --git a/ui/color/ui_color_mixer.cc b/ui/color/ui_color_mixer.cc
-index 00a8789f59..a5ca48a9ba 100644
+index 00a8789f59..ecb82026a2 100644
 --- a/ui/color/ui_color_mixer.cc
 +++ b/ui/color/ui_color_mixer.cc
 @@ -145,13 +145,13 @@ void AddUiColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
@@ -13149,7 +13219,7 @@ index 00a8789f59..a5ca48a9ba 100644
                 gfx::kGoogleGreyAlpha200);
    mixer[kColorMenuItemBackgroundHighlighted] = {kColorSubtleEmphasisBackground};
 -  mixer[kColorMenuItemBackgroundSelected] = {kColorMenuSelectionBackground};
-+  mixer[kColorMenuItemBackgroundSelected] = {SkColorSetA(SK_ColorWHITE, 0x24)};
++  mixer[kColorMenuItemBackgroundSelected] = {SkColorSetA(SK_ColorWHITE, 0x0F)};
    mixer[kColorMenuItemForeground] = {kColorPrimaryForeground};
    mixer[kColorMenuItemForegroundDisabled] = {kColorDisabledForeground};
    mixer[kColorMenuItemForegroundHighlighted] = {kColorMenuItemForeground};
@@ -13173,11 +13243,67 @@ index a3be3180bb..49ce107102 100644
  #endif
  // Enables or disables overlay scrollbars in Blink (i.e. web content) on Aura
  // or Linux.  The status of native UI overlay scrollbars is determined in
+diff --git a/ui/views/controls/menu/menu_config.cc b/ui/views/controls/menu/menu_config.cc
+index a711c50328..194c640446 100644
+--- a/ui/views/controls/menu/menu_config.cc
++++ b/ui/views/controls/menu/menu_config.cc
+@@ -6,7 +6,10 @@
+ 
+ #include "base/debug/dump_without_crashing.h"
+ #include "base/no_destructor.h"
++#include "base/strings/string_util.h"
++#include "ui/base/accelerators/accelerator.h"
+ #include "ui/base/ui_base_features.h"
++#include "ui/events/keycodes/keyboard_codes.h"
+ #include "ui/views/controls/menu/menu_controller.h"
+ #include "ui/views/controls/menu/menu_item_view.h"
+ #include "ui/views/layout/layout_provider.h"
+@@ -64,6 +67,26 @@ bool MenuConfig::ShouldShowAcceleratorText(const MenuItemView* item,
+     return false;
+   }
+   *text = accelerator.GetShortcutText();
++  std::u16string glyph;
++  switch (accelerator.key_code()) {
++    case ui::VKEY_LEFT:
++      glyph = u"←";
++      break;
++    case ui::VKEY_UP:
++      glyph = u"↑";
++      break;
++    case ui::VKEY_RIGHT:
++      glyph = u"→";
++      break;
++    case ui::VKEY_DOWN:
++      glyph = u"↓";
++      break;
++    default:
++      return true;
++  }
++  base::ReplaceFirstSubstringAfterOffset(
++      text, 0, ui::Accelerator(accelerator.key_code(), 0).KeyCodeToName(),
++      glyph);
+   return true;
+ }
+ 
 diff --git a/ui/views/controls/menu/menu_config_win.cc b/ui/views/controls/menu/menu_config_win.cc
-index a2dae078cc..7e297c8d81 100644
+index a2dae078cc..79c77234a5 100644
 --- a/ui/views/controls/menu/menu_config_win.cc
 +++ b/ui/views/controls/menu/menu_config_win.cc
-@@ -22,10 +22,16 @@ void MenuConfig::InitPlatform() {
+@@ -13,8 +13,11 @@
+ namespace views {
+ 
+ void MenuConfig::InitPlatform() {
+-  context_menu_font_list = font_list =
+-      gfx::FontList(gfx::win::GetSystemFont(gfx::win::SystemFont::kMenu));
++  const gfx::Font menu_font =
++      gfx::win::GetSystemFont(gfx::win::SystemFont::kMenu);
++  context_menu_font_list = font_list = gfx::FontList(
++      {"Segoe UI Variable Text", menu_font.GetFontName()}, gfx::Font::NORMAL,
++      menu_font.GetFontSize() + 2, gfx::Font::Weight::NORMAL);
+ 
+   BOOL show_cues;
+   show_mnemonics =
+@@ -22,10 +25,22 @@ void MenuConfig::InitPlatform() {
         show_cues == TRUE);
  
    SystemParametersInfo(SPI_GETMENUSHOWDELAY, 0, &show_delay, 0);
@@ -13187,13 +13313,19 @@ index a2dae078cc..7e297c8d81 100644
 -  use_bubble_border = corner_radius > 0;
 +  separator_upper_height = 3;
 +  separator_lower_height = 3;
-+  separator_height = 9;
++  separator_height = 7;
 +
 +  use_bubble_border = false;
-+  menu_horizontal_border_size = 4;
-+  item_horizontal_border_padding = 8;
-+  icon_label_spacing = 8;
-+  item_corner_radius = 6;
++  menu_horizontal_border_size = 0;
++  rounded_menu_vertical_border_size = 5;
++  item_horizontal_border_padding = 5;
++  item_horizontal_padding = 11;
++  item_vertical_margin = 4;
++  minimum_text_item_height = 29;
++  between_item_vertical_padding = 4;
++  icon_label_spacing = 12;
++  arrow_to_edge_padding = 9;
++  item_corner_radius = 4;
 +  auxiliary_corner_radius = 8;
  }
  
@@ -13215,10 +13347,67 @@ index 81281fb257..e2495928d5 100644
        menu_controller->TakeShowMenuHostDurationHistogram();
    CHECK(!menu_controller->TakeShowMenuHostDurationHistogram().has_value());
 diff --git a/ui/views/controls/menu/menu_item_view.cc b/ui/views/controls/menu/menu_item_view.cc
-index f22907bb8d..059ed3166a 100644
+index f22907bb8d..2130cff798 100644
 --- a/ui/views/controls/menu/menu_item_view.cc
 +++ b/ui/views/controls/menu/menu_item_view.cc
-@@ -1662,7 +1662,7 @@ void MenuItemView::UpdateSelectionBasedState(bool paint_as_selected) {
+@@ -874,7 +874,14 @@ ProposedLayout MenuItemView::CalculateProposedLayout(
+     if (icon_view_) {
+       const gfx::Size preferred_size = icon_view_->GetPreferredSize({});
+       const int x = CalculateIconX(icon_view_);
+-      const int y = (layout.host_size.height() - preferred_size.height()) / 2;
++      int y = (layout.host_size.height() - preferred_size.height()) / 2;
++      if (secondary_title().empty() && !title().empty()) {
++        const gfx::FontList& font_list = GetFontList();
++        const int text_top =
++            (layout.host_size.height() - font_list.GetHeight()) / 2;
++        y = text_top + font_list.GetBaseline() -
++            (font_list.GetCapHeight() + preferred_size.height() + 1) / 2;
++      }
+       layout.child_layouts.emplace_back(
+           icon_view_.get(), icon_view_->GetVisible(),
+           gfx::Rect(x, y, preferred_size.width(), preferred_size.height()));
+@@ -1027,7 +1034,7 @@ int MenuItemView::GetDrawStringFlags() const {
+                  ? gfx::Canvas::SHOW_PREFIX
+                  : gfx::Canvas::HIDE_PREFIX;
+   }
+-  return flags;
++  return flags | gfx::Canvas::NO_SUBPIXEL_RENDERING;
+ }
+ 
+ const gfx::FontList MenuItemView::GetFontList() const {
+@@ -1249,7 +1256,7 @@ void MenuItemView::PaintBackground(gfx::Canvas* canvas,
+     canvas->sk_canvas()->drawRRect(rounded_rect, flags);
+   } else if (paint_as_selected) {
+     gfx::Rect item_bounds = GetLocalBounds();
+-    if (menu_item_background_.has_value()) {
++    if (menu_item_background_.has_value() || config.item_corner_radius) {
+       item_bounds.Inset(gfx::Insets::VH(0, GetItemHorizontalBorder()));
+     }
+     if (type_ == Type::kActionableSubMenu) {
+@@ -1324,8 +1331,9 @@ void MenuItemView::PaintMinorIconAndText(gfx::Canvas* canvas, SkColor color) {
+ 
+   if (!minor_text.empty()) {
+     render_text->SetText(minor_text);
+-    render_text->SetFontList(GetFontList());
++    render_text->SetFontList(GetFontList().DeriveWithSizeDelta(-2));
+     render_text->SetColor(color);
++    render_text->set_subpixel_rendering_suppressed(true);
+     render_text->SetDisplayRect(minor_text_bounds);
+     render_text->SetHorizontalAlignment(base::i18n::IsRTL() ? gfx::ALIGN_LEFT
+                                                             : gfx::ALIGN_RIGHT);
+@@ -1507,7 +1515,10 @@ MenuItemView::MenuItemDimensions MenuItemView::CalculateDimensions() const {
+   // Determine the length of the right-side text.
+   std::u16string minor_text = GetMinorText();
+   dimensions.minor_text_width =
+-      (minor_text.empty() ? 0 : gfx::GetStringWidth(minor_text, font_list));
++      (minor_text.empty()
++           ? 0
++           : gfx::GetStringWidth(minor_text,
++                                 font_list.DeriveWithSizeDelta(-2)));
+   if (int minor_icon_width = minor_icon_.Size().width()) {
+     if (dimensions.minor_text_width) {
+       dimensions.minor_text_width += config.item_horizontal_padding;
+@@ -1662,7 +1673,7 @@ void MenuItemView::UpdateSelectionBasedState(bool paint_as_selected) {
        delegate->IsItemChecked(GetCommand())) {
      radio_check_image_view_->SetImage(ui::ImageModel::FromVectorIcon(
          features::IsRoundedIconsEnabled() ? kCheckSmallIcon : kMenuCheckOldIcon,
@@ -13227,7 +13416,7 @@ index f22907bb8d..059ed3166a 100644
    } else if (type_ == Type::kRadio) {
      const bool toggled = delegate && delegate->IsItemChecked(GetCommand());
      const gfx::VectorIcon& radio_icon =
-@@ -1737,7 +1737,7 @@ int MenuItemView::CalculateIconX(const ImageView* icon_view) const {
+@@ -1737,7 +1748,7 @@ int MenuItemView::CalculateIconX(const ImageView* icon_view) const {
    if (icon_view == radio_check_image_view_) {
      // The check/radio icon is always placed at the start of the content area
      // (the gutter), aligned left.
@@ -13271,10 +13460,19 @@ index 365de1cfbe..e62d87951e 100644
    // `vertical_margin_` is not set.
    int GetVerticalMargin() const;
 diff --git a/ui/views/controls/menu/submenu_view.cc b/ui/views/controls/menu/submenu_view.cc
-index 68ba7ecfc9..deaf458d14 100644
+index 68ba7ecfc9..04ec4e0e8d 100644
 --- a/ui/views/controls/menu/submenu_view.cc
 +++ b/ui/views/controls/menu/submenu_view.cc
-@@ -163,7 +163,10 @@ void SubmenuView::UpdateMenuPartSizes() {
+@@ -46,6 +46,8 @@ namespace {
+ // Height of the drop indicator. This should be an even number.
+ constexpr int kDropIndicatorHeight = 2;
+ 
++constexpr int kMinorTextLeadingPadding = 24;
++
+ template <typename MIV, typename V>
+ std::vector<MIV*> GetMenuItemsFromChildren(const View::Views& children) {
+   std::vector<MIV*> menu_items;
+@@ -163,7 +165,10 @@ void SubmenuView::UpdateMenuPartSizes() {
      icon_area_width_ = std::max(icon_area_width_, max_icon_width);
    }
  
@@ -13286,6 +13484,62 @@ index 68ba7ecfc9..deaf458d14 100644
    if (icon_area_width_) {
      const auto* const controller = parent_menu_item_->GetMenuController();
      label_start_ += (controller && controller->use_ash_system_ui_layout())
+@@ -225,19 +230,17 @@ void SubmenuView::Layout(PassKey) {
+   const int menu_item_width = width() - insets.width();
+   const int between_item_vertical_padding =
+       MenuConfig::instance().between_item_vertical_padding;
+-  bool previous_child_was_lower_separator = false;
++  bool previous_child_was_separator = false;
+   for (View* child : children()) {
+     if (child->GetVisible()) {
+-      const auto* separator = AsViewClass<MenuSeparator>(child);
+-      if (y != insets.top() && !previous_child_was_lower_separator &&
+-          (!separator || separator->GetType() != ui::UPPER_SEPARATOR)) {
++      const bool separator = IsViewClass<MenuSeparator>(child);
++      if (y != insets.top() && !previous_child_was_separator && !separator) {
+         y += between_item_vertical_padding;
+       }
+       child->SetBounds(x, y, menu_item_width,
+                        child->GetHeightForWidth(menu_item_width));
+       y = child->bounds().bottom();
+-      previous_child_was_lower_separator =
+-          separator && separator->GetType() == ui::LOWER_SEPARATOR;
++      previous_child_was_separator = separator;
+     }
+   }
+ }
+@@ -281,7 +284,7 @@ gfx::Size SubmenuView::CalculatePreferredSize(
+   }
+   const auto& config = MenuConfig::instance();
+   if (max_minor_text_width_ > 0) {
+-    max_minor_text_width_ += config.item_horizontal_padding;
++    max_minor_text_width_ += kMinorTextLeadingPadding;
+   }
+ 
+   // Finish calculating our optimum width.
+@@ -298,18 +301,16 @@ gfx::Size SubmenuView::CalculatePreferredSize(
+ 
+   // Then, the height for that width.
+   const int menu_item_width = width - insets.width();
+-  bool previous_child_was_lower_separator = false;
++  bool previous_child_was_separator = false;
+   const auto get_height = [&](int height, const View* child) {
+     if (!child->GetVisible()) {
+       return height;
+     }
+-    const auto* separator = AsViewClass<MenuSeparator>(child);
+-    if (height && !previous_child_was_lower_separator &&
+-        (!separator || separator->GetType() != ui::UPPER_SEPARATOR)) {
++    const bool separator = IsViewClass<MenuSeparator>(child);
++    if (height && !previous_child_was_separator && !separator) {
+       height += config.between_item_vertical_padding;
+     }
+-    previous_child_was_lower_separator =
+-        separator && separator->GetType() == ui::LOWER_SEPARATOR;
++    previous_child_was_separator = separator;
+     return height + child->GetHeightForWidth(menu_item_width);
+   };
+   const int height =
 diff --git a/ui/views/controls/menu/submenu_view.h b/ui/views/controls/menu/submenu_view.h
 index 4861722e75..d5c9192273 100644
 --- a/ui/views/controls/menu/submenu_view.h

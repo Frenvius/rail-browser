@@ -5,6 +5,7 @@
 
 #include "chrome/browser/ui/webui_browser/rail/rail_system_backdrop_controller.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/gfx/native_ui_types.h"
 
 namespace views {
 class Widget;
@@ -28,6 +29,15 @@ void RevealAcrylic(views::Widget* target,
                    SystemBackdropController* backdrop,
                    int start_offset,
                    bool wait_for_frame = true);
+
+void PrepareMenuWindow(gfx::AcceleratedWidget hwnd, views::Widget* widget);
+
+void ConcealMenuWindow(views::Widget* widget);
+
+void RevealMenu(views::Widget* target,
+                SystemBackdropController* backdrop,
+                bool submenu,
+                bool from_bottom);
 
 void WarmAcrylic(views::Widget* target, SystemBackdropController* backdrop);
 

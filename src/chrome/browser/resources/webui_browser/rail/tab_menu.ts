@@ -71,12 +71,17 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
                        []),
     !!target.tabId && target.hasOthers &&
         {command: 'new-window', label: 'New Window'},
-    !!target.tabId && {command: 'mini-window', label: 'Mini Window'},
+    !!target.tabId && {
+      command: 'mini-window',
+      label: 'Mini Window',
+      accelerator: 'Ctrl+Alt+M',
+    },
   ]);
   return menuItems([
     {label: 'Tab Context Menu'},
     single && {command: 'copy-link', label: 'Copy Link'},
-    single && !target.dormant && {command: 'reload', label: 'Reload'},
+    single && !target.dormant &&
+        {command: 'reload', label: 'Reload', accelerator: 'Ctrl+R'},
     !target.dormant && {
       command: 'mute',
       label: target.muted ? 'Unmute' : 'Mute',
@@ -121,6 +126,7 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
     {
       command: 'close',
       label: target.dormant ? 'Remove' : `Close ${noun(target)}`,
+      accelerator: single && !target.dormant ? 'Ctrl+W' : undefined,
     },
     target.hasRight && single &&
         {command: 'close-right', label: 'Close Tabs Below'},

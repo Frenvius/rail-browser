@@ -12,6 +12,8 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/insets.h"
 
+class SkBitmap;
+
 namespace views {
 class Widget;
 }
@@ -50,6 +52,11 @@ class SystemBackdropController {
   void SetActive(bool active);
   void SetDarkMode(bool dark_mode);
   void PlayReveal(float offset_y, base::TimeDelta duration);
+  bool PlayDrawerReveal(const SkBitmap& content,
+                        float hidden_fraction,
+                        bool from_bottom,
+                        base::TimeDelta duration);
+  void ClearDrawerContent();
   void HideReveal();
   void UpdateClip();
   base::WeakPtr<SystemBackdropController> GetWeakPtr();
