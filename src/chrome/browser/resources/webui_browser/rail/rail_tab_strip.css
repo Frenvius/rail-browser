@@ -438,6 +438,28 @@ webui-browser-tab {
   visibility: hidden;
 }
 
+.tidygroup:not([data-expanded]):has(webui-browser-tab[active])
+    .tidygroup-children {
+  height: auto;
+  opacity: 1;
+  transition: height 200ms cubic-bezier(0.42, 0, 0, 1),
+      opacity 200ms cubic-bezier(0.42, 0, 0, 1), visibility 0s;
+  visibility: visible;
+}
+
+@container not style(--rail-sidebar-icons: 1) {
+  .tidygroup:not([data-expanded]) .tidygroup-children
+      > webui-browser-tab:not([active]) {
+    display: none;
+    transition: display 0s 200ms allow-discrete;
+  }
+
+  .tidygroup:not([data-expanded]):has(webui-browser-tab[active])
+      .tidygroup-children > webui-browser-tab:not([active]) {
+    transition: none;
+  }
+}
+
 .folder-icon {
   --folder-stroke: color-mix(in srgb, var(--rail-accent, #7c5cfc) 45%,
       var(--rail-text-dim, #b4b4b4));

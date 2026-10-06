@@ -6082,7 +6082,7 @@ index 65d7e76ce5..5fc58ecfb7 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..fdab50efda 100644
+index aa4e0fe69e..3bc63c5f3a 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6609,7 +6609,7 @@ index aa4e0fe69e..fdab50efda 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +621,1640 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +621,1644 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -8140,15 +8140,17 @@ index aa4e0fe69e..fdab50efda 100644
 +        slots.push({id, kind: 'group', group: ''});
 +        continue;
 +      }
++      const expanded = entry.section.group.expanded;
++      const shown = expanded ?
++          entry.section.items :
++          entry.section.items.filter(item => item.id === this.activeTab_);
 +      slots.push({
 +        id,
 +        kind: 'header',
-+        group: entry.section.group.expanded ? id : '',
++        group: expanded || shown.length ? id : '',
 +      });
-+      if (entry.section.group.expanded) {
-+        for (const item of entry.section.items) {
-+          slots.push({id: item.id, kind: 'tab', group: id});
-+        }
++      for (const item of shown) {
++        slots.push({id: item.id, kind: 'tab', group: id});
 +      }
 +    }
 +    return slots;
@@ -8198,9 +8200,11 @@ index aa4e0fe69e..fdab50efda 100644
 +      if (slot.kind !== 'tab') {
 +        continue;
 +      }
-+      this.spaces_.setGroup(slot.id, slot.group);
 +      const group = slot.group ? this.tidyGroups_.byId(slot.group) : undefined;
-+      if (group && !group.expanded) {
++      const joining =
++          group && !this.spaces_.keysInGroup(group.id).includes(slot.id);
++      this.spaces_.setGroup(slot.id, slot.group);
++      if (group && joining && !group.expanded) {
 +        this.tidyGroups_.toggle(group.id);
 +      }
 +    }
