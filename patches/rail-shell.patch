@@ -9249,7 +9249,7 @@ index 806ff8ed9e..739ef0e7ad 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..7f55117f6b 100644
+index 3d4fe27f4f..02dde0411b 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,21 @@ source_set("headers") {
@@ -9371,8 +9371,11 @@ index 3d4fe27f4f..7f55117f6b 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/zoom:browser_window_zoom_observer",
      "//chrome/common:chrome_features",
-@@ -118,8 +186,14 @@ source_set("impl") {
+@@ -116,10 +184,18 @@ source_set("impl") {
+     "//components/guest_contents/browser",
+     "//components/input",
      "//components/omnibox/browser:vector_icons",
++    "//components/security_state/content",
      "//components/sharing_message",
      "//components/surface_embed/common",
 +    "//components/viz/common",
@@ -9383,10 +9386,11 @@ index 3d4fe27f4f..7f55117f6b 100644
 +    "//services/network/public/cpp",
      "//services/network/public/mojom",
 +    "//third_party/blink/renderer/core/rail:mojom",
++    "//third_party/blink/renderer/core/rail:sampler",
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -140,6 +214,14 @@ source_set("impl") {
+@@ -140,6 +216,14 @@ source_set("impl") {
      ]
    }
  
@@ -9401,7 +9405,7 @@ index 3d4fe27f4f..7f55117f6b 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -149,11 +231,15 @@ mojom("browser_mojo_bindings") {
+@@ -149,11 +233,15 @@ mojom("browser_mojo_bindings") {
    sources = [
      "bookmark_bar.mojom",
      "browser.mojom",
@@ -9418,7 +9422,7 @@ index 3d4fe27f4f..7f55117f6b 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..4622b9331d 100644
+index 15a65f7152..80d4426667 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -9497,7 +9501,7 @@ index 15a65f7152..4622b9331d 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,37 @@ interface Page {
+@@ -44,6 +91,38 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -9524,7 +9528,8 @@ index 15a65f7152..4622b9331d 100644
 +
 +  OnThemedTitlebarChanged(bool themed);
 +
-+  OnPageColorChanged(tabs_api.mojom.NodeId tab, bool has_color, uint32 color);
++  OnPageColorChanged(tabs_api.mojom.NodeId tab, bool has_color, uint32 color,
++                     bool? animated);
 +
 +  OnSidebarContextMenu(gfx.mojom.Point point);
 +
@@ -9535,7 +9540,7 @@ index 15a65f7152..4622b9331d 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -55,7 +133,7 @@ interface PageHandler {
+@@ -55,7 +134,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -9544,7 +9549,7 @@ index 15a65f7152..4622b9331d 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +168,80 @@ interface PageHandler {
+@@ -90,6 +169,80 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -9814,7 +9819,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..68f7b0ce03 100644
+index 3ba14e7289..d723661fc0 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -9825,7 +9830,7 @@ index 3ba14e7289..68f7b0ce03 100644
  #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
-@@ -26,10 +27,23 @@
+@@ -26,12 +27,25 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
@@ -9833,22 +9838,24 @@ index 3ba14e7289..68f7b0ce03 100644
 +#include "chrome/browser/ui/webui_browser/rail/rail_default_browser.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_drag_ghost.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_menu.h"
-+#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
-+#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_audio.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_opener.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_sleep.h"
-+#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_transfer.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
  #include "components/browser_apis/tab_strip/types/node_id.h"
  #include "components/guest_contents/browser/guest_contents_handle.h"
-+#include "components/tabs/public/tab_interface.h"
  #include "components/omnibox/browser/location_bar_model.h"
  #include "components/omnibox/browser/vector_icons.h"
++#include "components/tabs/public/tab_interface.h"
  #include "components/vector_icons/vector_icons.h"
+ #include "content/public/browser/devtools_agent_host.h"
+ #include "content/public/browser/navigation_controller.h"
 @@ -198,12 +212,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
    }
  
@@ -9940,16 +9947,15 @@ index 3ba14e7289..68f7b0ce03 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +415,280 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +415,276 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
 +void WebUIBrowserPageHandler::GetSidebarState(
 +    GetSidebarStateCallback callback) {
 +  Browser* browser = GetBrowser();
-+  std::move(callback).Run(
-+      rail::GetSidebarState(browser ? browser->profile()->GetPrefs()
-+                                    : nullptr));
++  std::move(callback).Run(rail::GetSidebarState(
++      browser ? browser->profile()->GetPrefs() : nullptr));
 +}
 +
 +void WebUIBrowserPageHandler::SetSidebarState(const std::string& value) {
@@ -9984,8 +9990,8 @@ index 3ba14e7289..68f7b0ce03 100644
 +void WebUIBrowserPageHandler::GetThemedTitlebar(
 +    GetThemedTitlebarCallback callback) {
 +  Browser* browser = GetBrowser();
-+  bool themed = rail::GetThemedTitlebar(
-+      browser ? browser->profile()->GetPrefs() : nullptr);
++  bool themed = rail::GetThemedTitlebar(browser ? browser->profile()->GetPrefs()
++                                                : nullptr);
 +  TrackPageColor(themed);
 +  std::move(callback).Run(themed);
 +}
@@ -10013,12 +10019,12 @@ index 3ba14e7289..68f7b0ce03 100644
 +  }
 +}
 +
-+void WebUIBrowserPageHandler::OnPageColorChanged(
-+    const tabs_api::NodeId& tab,
-+    std::optional<SkColor> color) {
++void WebUIBrowserPageHandler::OnPageColorChanged(const tabs_api::NodeId& tab,
++                                                 std::optional<SkColor> color,
++                                                 std::optional<bool> animated) {
 +  if (controller_) {
 +    controller_->page()->OnPageColorChanged(
-+        tab, color.has_value(), color.value_or(SK_ColorTRANSPARENT));
++        tab, color.has_value(), color.value_or(SK_ColorTRANSPARENT), animated);
 +  }
 +}
 +
@@ -10027,10 +10033,10 @@ index 3ba14e7289..68f7b0ce03 100644
 +    const gfx::Point& grab_offset,
 +    const std::vector<tabs_api::NodeId>& ids) {
 +  rail::DragGhostObserver observer;
-+  observer.moved = base::BindRepeating(
-+      &WebUIBrowserPageHandler::OnTabDragMoved, weak_factory_.GetWeakPtr());
-+  observer.ended = base::BindRepeating(
-+      &WebUIBrowserPageHandler::OnTabDragEnded, weak_factory_.GetWeakPtr());
++  observer.moved = base::BindRepeating(&WebUIBrowserPageHandler::OnTabDragMoved,
++                                       weak_factory_.GetWeakPtr());
++  observer.ended = base::BindRepeating(&WebUIBrowserPageHandler::OnTabDragEnded,
++                                       weak_factory_.GetWeakPtr());
 +  rail::StartDragGhost(
 +      GetBrowser(),
 +      content::WebContents::FromRenderFrameHost(&render_frame_host()), row,
@@ -10047,9 +10053,8 @@ index 3ba14e7289..68f7b0ce03 100644
 +  return profile;
 +}
 +
-+void ReplyWithTab(
-+    WebUIBrowserPageHandler::CreateTabInProfileCallback callback,
-+    content::WebContents* contents) {
++void ReplyWithTab(WebUIBrowserPageHandler::CreateTabInProfileCallback callback,
++                  content::WebContents* contents) {
 +  tabs::TabInterface* tab =
 +      contents ? tabs::TabInterface::GetFromContents(contents) : nullptr;
 +  std::move(callback).Run(
@@ -10058,9 +10063,8 @@ index 3ba14e7289..68f7b0ce03 100644
 +          : std::nullopt);
 +}
 +
-+void ReplyWithProfile(
-+    WebUIBrowserPageHandler::CreateProfileCallback callback,
-+    std::optional<rail::ProfileEntry> entry) {
++void ReplyWithProfile(WebUIBrowserPageHandler::CreateProfileCallback callback,
++                      std::optional<rail::ProfileEntry> entry) {
 +  std::move(callback).Run(entry ? ToMojoProfile(*entry) : nullptr);
 +}
 +
@@ -10175,8 +10179,7 @@ index 3ba14e7289..68f7b0ce03 100644
 +    int32_t window_id,
 +    const std::vector<tabs_api::NodeId>& ids,
 +    MoveTabsToWindowCallback callback) {
-+  std::move(callback).Run(
-+      rail::MoveTabsToWindow(GetBrowser(), window_id, ids));
++  std::move(callback).Run(rail::MoveTabsToWindow(GetBrowser(), window_id, ids));
 +}
 +
 +void WebUIBrowserPageHandler::TakeTab(const tabs_api::NodeId& id,
@@ -10221,7 +10224,7 @@ index 3ba14e7289..68f7b0ce03 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -339,7 +696,24 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -339,7 +692,23 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -10235,9 +10238,8 @@ index 3ba14e7289..68f7b0ce03 100644
 +                            weak_factory_.GetWeakPtr()));
 +    sidebar_state_registrar_.Add(
 +        rail::kSidebarIconsOnlyPref,
-+        base::BindRepeating(
-+            &WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged,
-+            weak_factory_.GetWeakPtr()));
++        base::BindRepeating(&WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged,
++                            weak_factory_.GetWeakPtr()));
 +    sidebar_state_registrar_.Add(
 +        rail::kThemedTitlebarPref,
 +        base::BindRepeating(&WebUIBrowserPageHandler::OnThemedTitlebarChanged,
@@ -10248,7 +10250,7 @@ index 3ba14e7289..68f7b0ce03 100644
  Browser* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..347db14711 100644
+index 859da4ef00..96ef99d01d 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -9,8 +9,11 @@
@@ -10274,7 +10276,7 @@ index 859da4ef00..347db14711 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +63,79 @@ class WebUIBrowserPageHandler
+@@ -56,8 +63,80 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -10346,7 +10348,8 @@ index 859da4ef00..347db14711 100644
 +  void OnThemedTitlebarChanged();
 +  void TrackPageColor(bool themed);
 +  void OnPageColorChanged(const tabs_api::NodeId& tab,
-+                          std::optional<SkColor> color);
++                          std::optional<SkColor> color,
++                          std::optional<bool> animated);
 +
 +  void OnTabDragMoved(const gfx::Point& point);
 +  void OnTabDragEnded(const gfx::Point& point, bool inside);
@@ -10354,7 +10357,7 @@ index 859da4ef00..347db14711 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +147,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +148,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -10363,7 +10366,7 @@ index 859da4ef00..347db14711 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -77,11 +157,17 @@ class WebUIBrowserPageHandler
+@@ -77,11 +158,17 @@ class WebUIBrowserPageHandler
    std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
  
    std::unique_ptr<content::WebContents> glic_contents_;

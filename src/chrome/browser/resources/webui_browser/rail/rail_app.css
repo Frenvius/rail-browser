@@ -625,9 +625,12 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   padding-top: 6px;
 }
 
-:host([titlebar-themed]) .titlebarDiv::before,
-:host([titlebar-themed]) .titlebarDiv::after {
+:host([titlebar-themed]) .titlebarDiv::before {
+  background: var(--rail-page-color, transparent);
   border-radius: 8px 8px 0 0;
+  box-shadow: 0 0 8px rgb(0 0 0 / 50%),
+      inset 0 -1px var(--rail-page-separator, transparent);
+  clip-path: inset(-8px -8px 0 -8px);
   bottom: 0;
   content: '';
   left: var(--rail-content-left);
@@ -635,75 +638,42 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   position: absolute;
   right: var(--rail-content-right);
   top: 6px;
+  transition: background-color var(--rail-page-transition, 0ms) linear,
+      left var(--rail-sidebar-transition, 0ms) cubic-bezier(.2, 0, 0, 1);
   z-index: -1;
 }
 
-:host([titlebar-themed]) {
-  --rail-page-divider-shift: 3;
-  --rail-page-ink: 255 255 255;
-}
-
-:host([titlebar-themed][page-color-light]) {
-  --rail-page-divider-shift: -3;
-  --rail-page-ink: 0 0 0;
-}
-
-:host([titlebar-themed]) .titlebarDiv::before {
-  background: var(--rail-page-color, transparent);
-  box-shadow: 0 0 8px rgb(0 0 0 / 50%),
-      inset 0 -1px hsl(from var(--rail-page-color, transparent) h s
-          clamp(10, l + var(--rail-page-divider-shift), 95));
-  clip-path: inset(-8px -8px 0 -8px);
-}
-
-:host([titlebar-themed]) .titlebarDiv::after {
-  background: var(--rail-page-color-from, transparent);
-  box-shadow: inset 0 -1px hsl(from var(--rail-page-color-from, transparent) h
-      s clamp(10, l + var(--rail-page-divider-shift), 95));
-  opacity: 0;
-}
-
-:host([titlebar-themed][page-color-fade='out-a']) .titlebarDiv::after {
-  animation: rail-page-color-fade-a 220ms ease-out;
-}
-
-:host([titlebar-themed][page-color-fade='out-b']) .titlebarDiv::after {
-  animation: rail-page-color-fade-b 220ms ease-out;
-}
-
-:host([titlebar-themed][page-color-fade='in-a']) .titlebarDiv::before {
-  animation: rail-page-color-fade-a 220ms ease-out reverse;
-}
-
-:host([titlebar-themed][page-color-fade='in-b']) .titlebarDiv::before {
-  animation: rail-page-color-fade-b 220ms ease-out reverse;
-}
-
-@keyframes rail-page-color-fade-a {
-  from {
-    opacity: 1;
-  }
-
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes rail-page-color-fade-b {
-  from {
-    opacity: 1;
-  }
-
-  to {
-    opacity: 0;
-  }
+:host([titlebar-themed][page-color-animated]) {
+  --rail-page-transition: 150ms;
 }
 
 :host([titlebar-themed][sidebar-animate]:not([sidebar-resizing]))
-    .titlebarDiv::before,
-:host([titlebar-themed][sidebar-animate]:not([sidebar-resizing]))
-    .titlebarDiv::after {
-  transition: left 180ms cubic-bezier(.2, 0, 0, 1);
+    .titlebarDiv::before {
+  --rail-sidebar-transition: 180ms;
+}
+
+:host([titlebar-themed][page-color-light]) #addressBox,
+:host([titlebar-themed][page-color-dark]) #addressBox {
+  background-color: var(--rail-page-capsule-background);
+  transition: background-color var(--rail-page-transition, 0ms) linear;
+}
+
+:host([titlebar-themed][page-color-light]) #addressBox:hover,
+:host([titlebar-themed][page-color-dark]) #addressBox:hover {
+  background-color: var(--rail-page-capsule-background-hovered);
+  box-shadow: inset 0 0 0 1px var(--rail-page-border-hovered);
+  transition: none;
+}
+
+:host([titlebar-themed][page-color-light]) #addressBox:active,
+:host([titlebar-themed][page-color-dark]) #addressBox:active {
+  background-color: var(--rail-page-capsule-background-pressed);
+  transition: none;
+}
+
+:host([titlebar-themed][page-color-light]) #addressText,
+:host([titlebar-themed][page-color-dark]) #addressText {
+  color: var(--rail-page-foreground-primary);
 }
 
 :host([titlebar-themed]) #railLogoHit {
@@ -725,18 +695,38 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   clip-path: inset(0 -8px -8px -8px);
 }
 
+:host([titlebar-themed][page-color-light]) .titlebarDiv cr-icon-button,
+:host([titlebar-themed][page-color-dark]) .titlebarDiv cr-icon-button {
+  --cr-icon-button-fill-color: var(--rail-page-foreground-primary);
+  transition: none;
+}
+
+:host([titlebar-themed][page-color-light]) .titlebarDiv cr-icon-button[disabled],
+:host([titlebar-themed][page-color-dark]) .titlebarDiv cr-icon-button[disabled] {
+  --cr-icon-button-fill-color: var(--rail-page-foreground-secondary);
+  opacity: 1;
+}
+
+:host([titlebar-themed][page-color-light])
+    .caption-button:not(:last-child:hover),
+:host([titlebar-themed][page-color-dark])
+    .caption-button:not(:last-child:hover) {
+  --iron-icon-stroke-color: var(--rail-page-foreground-primary);
+  color: var(--rail-page-foreground-primary);
+}
+
 :host([titlebar-themed][page-color-light]) .titlebarDiv > :not(#railLogoHit),
 :host([titlebar-themed][page-color-dark]) .titlebarDiv > :not(#railLogoHit),
 :host([titlebar-themed][page-color-light][sidebar-collapsed]:not(
     [sidebar-icons-only])) #railLogoHit,
 :host([titlebar-themed][page-color-dark][sidebar-collapsed]:not(
     [sidebar-icons-only])) #railLogoHit {
-  --color-toolbar-button-icon: rgb(var(--rail-page-ink) / 70%);
-  --rail-border: rgb(var(--rail-page-ink) / 14%);
-  --rail-hover: rgb(var(--rail-page-ink) / 8%);
-  --rail-hover-strong: rgb(var(--rail-page-ink) / 14%);
-  --rail-text: rgb(var(--rail-page-ink));
-  --rail-text-dim: rgb(var(--rail-page-ink) / 70%);
+  --color-toolbar-button-icon: var(--rail-page-foreground-primary);
+  --rail-border: var(--rail-page-border);
+  --rail-hover: var(--rail-page-background-hovered);
+  --rail-hover-strong: var(--rail-page-capsule-background-pressed);
+  --rail-text: var(--rail-page-foreground-primary);
+  --rail-text-dim: var(--rail-page-foreground-secondary);
 }
 
 :host([titlebar-themed][page-color-light]) .titlebarDiv > :not(#railLogoHit),

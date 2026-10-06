@@ -1,5 +1,13 @@
 module rail.mojom;
 
+struct TopBandColorState {
+  uint32? color;
+  bool needs_sampling;
+  uint64 sample_token;
+  bool reuse_last_sample;
+  bool transition;
+};
+
 interface TopBandColorHost {
-  SetTopBandColor(uint32? color);
+  SetTopBandColor(TopBandColorState state);
 };

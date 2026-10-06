@@ -1,46 +1,71 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_page_color.h"
 
-#include <memory>
+#include <algorithm>
 #include <set>
-#include <vector>
+#include <utility>
 
 #include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
-#include "base/supports_user_data.h"
-#include "base/time/time.h"
+#include "base/numerics/safe_conversions.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/security_state/content/content_utils.h"
 #include "components/tabs/public/tab_interface.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/public/browser/document_user_data.h"
 #include "content/public/browser/render_frame_host.h"
-#include "content/public/browser/visibility.h"
+#include "content/public/browser/render_widget_host.h"
+#include "content/public/browser/render_widget_host_observer.h"
+#include "content/public/browser/render_widget_host_view.h"
+#include "content/public/browser/weak_document_ptr.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_user_data.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/renderer/core/rail/top_band_color.mojom.h"
-#include "third_party/skia/include/core/SkBitmap.h"
-#include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/geometry/size.h"
+#include "third_party/blink/renderer/core/rail/top_band_color_sampler.h"
 
 namespace rail {
 
 namespace {
 
-const char kCachedPageColorKey[] = "rail_page_color";
-constexpr int kSampleHeight = 4;
-constexpr base::TimeDelta kPollInterval = base::Milliseconds(150);
-constexpr base::TimeDelta kCopyTimeout = base::Seconds(1);
+bool IsPageColorAllowed(content::WebContents* contents) {
+  auto security = security_state::GetVisibleSecurityState(contents);
+  auto level = security_state::GetSecurityLevel(*security);
+  return level == security_state::NONE || level == security_state::SECURE;
+}
 
-struct CachedPageColor : public base::SupportsUserData::Data {
-  explicit CachedPageColor(SkColor color) : color(color) {}
-  SkColor color;
+class CommittedPageColor
+    : public content::WebContentsUserData<CommittedPageColor> {
+ public:
+  std::optional<SkColor> color;
+  content::WeakDocumentPtr document;
+  bool allowed = false;
+  bool has_sampled = false;
+
+ private:
+  explicit CommittedPageColor(content::WebContents* contents)
+      : WebContentsUserData(*contents) {}
+
+  friend WebContentsUserData;
+  WEB_CONTENTS_USER_DATA_KEY_DECL();
 };
+
+WEB_CONTENTS_USER_DATA_KEY_IMPL(CommittedPageColor);
 
 class TopBandColorDocument
     : public content::DocumentUserData<TopBandColorDocument>,
-      public mojom::TopBandColorHost {
+      public mojom::TopBandColorHost,
+      public content::RenderWidgetHost::InputEventObserver,
+      public content::RenderWidgetHostObserver {
  public:
-  ~TopBandColorDocument() override = default;
+  ~TopBandColorDocument() override {
+    if (widget_) {
+      widget_->RemoveInputEventObserver(this);
+      widget_->RemoveObserver(this);
+    }
+  }
 
   void Bind(mojo::PendingAssociatedReceiver<mojom::TopBandColorHost> receiver) {
     receiver_.reset();
@@ -49,20 +74,125 @@ class TopBandColorDocument
 
   std::optional<SkColor> color() const { return color_; }
 
-  void SetTopBandColor(std::optional<uint32_t> color) override {
-    color_ = color;
-    PageColorTracker::OnTopBandColorChanged(&render_frame_host());
+  void SetTopBandColor(mojom::TopBandColorStatePtr state) override {
+    if (!state->needs_sampling) {
+      requested_.reset();
+      Report(state->reuse_last_sample && sampled_color_ ? sampled_color_
+                                                        : state->color);
+      return;
+    }
+    requested_ = std::move(state);
+    SampleIfNeeded();
+  }
+
+  void OnInputEvent(const content::RenderWidgetHost&,
+                    const blink::WebInputEvent& event,
+                    InputEventSource) override {
+    if (event.GetType() == blink::WebInputEvent::Type::kGestureScrollBegin) {
+      scrolling_ = true;
+      discard_capture_ = capturing_.has_value();
+    } else if (event.GetType() ==
+               blink::WebInputEvent::Type::kGestureScrollEnd) {
+      scrolling_ = false;
+      SampleIfNeeded();
+    }
+  }
+
+  void RenderWidgetHostDestroyed(content::RenderWidgetHost* widget) override {
+    widget->RemoveInputEventObserver(this);
+    widget->RemoveObserver(this);
+    widget_ = nullptr;
+    capturing_.reset();
+    weak_factory_.InvalidateWeakPtrs();
   }
 
  private:
   explicit TopBandColorDocument(content::RenderFrameHost* render_frame_host)
-      : DocumentUserData(render_frame_host) {}
+      : DocumentUserData(render_frame_host),
+        widget_(render_frame_host->GetRenderWidgetHost()) {
+    auto* contents =
+        content::WebContents::FromRenderFrameHost(render_frame_host);
+    if (contents && contents->GetPrimaryMainFrame() == render_frame_host) {
+      CommittedPageColor::GetOrCreateForWebContents(contents)->has_sampled =
+          false;
+    }
+    if (widget_) {
+      widget_->AddInputEventObserver(this);
+      widget_->AddObserver(this);
+    }
+  }
+
+  void Report(std::optional<SkColor> color) {
+    if (has_reported_ && color_ == color) {
+      return;
+    }
+    color_ = color;
+    has_reported_ = true;
+    PageColorTracker::OnTopBandColorChanged(&render_frame_host());
+  }
+
+  void SampleIfNeeded() {
+    if (!requested_ || scrolling_ || capturing_) {
+      return;
+    }
+    uint64_t token = requested_->sample_token;
+    if (sampled_token_ == token) {
+      requested_.reset();
+      Report(sampled_color_);
+      return;
+    }
+    content::RenderWidgetHostView* view = render_frame_host().GetView();
+    if (!view || view->GetViewBounds().width() <= 0) {
+      return;
+    }
+    capturing_ = token;
+    discard_capture_ = false;
+    view->CopyFromSurface(
+        gfx::Rect(0, 0, view->GetViewBounds().width(), kSampleBandHeight),
+        gfx::Size(), base::TimeDelta(),
+        base::BindOnce(&TopBandColorDocument::OnSampled,
+                       weak_factory_.GetWeakPtr(), token,
+                       view->GetDeviceScaleFactor()));
+  }
+
+  void OnSampled(uint64_t token,
+                 float scale,
+                 const content::CopyFromSurfaceResult& result) {
+    if (capturing_ != token) {
+      return;
+    }
+    capturing_.reset();
+    bool discard = std::exchange(discard_capture_, false);
+    if (!discard && !scrolling_ && requested_ &&
+        requested_->sample_token == token) {
+      sampled_token_ = token;
+      sampled_color_ =
+          result.has_value()
+              ? FlatBandColor(
+                    result->bitmap,
+                    std::max(1, base::ClampRound(kSampleBandHeight * scale)),
+                    base::ClampRound(kSampleRightInset * scale))
+              : std::nullopt;
+      requested_.reset();
+      Report(sampled_color_);
+    }
+    SampleIfNeeded();
+  }
 
   friend DocumentUserData;
   DOCUMENT_USER_DATA_KEY_DECL();
 
   mojo::AssociatedReceiver<mojom::TopBandColorHost> receiver_{this};
+  raw_ptr<content::RenderWidgetHost> widget_ = nullptr;
+  mojom::TopBandColorStatePtr requested_;
+  std::optional<uint64_t> capturing_;
+  std::optional<uint64_t> sampled_token_;
+  std::optional<SkColor> sampled_color_;
   std::optional<SkColor> color_;
+  bool scrolling_ = false;
+  bool discard_capture_ = false;
+  bool has_reported_ = false;
+  base::WeakPtrFactory<TopBandColorDocument> weak_factory_{this};
 };
 
 DOCUMENT_USER_DATA_KEY_IMPL(TopBandColorDocument);
@@ -70,60 +200,6 @@ DOCUMENT_USER_DATA_KEY_IMPL(TopBandColorDocument);
 std::set<PageColorTracker*>& Trackers() {
   static base::NoDestructor<std::set<PageColorTracker*>> trackers;
   return *trackers;
-}
-
-std::optional<SkColor> CachedColor(content::WebContents* contents) {
-  auto* cached = static_cast<CachedPageColor*>(
-      contents->GetUserData(kCachedPageColorKey));
-  return cached ? std::optional<SkColor>(cached->color) : std::nullopt;
-}
-
-std::optional<SkColor> SolidColor(content::WebContents* contents) {
-  auto* document = TopBandColorDocument::GetForCurrentDocument(
-      contents->GetPrimaryMainFrame());
-  return document ? document->color() : std::nullopt;
-}
-
-bool HasPainted(content::WebContents* contents) {
-  return contents->CompletedFirstVisuallyNonEmptyPaint() ||
-         TopBandColorDocument::GetForCurrentDocument(
-             contents->GetPrimaryMainFrame()) != nullptr;
-}
-
-std::optional<SkColor> DominantColor(const SkBitmap& bitmap) {
-  struct Bucket {
-    int count = 0;
-    int64_t r = 0;
-    int64_t g = 0;
-    int64_t b = 0;
-  };
-  std::vector<Bucket> buckets(4096);
-  int best = -1;
-  for (int y = 0; y < bitmap.height(); ++y) {
-    for (int x = 0; x < bitmap.width(); ++x) {
-      SkColor color = bitmap.getColor(x, y);
-      if (SkColorGetA(color) != SK_AlphaOPAQUE) {
-        continue;
-      }
-      int key = (SkColorGetR(color) >> 4) << 8 |
-                (SkColorGetG(color) >> 4) << 4 | SkColorGetB(color) >> 4;
-      Bucket& bucket = buckets[key];
-      ++bucket.count;
-      bucket.r += SkColorGetR(color);
-      bucket.g += SkColorGetG(color);
-      bucket.b += SkColorGetB(color);
-      if (best < 0 || bucket.count > buckets[best].count) {
-        best = key;
-      }
-    }
-  }
-  if (best < 0) {
-    return std::nullopt;
-  }
-  const Bucket& bucket = buckets[best];
-  return SkColorSetRGB(static_cast<U8CPU>(bucket.r / bucket.count),
-                       static_cast<U8CPU>(bucket.g / bucket.count),
-                       static_cast<U8CPU>(bucket.b / bucket.count));
 }
 
 }
@@ -141,10 +217,24 @@ void RegisterTopBandColorHost(content::RenderFrameHost& render_frame_host,
 
 void PageColorTracker::OnTopBandColorChanged(
     content::RenderFrameHost* render_frame_host) {
+  auto* contents = content::WebContents::FromRenderFrameHost(render_frame_host);
+  if (!contents || contents->GetPrimaryMainFrame() != render_frame_host) {
+    return;
+  }
+  auto* document =
+      TopBandColorDocument::GetForCurrentDocument(render_frame_host);
+  if (!document) {
+    return;
+  }
+  auto* committed = CommittedPageColor::GetOrCreateForWebContents(contents);
+  bool animated = committed->has_sampled;
+  committed->color = document->color();
+  committed->document = render_frame_host->GetWeakDocumentPtr();
+  committed->allowed = IsPageColorAllowed(contents);
+  committed->has_sampled = committed->color.has_value();
   for (PageColorTracker* tracker : Trackers()) {
-    content::WebContents* contents = tracker->web_contents();
-    if (contents && contents->GetPrimaryMainFrame() == render_frame_host) {
-      tracker->Refresh();
+    if (tracker->web_contents() == contents) {
+      tracker->Report(animated);
     }
   }
 }
@@ -169,106 +259,48 @@ void PageColorTracker::OnTabStripModelChanged(
   }
 }
 
-void PageColorTracker::DidFirstVisuallyNonEmptyPaint() {
-  Refresh();
-}
-
-void PageColorTracker::PrimaryPageChanged(content::Page& page) {
-  Refresh();
+void PageColorTracker::DidChangeVisibleSecurityState() {
+  Report();
 }
 
 void PageColorTracker::Track(content::WebContents* contents) {
-  weak_factory_.InvalidateWeakPtrs();
-  capturing_ = false;
-  poll_timer_.Stop();
   has_reported_ = false;
   Observe(contents);
-  if (!contents) {
-    return;
-  }
-  if (HasPainted(contents) && !SolidColor(contents)) {
-    Report(CachedColor(contents));
-  }
-  Refresh();
-}
-
-void PageColorTracker::Refresh() {
-  content::WebContents* contents = web_contents();
-  if (!contents) {
-    return;
-  }
-  if (!HasPainted(contents)) {
-    poll_timer_.Stop();
-    Report(std::nullopt);
-    return;
-  }
-  if (std::optional<SkColor> color = SolidColor(contents)) {
-    weak_factory_.InvalidateWeakPtrs();
-    capturing_ = false;
-    poll_timer_.Stop();
-    Report(color);
-    return;
-  }
-  Capture();
-  if (!poll_timer_.IsRunning()) {
-    poll_timer_.Start(FROM_HERE, kPollInterval, this,
-                      &PageColorTracker::Capture);
+  if (contents) {
+    Report();
   }
 }
 
-void PageColorTracker::Capture() {
-  content::WebContents* contents = web_contents();
-  if (!contents || capturing_) {
-    return;
-  }
-  if (!HasPainted(contents)) {
-    Report(std::nullopt);
-    return;
-  }
-  if (contents->GetVisibility() != content::Visibility::VISIBLE) {
-    return;
-  }
-  content::RenderWidgetHostView* view = contents->GetRenderWidgetHostView();
-  if (!view || !view->IsSurfaceAvailableForCopy()) {
-    return;
-  }
-  gfx::Size size = view->GetViewBounds().size();
-  if (size.IsEmpty()) {
-    return;
-  }
-  capturing_ = true;
-  view->CopyFromSurface(
-      gfx::Rect(0, 0, size.width(), kSampleHeight), gfx::Size(), kCopyTimeout,
-      base::BindOnce(&PageColorTracker::OnSampled,
-                     weak_factory_.GetWeakPtr()));
-}
-
-void PageColorTracker::OnSampled(const content::CopyFromSurfaceResult& result) {
-  capturing_ = false;
-  content::WebContents* contents = web_contents();
-  if (!result.has_value() || !contents) {
-    return;
-  }
-  Report(HasPainted(contents) ? DominantColor(result->bitmap) : std::nullopt);
-}
-
-void PageColorTracker::Report(std::optional<SkColor> color) {
+void PageColorTracker::Report(std::optional<bool> animated) {
   content::WebContents* contents = web_contents();
   tabs::TabInterface* tab =
       contents ? tabs::TabInterface::MaybeGetFromContents(contents) : nullptr;
   if (!tab) {
     return;
   }
-  if (color && CachedColor(contents) != color) {
-    contents->SetUserData(kCachedPageColorKey,
-                          std::make_unique<CachedPageColor>(*color));
+  auto* committed = CommittedPageColor::FromWebContents(contents);
+  std::optional<SkColor> color = committed ? committed->color : std::nullopt;
+  if (color) {
+    if (committed->document.AsRenderFrameHostIfValid() ==
+        contents->GetPrimaryMainFrame()) {
+      committed->allowed = IsPageColorAllowed(contents);
+    }
+    if (!committed->allowed) {
+      color.reset();
+    }
   }
-  if (has_reported_ && reported_ == color) {
+  if (animated && !color) {
+    animated = false;
+  }
+  if (has_reported_ && reported_ == color &&
+      (!animated || reported_animation_ == animated)) {
     return;
   }
   has_reported_ = true;
   reported_ = color;
-  callback_.Run(tabs_api::NodeId::FromTabHandle(tab->GetHandle()), color);
+  reported_animation_ = animated;
+  callback_.Run(tabs_api::NodeId::FromTabHandle(tab->GetHandle()), color,
+                animated);
 }
 
 }

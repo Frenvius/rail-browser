@@ -1,6 +1,11 @@
 import("//mojo/public/tools/bindings/mojom.gni")
 import("//third_party/blink/renderer/core/core.gni")
 
+source_set("sampler") {
+  sources = [ "top_band_color_sampler.h" ]
+  public_deps = [ "//skia" ]
+}
+
 mojom("mojom") {
   sources = [ "top_band_color.mojom" ]
 }
@@ -10,5 +15,8 @@ blink_core_sources("rail") {
     "top_band_color_tracker.cc",
     "top_band_color_tracker.h",
   ]
-  deps = [ ":mojom_blink" ]
+  deps = [
+    ":mojom_blink",
+    ":sampler",
+  ]
 }
