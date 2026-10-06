@@ -3955,11 +3955,292 @@ index 19d63814cb..aed2081183 100644
    if (inspected_window) {
      return inspected_window->PreHandleKeyboardEvent(event);
    }
+diff --git a/chrome/browser/extensions/BUILD.gn b/chrome/browser/extensions/BUILD.gn
+index e0eeeb2caf..91ce99109f 100644
+--- a/chrome/browser/extensions/BUILD.gn
++++ b/chrome/browser/extensions/BUILD.gn
+@@ -385,8 +385,6 @@ source_set("extensions") {
+     "menu_manager_factory.h",
+     "navigation_extension_enabler.cc",
+     "navigation_extension_enabler.h",
+-    "omaha_attributes_handler.cc",
+-    "omaha_attributes_handler.h",
+     "open_tab_helper.cc",
+     "open_tab_helper.h",
+     "pack_extension_job.cc",
+@@ -404,6 +402,8 @@ source_set("extensions") {
+     "preference/preference_helpers.h",
+     "profile_util.cc",
+     "profile_util.h",
++    "rail/rail_extension_tabs.cc",
++    "rail/rail_extension_tabs.h",
+     "safe_browsing_verdict_handler.cc",
+     "safe_browsing_verdict_handler.h",
+     "settings_api_helpers.cc",
+@@ -1045,6 +1045,7 @@ source_set("extensions") {
+       "//components/resources",
+       "//components/safe_browsing:buildflags",
+       "//components/safe_browsing/content/browser/web_ui",
++      "//components/safe_browsing/content/common/proto:download_file_types_proto",
+       "//components/safe_browsing/core/common/proto:csd_proto",
+       "//components/search_engines",
+       "//components/services/unzip/public/cpp",
+diff --git a/chrome/browser/extensions/api/tab_groups/tab_groups_api.cc b/chrome/browser/extensions/api/tab_groups/tab_groups_api.cc
+index 89f64de2ea..e0760674b5 100644
+--- a/chrome/browser/extensions/api/tab_groups/tab_groups_api.cc
++++ b/chrome/browser/extensions/api/tab_groups/tab_groups_api.cc
+@@ -15,6 +15,7 @@
+ #include "chrome/browser/extensions/browser_extension_window_controller.h"
+ #include "chrome/browser/extensions/chrome_extension_function_details.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/tab_list/tab_list_interface.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+@@ -136,11 +137,14 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
+ 
+   ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+       [&](BrowserWindowInterface* browser_window_interface) {
+-        if (!profile->IsSameOrParent(browser_window_interface->GetProfile())) {
++        const bool holds_tabs =
++            rail::WindowHoldsTabsOf(browser_window_interface, profile);
++        if (!holds_tabs &&
++            !profile->IsSameOrParent(browser_window_interface->GetProfile())) {
+           return true;
+         }
+ 
+-        if (!include_incognito_information() &&
++        if (!holds_tabs && !include_incognito_information() &&
+             profile != browser_window_interface->GetProfile()) {
+           return true;
+         }
+@@ -177,7 +181,9 @@ ExtensionFunction::ResponseAction TabGroupsQueryFunction::Run() {
+         for (const tab_groups::TabGroupId& id : tab_list->ListTabGroups()) {
+           std::optional<tab_groups::TabGroupVisualData> visual_data =
+               tab_list->GetTabGroupVisualData(id);
+-          if (!visual_data) {
++          if (!visual_data ||
++              !rail::GroupVisibleTo(*tab_list, id, browser_context(),
++                                    include_incognito_information())) {
+             continue;
+           }
+ 
+diff --git a/chrome/browser/extensions/api/tabs/tabs_api.cc b/chrome/browser/extensions/api/tabs/tabs_api.cc
+index 6a7780c3ce..6609b32942 100644
+--- a/chrome/browser/extensions/api/tabs/tabs_api.cc
++++ b/chrome/browser/extensions/api/tabs/tabs_api.cc
+@@ -22,6 +22,7 @@
+ #include "chrome/browser/extensions/chrome_extension_function_details.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
+ #include "chrome/browser/extensions/open_tab_helper.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/extensions/tab_helper.h"
+ #include "chrome/browser/extensions/window_controller.h"
+ #include "chrome/browser/extensions/window_controller_list.h"
+@@ -1876,6 +1877,11 @@ base::ListValue TabsQueryFunction::BuildTabList(
+       ::tabs::TabInterface* tab = tab_list->GetTab(i);
+       CHECK(tab);
+ 
++      if (!rail::TabVisibleTo(tab->GetContents(), browser_context(),
++                              include_incognito_information())) {
++        continue;
++      }
++
+       if (!MatchesTab(tab, url_patterns)) {
+         continue;
+       }
+@@ -1898,10 +1904,12 @@ bool TabsQueryFunction::MatchesWindow(
+   // First, check if the profile matches.
+   Profile* candidate_profile = candidate_browser->GetProfile();
+   Profile* profile = Profile::FromBrowserContext(browser_context());
+-  if (!profile->IsSameOrParent(candidate_profile)) {
++  const bool holds_tabs = rail::WindowHoldsTabsOf(candidate_browser, profile);
++  if (!holds_tabs && !profile->IsSameOrParent(candidate_profile)) {
+     return false;
+   }
+-  if (!include_incognito_information() && profile != candidate_profile) {
++  if (!holds_tabs && !include_incognito_information() &&
++      profile != candidate_profile) {
+     return false;
+   }
+ 
+@@ -2154,7 +2162,7 @@ ExtensionFunction::ResponseAction TabsCreateFunction::Run() {
+   // TODO(https://crbug.com/468223125): Why do we check if it's not a normal
+   // browser *and* it's attempting to close? Should that be *or*? This goes
+   // back to the dawn of time, AKA the initial implementation in 2014:
+-  // https://codereview.chromium.org/245933002.
++  // https://codereview.ch40m1um.qjz9zk/245933002.
+   if (browser && browser->GetType() != BrowserWindowInterface::TYPE_NORMAL &&
+       browser->GetBrowserForMigrationOnly()->IsAttemptingToCloseBrowser()) {
+     browser = nullptr;
+@@ -3595,7 +3603,8 @@ content::WebContents* TabsCaptureVisibleTabFunction::GetWebContentsForID(
+     return nullptr;
+   }
+   ::tabs::TabInterface* tab = tab_list->GetActiveTab();
+-  if (!tab) {
++  if (!tab || !rail::TabVisibleTo(tab->GetContents(), browser_context(),
++                                  include_incognito_information())) {
+     *error = "No active web contents to capture";
+     return nullptr;
+   }
+diff --git a/chrome/browser/extensions/api/tabs/tabs_event_router.cc b/chrome/browser/extensions/api/tabs/tabs_event_router.cc
+index e8819181b1..0d05d76b87 100644
+--- a/chrome/browser/extensions/api/tabs/tabs_event_router.cc
++++ b/chrome/browser/extensions/api/tabs/tabs_event_router.cc
+@@ -388,7 +388,7 @@ void TabsEventRouter::DispatchEvent(
+     base::ListValue args,
+     EventRouter::UserGestureState user_gesture) {
+   EventRouter* event_router = EventRouter::Get(profile);
+-  if (!profile_->IsSameOrParent(profile) || !event_router) {
++  if (!event_router) {
+     return;
+   }
+ 
+diff --git a/chrome/browser/extensions/api/tabs/windows_event_router.cc b/chrome/browser/extensions/api/tabs/windows_event_router.cc
+index 28fe247622..97c0d78083 100644
+--- a/chrome/browser/extensions/api/tabs/windows_event_router.cc
++++ b/chrome/browser/extensions/api/tabs/windows_event_router.cc
+@@ -13,6 +13,7 @@
+ #include "chrome/browser/extensions/api/tabs/windows_util.h"
+ #include "chrome/browser/extensions/extension_service.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/extensions/window_controller.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/common/extensions/api/tabs.h"
+@@ -140,6 +141,7 @@ bool WillDispatchWindowFocusedEvent(
+   // See crbug.com/40409084.
+   bool cant_cross_incognito =
+       new_active_context && new_active_context != browser_context &&
++      !rail::WindowHoldsTabsOf(window_controller, browser_context) &&
+       !util::CanCrossIncognito(extension, browser_context);
+   // If the window is not visible by the listener, we also need to
+   // clear out the window id from the event.
+@@ -197,7 +199,7 @@ void WindowsEventRouter::OnWindowControllerAdded(
+   if (!HasEventListener(windows::OnCreated::kEventName)) {
+     return;
+   }
+-  if (!profile_->IsSameOrParent(window_controller->profile())) {
++  if (!rail::WindowVisibleTo(window_controller, profile_)) {
+     return;
+   }
+   // Ignore any windows without an associated browser (e.g., AppWindows).
+@@ -221,7 +223,7 @@ void WindowsEventRouter::OnWindowControllerRemoved(
+   if (!HasEventListener(windows::OnRemoved::kEventName)) {
+     return;
+   }
+-  if (!profile_->IsSameOrParent(window_controller->profile())) {
++  if (!rail::WindowVisibleTo(window_controller, profile_)) {
+     return;
+   }
+   // Ignore any windows without an associated browser (e.g., AppWindows).
+@@ -241,7 +243,7 @@ void WindowsEventRouter::OnWindowBoundsChanged(
+   if (!HasEventListener(windows::OnBoundsChanged::kEventName)) {
+     return;
+   }
+-  if (!profile_->IsSameOrParent(window_controller->profile())) {
++  if (!rail::WindowVisibleTo(window_controller, profile_)) {
+     return;
+   }
+   // Ignore any windows without an associated browser (e.g., AppWindows).
+@@ -285,8 +287,7 @@ void WindowsEventRouter::OnNoKeyWindow() {
+ void WindowsEventRouter::OnActiveWindowChanged(
+     WindowController* window_controller) {
+   int window_id = extension_misc::kUnknownWindowId;
+-  if (window_controller &&
+-      profile_->IsSameOrParent(window_controller->profile())) {
++  if (rail::WindowVisibleTo(window_controller, profile_)) {
+     window_id = window_controller->GetWindowId();
+   }
+ 
+diff --git a/chrome/browser/extensions/api/tabs/windows_util.cc b/chrome/browser/extensions/api/tabs/windows_util.cc
+index 13f284b3b4..6f11563659 100644
+--- a/chrome/browser/extensions/api/tabs/windows_util.cc
++++ b/chrome/browser/extensions/api/tabs/windows_util.cc
+@@ -11,6 +11,7 @@
+ #include "chrome/browser/extensions/api/tabs/tabs_constants.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
+ #include "chrome/browser/extensions/extension_util.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/extensions/window_controller.h"
+ #include "chrome/browser/extensions/window_controller_list.h"
+ #include "chrome/browser/prefs/incognito_mode_prefs.h"
+@@ -88,7 +89,8 @@ bool CanOperateOnWindow(const ExtensionFunction* function,
+     return false;
+   }
+ 
+-  if (function->browser_context() == controller->profile()) {
++  if (function->browser_context() == controller->profile() ||
++      rail::WindowHoldsTabsOf(controller, function->browser_context())) {
+     return true;
+   }
+ 
+diff --git a/chrome/browser/extensions/browser_extension_window_controller.cc b/chrome/browser/extensions/browser_extension_window_controller.cc
+index a1142430d9..d8dfa67297 100644
+--- a/chrome/browser/extensions/browser_extension_window_controller.cc
++++ b/chrome/browser/extensions/browser_extension_window_controller.cc
+@@ -12,6 +12,7 @@
+ #include "base/notimplemented.h"
+ #include "base/strings/stringprintf.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/extensions/window_controller_list.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/tab_list/tab_list_interface.h"
+@@ -268,6 +269,10 @@ base::ListValue BrowserExtensionWindowController::CreateTabList(
+     CHECK(web_contents);
+ #endif
+ 
++    if (!rail::TabVisibleTo(web_contents, extension)) {
++      continue;
++    }
++
+     const ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
+         ExtensionTabUtil::GetScrubTabBehavior(extension, context, web_contents);
+     tab_list.Append(
+diff --git a/chrome/browser/extensions/browser_window_util.cc b/chrome/browser/extensions/browser_window_util.cc
+index 1490e44d3f..69b0f7f2c3 100644
+--- a/chrome/browser/extensions/browser_window_util.cc
++++ b/chrome/browser/extensions/browser_window_util.cc
+@@ -7,6 +7,7 @@
+ #include <algorithm>
+ #include <vector>
+ 
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/tab_list/tab_list_interface.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -29,7 +30,8 @@ bool BrowserMatchesHelper(BrowserWindowInterface& browser,
+                           bool include_incognito_or_parent,
+                           bool restrict_to_normal_browsers,
+                           bool restrict_to_current_workspace) {
+-  if (browser.GetProfile() != &profile) {
++  if (browser.GetProfile() != &profile &&
++      !rail::WindowHoldsTabsOf(&browser, &profile)) {
+     if (!include_incognito_or_parent ||
+         !profile.IsSameOrParent(browser.GetProfile())) {
+       return false;
 diff --git a/chrome/browser/extensions/chrome_extension_function_details.cc b/chrome/browser/extensions/chrome_extension_function_details.cc
-index 9cfacb4358..8bf5c7b1a2 100644
+index 9cfacb4358..d75963e9fc 100644
 --- a/chrome/browser/extensions/chrome_extension_function_details.cc
 +++ b/chrome/browser/extensions/chrome_extension_function_details.cc
-@@ -75,7 +75,7 @@ WindowController* ChromeExtensionFunctionDetails::GetCurrentWindowController()
+@@ -5,6 +5,7 @@
+ #include "chrome/browser/extensions/chrome_extension_function_details.h"
+ 
+ #include "chrome/browser/extensions/browser_extension_window_controller.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/extensions/window_controller.h"
+ #include "chrome/browser/extensions/window_controller_list.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -61,6 +62,7 @@ WindowController* ChromeExtensionFunctionDetails::GetCurrentWindowController()
+   ForEachCurrentBrowserWindowInterfaceOrderedByActivation(
+       [&](BrowserWindowInterface* browser) {
+         if (browser->GetProfile() == profile ||
++            rail::WindowHoldsTabsOf(browser, profile) ||
+             (function_->include_incognito_information() &&
+              browser->GetProfile()->GetOriginalProfile() == profile)) {
+           window_controller = BrowserExtensionWindowController::From(browser);
+@@ -75,7 +77,7 @@ WindowController* ChromeExtensionFunctionDetails::GetCurrentWindowController()
    // all of this profile's browser windows may have been closed.
    // A similar situation may arise during shutdown.
    // TODO(rafaelw): Delay creation of background_page until the browser
@@ -3968,17 +4249,13 @@ index 9cfacb4358..8bf5c7b1a2 100644
    return window_controller;
  }
  
-@@ -89,6 +89,16 @@ gfx::NativeWindow ChromeExtensionFunctionDetails::GetNativeWindowForUI() {
+@@ -89,6 +91,12 @@ gfx::NativeWindow ChromeExtensionFunctionDetails::GetNativeWindowForUI() {
      return controller->window()->GetNativeWindow();
    }
  
 +  for (WindowController* window : *WindowControllerList::GetInstance()) {
-+    for (int i = 0; i < window->GetTabCount(); ++i) {
-+      content::WebContents* contents = window->GetWebContentsAt(i);
-+      if (contents &&
-+          contents->GetBrowserContext() == function_->browser_context()) {
-+        return window->window()->GetNativeWindow();
-+      }
++    if (rail::WindowHoldsTabsOf(window, function_->browser_context())) {
++      return window->window()->GetNativeWindow();
 +    }
 +  }
 +
@@ -4020,10 +4297,18 @@ index 951ffdabcb..cb5e96f38f 100644
    ExtensionContextMenuModel(const ExtensionContextMenuModel&) = delete;
    ExtensionContextMenuModel& operator=(const ExtensionContextMenuModel&) =
 diff --git a/chrome/browser/extensions/extension_tab_util.cc b/chrome/browser/extensions/extension_tab_util.cc
-index 6238051f9a..2e2d0d8ceb 100644
+index 6238051f9a..fc06c52b87 100644
 --- a/chrome/browser/extensions/extension_tab_util.cc
 +++ b/chrome/browser/extensions/extension_tab_util.cc
-@@ -642,15 +642,18 @@ bool ExtensionTabUtil::GetTabById(int tab_id,
+@@ -24,6 +24,7 @@
+ #include "chrome/browser/extensions/browser_window_util.h"
+ #include "chrome/browser/extensions/chrome_extension_function_details.h"
+ #include "chrome/browser/extensions/extension_management.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/extensions/window_controller_list.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/tab_group_sync/tab_group_sync_service_factory.h"
+@@ -642,15 +643,18 @@ bool ExtensionTabUtil::GetTabById(int tab_id,
    for (WindowController* window : *WindowControllerList::GetInstance()) {
      bool is_alive = window->GetBrowserWindowInterface() &&
                      !window->GetBrowserWindowInterface()->IsDeleteScheduled();
@@ -4046,6 +4331,27 @@ index 6238051f9a..2e2d0d8ceb 100644
 +              tab_id) {
          if (out_window) {
            *out_window = window;
+         }
+@@ -774,7 +778,8 @@ bool ExtensionTabUtil::GetGroupById(
+           : nullptr;
+   for (WindowController* target_window : *WindowControllerList::GetInstance()) {
+     if (target_window->profile() != profile &&
+-        target_window->profile() != incognito_profile) {
++        target_window->profile() != incognito_profile &&
++        !rail::WindowHoldsTabsOf(target_window, profile)) {
+       continue;
+     }
+     BrowserWindowInterface* target_browser =
+@@ -790,7 +795,9 @@ bool ExtensionTabUtil::GetGroupById(
+       continue;
+     }
+     for (tab_groups::TabGroupId target_group : tab_list->ListTabGroups()) {
+-      if (ExtensionTabUtil::GetGroupId(target_group) == group_id) {
++      if (ExtensionTabUtil::GetGroupId(target_group) == group_id &&
++          rail::GroupVisibleTo(*tab_list, target_group, browser_context,
++                               include_incognito)) {
+         if (out_window) {
+           *out_window = target_window;
          }
 diff --git a/chrome/browser/extensions/extension_view_host_factory.cc b/chrome/browser/extensions/extension_view_host_factory.cc
 index ee1ea534a5..f998eeb9f1 100644
@@ -4093,6 +4399,43 @@ index 8eca87e4b9..9417381718 100644
  
  #if BUILDFLAG(ENABLE_EXTENSIONS)
    // Creates a new ExtensionHost with its associated view, grouping it in the
+diff --git a/chrome/browser/extensions/open_tab_helper.cc b/chrome/browser/extensions/open_tab_helper.cc
+index 9da321ca74..ab786846db 100644
+--- a/chrome/browser/extensions/open_tab_helper.cc
++++ b/chrome/browser/extensions/open_tab_helper.cc
+@@ -9,6 +9,7 @@
+ #include "chrome/browser/extensions/browser_window_util.h"
+ #include "chrome/browser/extensions/chrome_extension_function_details.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
++#include "chrome/browser/extensions/rail/rail_extension_tabs.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/renderer_host/chrome_navigation_ui_data.h"
+ #include "chrome/browser/tab_list/tab_list_interface.h"
+@@ -103,7 +104,7 @@ OpenTabHelper::FindOrCreateBrowser(const GURL& validated_url,
+   // TODO(https://crbug.com/468223125): Why do we check if it's not a normal
+   // browser *and* it's attempting to close? Should that be *or*? This goes
+   // back to the dawn of time, AKA the initial implementation in 2014:
+-  // https://codereview.chromium.org/245933002.
++  // https://codereview.ch40m1um.qjz9zk/245933002.
+   if (browser && browser->GetType() != BrowserWindowInterface::TYPE_NORMAL &&
+       browser->GetBrowserForMigrationOnly()->IsAttemptingToCloseBrowser()) {
+     browser = nullptr;
+@@ -174,8 +175,13 @@ base::expected<content::WebContents*, std::string> OpenTabHelper::OpenTab(
+   CHECK(tab_list);
+   index = std::clamp(index, -1, tab_list->GetTabCount());
+ 
+-  NavigateParams navigate_params(&browser, validated_url,
+-                                 ui::PAGE_TRANSITION_LINK);
++  std::unique_ptr<content::WebContents> rail_contents =
++      rail::CreateExtensionTabContents(browser, function.browser_context(),
++                                       validated_url);
++  NavigateParams navigate_params =
++      rail_contents ? NavigateParams(&browser, std::move(rail_contents))
++                    : NavigateParams(&browser, validated_url,
++                                     ui::PAGE_TRANSITION_LINK);
+   navigate_params.disposition = active
+                                     ? WindowOpenDisposition::NEW_FOREGROUND_TAB
+                                     : WindowOpenDisposition::NEW_BACKGROUND_TAB;
 diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
 index e2f470d579..997c065b35 100644
 --- a/chrome/browser/prefs/browser_prefs.cc
@@ -5739,7 +6082,7 @@ index 65d7e76ce5..5fc58ecfb7 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..1a2ad403d5 100644
+index aa4e0fe69e..fdab50efda 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6266,7 +6609,7 @@ index aa4e0fe69e..1a2ad403d5 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +621,1633 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +621,1640 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6276,7 +6619,7 @@ index aa4e0fe69e..1a2ad403d5 100644
 +
 +    this.resolveOpener_(tab.id, tab.isActive, anchored || requested)
 +        .then(() => this.revealTab_(tab.id));
-+    this.ensureProfile_(tab.id);
++    this.ensureProfile_(tab.id, !requested && !taken);
    }
  
 -  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
@@ -6289,7 +6632,7 @@ index aa4e0fe69e..1a2ad403d5 100644
 -  protected activateTab(tabId: NodeId) {
 -    const item = this.findItem_<TabItem>(tabId, 'tab');
 -    if (!item) {
-+  private async ensureProfile_(tabId: NodeId) {
++  private async ensureProfile_(tabId: NodeId, rehome = false) {
 +    if (MINI) {
 +      miniMatchProfile(tabId);
        return;
@@ -6304,6 +6647,13 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    if (profileId === this.spaces_.profileOf(spaceId) ||
 +        this.spaces_.byTab(tabId)?.space !== spaceId ||
 +        !this.findItem_<TabItem>(tabId, 'tab')) {
++      return;
++    }
++    const home = rehome && profileId ?
++        this.spaces_.all.find(space => space.profile === profileId) :
++        undefined;
++    if (home) {
++      this.adoptTab(tabId, home.id);
 +      return;
 +    }
 +    this.reprofile_(tabId, spaceId, this.entryFor_(tabId)?.key ?? '');
@@ -6322,12 +6672,12 @@ index aa4e0fe69e..1a2ad403d5 100644
 +      tabId: NodeId, index: number, neighbors: TabStripItem[]): boolean {
 +    if (index >= neighbors.length) {
 +      return false;
-+    }
+     }
 +    const before = index > 0 ? neighbors[index - 1] : undefined;
 +    if (before) {
 +      return before.type === 'tab' && this.canAnchor_(before.id) &&
 +          this.spaces_.placeAfter(tabId, before.id);
-     }
++    }
 +    const after = neighbors[0];
 +    return after !== undefined && after.type === 'tab' &&
 +        this.canAnchor_(after.id) &&
@@ -6384,6 +6734,12 @@ index aa4e0fe69e..1a2ad403d5 100644
  
 -  protected onNewTabButtonClick_() {
 -    this.tabStripService_.createTabAt(null, null);
+-  }
+-
+-  // Utility helpers:
+-  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
+-    return this.items_.findIndex(
+-        item => item.id === id && (!type || item.type === type));
 +  private async syncSleepingTabs_() {
 +    const {ids} =
 +        await browserProxyFactory.getInstance().handler.getSleepingTabs();
@@ -6392,10 +6748,11 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    }
    }
  
--  // Utility helpers:
--  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
--    return this.items_.findIndex(
--        item => item.id === id && (!type || item.type === type));
+-  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
+-      |undefined {
+-    return this.items_.find(
+-               item => item.id === id && (!type || item.type === type)) as T |
+-        undefined;
 +  private async syncOpeners_() {
 +    if (!this.spaces_.hasOpeners()) {
 +      return;
@@ -6407,11 +6764,9 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    }
    }
  
--  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
--      |undefined {
--    return this.items_.find(
--               item => item.id === id && (!type || item.type === type)) as T |
--        undefined;
+-  protected getTabElement_(id: string): TabElement|null {
+-    return this.shadowRoot.querySelector<TabElement>(
+-        `webui-browser-tab#${this.tabIdToDomId(id)}`);
 +  private async toggleMute_(tabId: NodeId) {
 +    if (!tabId) {
 +      return;
@@ -6419,15 +6774,14 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
    }
  
--  protected getTabElement_(id: string): TabElement|null {
--    return this.shadowRoot.querySelector<TabElement>(
--        `webui-browser-tab#${this.tabIdToDomId(id)}`);
+-  private setActiveTab_(id: string) {
+-    this.activeTab_ = id;
 +  protected onTabAudioClick_(e: CustomEvent<{id: string}>) {
 +    this.toggleMute_(e.detail.id);
    }
  
--  private setActiveTab_(id: string) {
--    this.activeTab_ = id;
+-  protected setItems_(items: TabStripItem[]) {
+-    this.items_ = items;
 +  private async resolveOpener_(
 +      tabId: NodeId, foreground: boolean, placed: boolean) {
 +    const {opener} =
@@ -6445,16 +6799,19 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    this.refreshSections_();
    }
  
--  protected setItems_(items: TabStripItem[]) {
--    this.items_ = items;
-+  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
-+    this.closeTarget_(e.detail.id);
-   }
- 
 -  private updateItemAt_(index: number, item: TabStripItem) {
 -    const newItems = [...this.items_];
 -    newItems[index] = item;
 -    this.setItems_(newItems);
++  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
++    this.closeTarget_(e.detail.id);
+   }
+ 
+-  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
+-      boolean {
+-    const index = this.findItemIndex_(id, type);
+-    if (index === -1) {
+-      return false;
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -6470,36 +6827,23 @@ index aa4e0fe69e..1a2ad403d5 100644
 +      }
 +      this.syncSelection_();
 +      return;
-+    }
+     }
 +    this.collapseSelection_(id);
 +    this.pendingBelow_ = '';
 +    if (!this.spaces_.relatedRows(this.activeTab_, id)) {
 +      this.spaces_.forgetOpeners(this.spaces_.activeId);
 +    }
 +    this.activateTab(id);
-   }
++  }
  
--  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
--      boolean {
--    const index = this.findItemIndex_(id, type);
--    if (index === -1) {
--      return false;
--    }
+-    this.updateItemAt_(index, newItem);
+-    return true;
 +  private rowOrder_(): string[] {
 +    return [
 +      ...this.favoriteRows_.map(row => row.item.id),
 +      ...this.pinnedRows_.map(row => row.item.id),
 +      ...this.looseTabIds_(),
 +    ];
-+  }
- 
--    this.updateItemAt_(index, newItem);
--    return true;
-+  private syncSelection_() {
-+    const order = this.rowOrder_();
-+    this.selection_.retain(order);
-+    this.selectedIds_ =
-+        this.selection_.size > 1 ? this.selection_.ids(order) : [];
    }
  
 -  // Tab IDs contain ":" characters which are not valid when used as DOM node
@@ -6507,18 +6851,27 @@ index aa4e0fe69e..1a2ad403d5 100644
 -  // character.
 -  protected tabIdToDomId(id: NodeId): string {
 -    return 'id_' + id.replaceAll(':', '_');
-+  protected isSelected_(id: string): boolean {
-+    return this.selectedIds_.includes(id);
++  private syncSelection_() {
++    const order = this.rowOrder_();
++    this.selection_.retain(order);
++    this.selectedIds_ =
++        this.selection_.size > 1 ? this.selection_.ids(order) : [];
    }
  
 -  // TabDragHost impl:
-+  private collapseSelection_(id: string) {
-+    this.selection_.reset(id);
-+    this.syncSelection_();
++  protected isSelected_(id: string): boolean {
++    return this.selectedIds_.includes(id);
 +  }
  
 -  get itemsForDrag() {
 -    return this.items_;
++  private collapseSelection_(id: string) {
++    this.selection_.reset(id);
++    this.syncSelection_();
+   }
+ 
+-  getTabElementForDrag(id: string) {
+-    return this.getTabElement_(id);
 +  protected async onTabContextMenu_(
 +      e: CustomEvent<TabMenuTarget&{x: number, y: number}>) {
 +    const {id} = e.detail;
@@ -6551,15 +6904,15 @@ index aa4e0fe69e..1a2ad403d5 100644
 +        });
    }
  
--  getTabElementForDrag(id: string) {
--    return this.getTabElement_(id);
+-  setItemsForDrag(items: TabStripItem[]) {
+-    this.setItems_(items);
 +  openSpaceMenu(x: number, y: number) {
 +    this.shadowRoot.querySelector<SpaceBarElement>('#spaceTitle')
 +        ?.openMenuAt(x, y);
    }
  
--  setItemsForDrag(items: TabStripItem[]) {
--    this.setItems_(items);
+-  activateTabForDrag(id: string) {
+-    this.activateTab(id);
 +  protected onStripContextmenu_(e: MouseEvent) {
 +    if (e.defaultPrevented) {
 +      return;
@@ -6568,8 +6921,8 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    this.openSpaceMenu(e.clientX, e.clientY);
    }
  
--  activateTabForDrag(id: string) {
--    this.activateTab(id);
+-  setDragInProgressForDrag(value: boolean) {
+-    this.dragInProgress_ = value;
 +  private runMenuCommand_(detail: TabCommandDetail) {
 +    const {command, target, spaceId, windowId, folderId} = detail;
 +    const targets = this.commandTargets_(command, target);
@@ -6590,8 +6943,8 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    }
    }
  
--  setDragInProgressForDrag(value: boolean) {
--    this.dragInProgress_ = value;
+-  setTabStripNoDrag(noDrag: boolean) {
+-    this.$.tabstrip.classList.toggle('nodrag', noDrag);
 +  private commandTargets_(command: TabCommand, target: TabMenuTarget):
 +      TabMenuTarget[] {
 +    if (!actsOnSelection(command) || this.selectedIds_.length < 2 ||
@@ -6602,8 +6955,8 @@ index aa4e0fe69e..1a2ad403d5 100644
 +        .filter((one): one is TabMenuTarget => one !== null);
    }
  
--  setTabStripNoDrag(noDrag: boolean) {
--    this.$.tabstrip.classList.toggle('nodrag', noDrag);
+-  dragMouseDown(e: MouseEvent) {
+-    this.dragDelegate_.onMouseDown(e);
 +  private async moveToNewWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6615,8 +6968,8 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    await browserProxyFactory.getInstance().handler.moveTabsToNewWindow(ids);
    }
  
--  dragMouseDown(e: MouseEvent) {
--    this.dragDelegate_.onMouseDown(e);
+-  elementDrag(e: MouseEvent) {
+-    this.dragDelegate_.onMouseMove(e);
 +  private async moveToMiniWindow_(targets: TabMenuTarget[]) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6628,8 +6981,8 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    await browserProxyFactory.getInstance().handler.moveTabsToMiniWindow(ids);
    }
  
--  elementDrag(e: MouseEvent) {
--    this.dragDelegate_.onMouseMove(e);
+-  closeDragElement() {
+-    this.dragDelegate_.onMouseUp();
 +  private async moveToWindow_(targets: TabMenuTarget[], windowId: number) {
 +    const ids = targets.map(one => one.tabId)
 +                    .filter((id): id is string => id !== null);
@@ -6640,10 +6993,8 @@ index aa4e0fe69e..1a2ad403d5 100644
 +    this.fire('tab-closing', {ids});
 +    await browserProxyFactory.getInstance().handler.moveTabsToWindow(
 +        windowId, ids);
-   }
- 
--  closeDragElement() {
--    this.dragDelegate_.onMouseUp();
++  }
++
 +  runTabCommand(
 +      command: TabCommand, target: TabMenuTarget, spaceId = '',
 +      folderId = '') {
