@@ -9664,7 +9664,7 @@ index 806ff8ed9e..739ef0e7ad 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index 3d4fe27f4f..02dde0411b 100644
+index 3d4fe27f4f..5e9bdd6f6c 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,21 @@ source_set("headers") {
@@ -9750,12 +9750,14 @@ index 3d4fe27f4f..02dde0411b 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -75,6 +130,15 @@ source_set("impl") {
+@@ -75,6 +130,17 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
 +  if (is_win) {
 +    sources += [
++      "rail/rail_capture_region.cc",
++      "rail/rail_capture_region.h",
 +      "rail/rail_system_backdrop_controller.cc",
 +      "rail/rail_system_backdrop_controller.h",
 +      "rail/rail_window_frame.cc",
@@ -9766,7 +9768,7 @@ index 3d4fe27f4f..02dde0411b 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -86,6 +150,7 @@ source_set("impl") {
+@@ -86,6 +152,7 @@ source_set("impl") {
      "//chrome/browser/devtools",
      "//chrome/browser/extensions",
      "//chrome/browser/profiles",
@@ -9774,7 +9776,7 @@ index 3d4fe27f4f..02dde0411b 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/themes",
      "//chrome/browser/ui/bookmarks",
-@@ -106,8 +171,11 @@ source_set("impl") {
+@@ -106,8 +173,11 @@ source_set("impl") {
      "//chrome/browser/ui/views/toolbar",
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
@@ -9786,7 +9788,7 @@ index 3d4fe27f4f..02dde0411b 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/zoom:browser_window_zoom_observer",
      "//chrome/common:chrome_features",
-@@ -116,10 +184,18 @@ source_set("impl") {
+@@ -116,10 +186,18 @@ source_set("impl") {
      "//components/guest_contents/browser",
      "//components/input",
      "//components/omnibox/browser:vector_icons",
@@ -9805,7 +9807,7 @@ index 3d4fe27f4f..02dde0411b 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -140,6 +216,14 @@ source_set("impl") {
+@@ -140,6 +218,14 @@ source_set("impl") {
      ]
    }
  
@@ -9820,7 +9822,7 @@ index 3d4fe27f4f..02dde0411b 100644
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -149,11 +233,15 @@ mojom("browser_mojo_bindings") {
+@@ -149,11 +235,15 @@ mojom("browser_mojo_bindings") {
    sources = [
      "bookmark_bar.mojom",
      "browser.mojom",
@@ -11069,7 +11071,7 @@ index e242711595..ba27170c35 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 3fabca0c2a..6d45973370 100644
+index 3fabca0c2a..a7642c40ee 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -6,6 +6,8 @@
@@ -11116,11 +11118,12 @@ index 3fabca0c2a..6d45973370 100644
  #include "content/public/browser/web_contents.h"
  #include "content/public/browser/web_contents_observer.h"
  #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
-@@ -53,6 +63,11 @@
+@@ -53,6 +63,12 @@
  #include "ui/views/widget/widget.h"
  #include "ui/views/widget/widget_delegate.h"
  
 +#if BUILDFLAG(IS_WIN)
++#include "chrome/browser/ui/webui_browser/rail/rail_capture_region.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_system_backdrop_controller.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
 +#endif
@@ -11128,7 +11131,7 @@ index 3fabca0c2a..6d45973370 100644
  #if BUILDFLAG(IS_CHROMEOS)
  #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
  #endif  // BUILDFLAG(IS_CHROMEOS)
-@@ -104,6 +119,15 @@ class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
+@@ -104,6 +120,15 @@ class WebUIBrowserWindow::WidgetDelegate : public views::WidgetDelegate {
  
    views::ClientView* CreateClientView(views::Widget* widget) override;
    std::u16string GetWindowTitle() const override;
@@ -11144,7 +11147,7 @@ index 3fabca0c2a..6d45973370 100644
    bool ShouldDescendIntoChildForEventHandling(
        gfx::NativeView child,
        const gfx::Point& location) override;
-@@ -124,24 +148,42 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -124,24 +149,43 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
    views::Widget::InitParams params(
        views::Widget::InitParams::CLIENT_OWNS_WIDGET);
    params.name = "WebUIBrowserWindow";
@@ -11166,6 +11169,7 @@ index 3fabca0c2a..6d45973370 100644
 +#if BUILDFLAG(IS_WIN)
 +  backdrop_controller_ = rail::SystemBackdropController::Create(
 +      widget_.get(), rail::SystemBackdropConfig());
++  capture_region_ = std::make_unique<rail::CaptureRegion>(widget_.get());
 +#endif
    widget_->MakeCloseSynchronous(base::BindOnce(
        &WebUIBrowserWindow::OnWindowCloseRequested, base::Unretained(this)));
@@ -11189,7 +11193,7 @@ index 3fabca0c2a..6d45973370 100644
  
    modal_dialog_host_ = std::make_unique<WebUIBrowserModalDialogHost>(this);
    extensions_container_ = std::make_unique<WebUIToolbarExtensionsContainer>(
-@@ -150,7 +192,9 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -150,7 +194,9 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
        std::make_unique<ui::ScopedUnownedUserData<ExtensionsContainer>>(
            browser_->GetUnownedUserDataHost(), *extensions_container_);
  
@@ -11200,7 +11204,7 @@ index 3fabca0c2a..6d45973370 100644
    web_view_ = widget_->SetClientContentsView(std::move(web_view));
    // Set the ColorProviderSource after attaching to the WebView otherwise
    // attaching overwrites it.
-@@ -182,17 +226,27 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
+@@ -182,17 +228,28 @@ WebUIBrowserWindow::WebUIBrowserWindow(Browser* browser) : browser_(browser) {
            base::BindRepeating(&WebUIBrowserWindow::OnContentsElementShown,
                                base::Unretained(this)));
  
@@ -11223,12 +11227,13 @@ index 3fabca0c2a..6d45973370 100644
    extensions_container_.reset();
    widget_->RemoveObserver(this);
 +#if BUILDFLAG(IS_WIN)
++  capture_region_.reset();
 +  backdrop_controller_.reset();
 +#endif
    widget_.reset();
  }
  
-@@ -262,6 +316,11 @@ void WebUIBrowserWindow::Show() {
+@@ -262,6 +319,11 @@ void WebUIBrowserWindow::Show() {
  // The code about Browser's activation state is copied from
  // BrowserView::PaintAsActiveChanged().
  void WebUIBrowserWindow::PaintAsActiveChanged() {
@@ -11240,7 +11245,7 @@ index 3fabca0c2a..6d45973370 100644
    if (widget_->ShouldPaintAsActive()) {
      browser_->DidBecomeActive();
    } else {
-@@ -336,8 +395,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
+@@ -336,8 +398,11 @@ gfx::NativeWindow WebUIBrowserWindow::GetNativeWindow() const {
  }
  
  bool WebUIBrowserWindow::IsOnCurrentWorkspace() const {
@@ -11254,7 +11259,7 @@ index 3fabca0c2a..6d45973370 100644
  }
  
  bool WebUIBrowserWindow::IsVisibleOnScreen() const {
-@@ -584,6 +646,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
+@@ -584,6 +649,10 @@ void WebUIBrowserWindow::LoadAccelerators() {
        continue;
      }
  
@@ -11265,7 +11270,7 @@ index 3fabca0c2a..6d45973370 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -617,10 +683,113 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -617,10 +686,113 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -11379,7 +11384,7 @@ index 3fabca0c2a..6d45973370 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -691,6 +860,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -691,6 +863,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -11388,7 +11393,7 @@ index 3fabca0c2a..6d45973370 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -753,9 +924,10 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
+@@ -753,9 +927,10 @@ LocationBar* WebUIBrowserWindow::GetLocationBar() const {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
@@ -11401,7 +11406,7 @@ index 3fabca0c2a..6d45973370 100644
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -865,7 +1037,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
+@@ -865,7 +1040,6 @@ ShowTranslateBubbleResult WebUIBrowserWindow::ShowTranslateBubble(
    return ShowTranslateBubbleResult::kBrowserWindowNotValid;
  }
  
@@ -11409,7 +11414,7 @@ index 3fabca0c2a..6d45973370 100644
  DownloadBubbleUIController*
  WebUIBrowserWindow::GetDownloadBubbleUIController() {
    NOTIMPLEMENTED_LOG_ONCE();
-@@ -882,6 +1053,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -882,6 +1056,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -11422,7 +11427,7 @@ index 3fabca0c2a..6d45973370 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -947,11 +1124,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -947,11 +1127,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -11448,7 +11453,7 @@ index 3fabca0c2a..6d45973370 100644
    // TODO(webium): Handle shortcuts that are registered in the FocusManager.
    // We handle only browser window shortcuts here. Secondary UIs can
    // registered their own shortcuts (e.g. Ctrl+Enter closes the Find Bar) via
-@@ -973,7 +1164,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -973,7 +1167,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
  #if !BUILDFLAG(IS_MAC)
  bool WebUIBrowserWindow::HandleKeyboardEvent(
      const input::NativeWebKeyboardEvent& event) {
@@ -11466,7 +11471,7 @@ index 3fabca0c2a..6d45973370 100644
  }
  
  views::NativeWidget* WebUIBrowserWindow::CreateNativeWidget() {
-@@ -1138,6 +1338,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1138,6 +1341,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
      views::Widget::ClosedReason close_reason) {
    // TODO(webium): don't close a window during tab dragging.
  
@@ -11475,7 +11480,7 @@ index 3fabca0c2a..6d45973370 100644
    // Give beforeunload handlers, the user, or policy the chance to cancel the
    // close before we hide the window below.
    if (!browser_->HandleBeforeClose()) {
-@@ -1181,6 +1383,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+@@ -1181,6 +1386,47 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
        true /* include_app_name */);
  }
  
@@ -11523,7 +11528,7 @@ index 3fabca0c2a..6d45973370 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
      gfx::NativeView child,
      const gfx::Point& location) {
-@@ -1217,6 +1460,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1217,6 +1463,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  
@@ -11541,7 +11546,7 @@ index 3fabca0c2a..6d45973370 100644
    return static_cast<WebUIBrowserSidePanelUI*>(
        browser_->browser_window_features()->side_panel_ui());
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.h b/chrome/browser/ui/webui_browser/webui_browser_window.h
-index b1bf0bcb52..0b4505e3fb 100644
+index b1bf0bcb52..091d14246b 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.h
 @@ -11,6 +11,8 @@
@@ -11562,11 +11567,12 @@ index b1bf0bcb52..0b4505e3fb 100644
  class ExtensionsContainer;
  class WebUIToolbarExtensionsContainer;
  class WebUIBrowserModalDialogHost;
-@@ -37,6 +41,13 @@ class WebUIStubLocationBar;
+@@ -37,6 +41,14 @@ class WebUIStubLocationBar;
  
  // A BrowserWindow implementation that uses WebUI for its primary UI. It still
  // uses views::Widget for windowing management.
 +namespace rail {
++class CaptureRegion;
 +class RailCommandBubble;
 +class RailSettingsWindow;
 +class RailSpacePanel;
@@ -11576,7 +11582,7 @@ index b1bf0bcb52..0b4505e3fb 100644
  class WebUIBrowserWindow : public BrowserWindow,
                             public ui::ColorProviderSource,
                             public ui::AcceleratorProvider,
-@@ -59,6 +70,14 @@ class WebUIBrowserWindow : public BrowserWindow,
+@@ -59,6 +71,14 @@ class WebUIBrowserWindow : public BrowserWindow,
    // Returns the WebUIBrowserWindow for the given `window`.
    static WebUIBrowserWindow* FromNativeWindow(gfx::NativeWindow window);
  
@@ -11591,12 +11597,13 @@ index b1bf0bcb52..0b4505e3fb 100644
    // BrowserWindow:
    gfx::NativeWindow GetNativeWindow() const override;
    bool IsOnCurrentWorkspace() const override;
-@@ -283,14 +302,27 @@ class WebUIBrowserWindow : public BrowserWindow,
+@@ -283,14 +303,28 @@ class WebUIBrowserWindow : public BrowserWindow,
    std::unique_ptr<WebUIBrowserWebContentsDelegate> web_contents_delegate_;
    std::unique_ptr<WidgetDelegate> widget_delegate_;
    std::unique_ptr<views::Widget> widget_;
 +#if BUILDFLAG(IS_WIN)
 +  std::unique_ptr<rail::SystemBackdropController> backdrop_controller_;
++  std::unique_ptr<rail::CaptureRegion> capture_region_;
 +#endif
    raw_ptr<views::WebView> web_view_ = nullptr;
    std::unique_ptr<WebUIStubLocationBar> location_bar_;
