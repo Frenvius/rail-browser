@@ -55,6 +55,10 @@ interface PageHandler {
 
   SetThemedTitlebar(bool themed);
 
+  GetGroupOpenedLinks() => (bool grouped);
+
+  SetGroupOpenedLinks(bool grouped);
+
   OpenCredits();
 
   Close();

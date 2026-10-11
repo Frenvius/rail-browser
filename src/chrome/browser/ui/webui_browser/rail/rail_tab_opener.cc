@@ -3,8 +3,11 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/navigation_controller.h"
+#include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
+#include "ui/base/page_transition_types.h"
 
 namespace rail {
 
@@ -28,6 +31,38 @@ std::optional<tabs_api::NodeId> OpenerOfTab(Browser* browser,
     return std::nullopt;
   }
   return tabs_api::NodeId::FromTabHandle(opener->GetHandle());
+}
+
+bool OpenedFromLink(const tabs_api::NodeId& tab_id) {
+  std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
+  tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
+  if (!tab) {
+    return false;
+  }
+  content::NavigationController& controller =
+      tab->GetContents()->GetController();
+  content::NavigationEntry* entry = controller.GetPendingEntry();
+  if (!entry) {
+    entry = controller.GetLastCommittedEntry();
+  }
+  return entry && ui::PageTransitionCoreTypeIs(entry->GetTransitionType(),
+                                               ui::PAGE_TRANSITION_LINK);
+}
+
+void ForgetOpeners(Browser* browser,
+                   const std::vector<tabs_api::NodeId>& tab_ids) {
+  if (!browser) {
+    return;
+  }
+  TabStripModel* model = browser->tab_strip_model();
+  for (const tabs_api::NodeId& tab_id : tab_ids) {
+    std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
+    tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
+    const int index = tab ? model->GetIndexOfTab(tab) : TabStripModel::kNoTab;
+    if (index != TabStripModel::kNoTab) {
+      model->SetOpenerOfTabAt(index, nullptr);
+    }
+  }
 }
 
 std::vector<std::pair<tabs_api::NodeId, tabs_api::NodeId>> OpenersOfTabs(

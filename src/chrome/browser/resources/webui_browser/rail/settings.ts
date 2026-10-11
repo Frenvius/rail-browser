@@ -65,6 +65,7 @@ export class RailSettingsElement extends CrLitElement {
       model_: {type: String, state: true},
       sidebarIconsOnly_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
+      groupOpenedLinks_: {type: Boolean, state: true},
     };
   }
 
@@ -78,6 +79,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor model_ = '';
   protected accessor sidebarIconsOnly_ = false;
   protected accessor themedTitlebar_ = true;
+  protected accessor groupOpenedLinks_ = true;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -94,6 +96,7 @@ export class RailSettingsElement extends CrLitElement {
     this.model_ = organize.model;
     this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
+    this.groupOpenedLinks_ = (await handler.getGroupOpenedLinks()).grouped;
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -128,6 +131,11 @@ export class RailSettingsElement extends CrLitElement {
   protected onThemedTitlebarChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setThemedTitlebar(e.detail);
     this.themedTitlebar_ = e.detail;
+  }
+
+  protected onGroupOpenedLinksChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setGroupOpenedLinks(e.detail);
+    this.groupOpenedLinks_ = e.detail;
   }
 
   protected onCreditsClick_() {

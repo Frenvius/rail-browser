@@ -103,6 +103,8 @@ const char* RailCommandForBrowserCommand(int command_id) {
       return "select-tab:7";
     case IDC_SELECT_LAST_TAB:
       return "select-tab:last";
+    case IDC_CLOSE_TAB:
+      return "close-tab";
     default:
       return nullptr;
   }

@@ -21,8 +21,13 @@ namespace rail {
 std::optional<tabs_api::NodeId> OpenerOfTab(Browser* browser,
                                             const tabs_api::NodeId& tab_id);
 
+bool OpenedFromLink(const tabs_api::NodeId& tab_id);
+
 std::vector<std::pair<tabs_api::NodeId, tabs_api::NodeId>> OpenersOfTabs(
     Browser* browser);
+
+void ForgetOpeners(Browser* browser,
+                   const std::vector<tabs_api::NodeId>& tab_ids);
 
 content::WebContents* OpenFromShell(
     Browser* browser,

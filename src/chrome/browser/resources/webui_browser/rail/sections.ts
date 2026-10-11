@@ -140,6 +140,12 @@ export function splitSections(
     }
   }
 
+  for (const group of tidyGroups.in(spaces.activeId)) {
+    if (!spaces.keysInGroup(group.id).length) {
+      looseEntries.push({kind: 'group', section: {group, items: []}});
+    }
+  }
+
   for (const item of items) {
     if (item.type === 'group' && spaces.owns(item.id)) {
       looseEntries.push({kind: 'item', item});

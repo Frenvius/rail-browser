@@ -8,12 +8,14 @@ namespace rail {
 const char kSidebarStatePref[] = "rail.sidebar_state";
 const char kSidebarIconsOnlyPref[] = "rail.sidebar_icons_only";
 const char kThemedTitlebarPref[] = "rail.titlebar_themed";
+const char kGroupOpenedLinksPref[] = "rail.group_opened_links";
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterStringPref(kSidebarStatePref, std::string());
   registry->RegisterBooleanPref(kSidebarIconsOnlyPref, false);
   registry->RegisterBooleanPref(kThemedTitlebarPref, true);
+  registry->RegisterBooleanPref(kGroupOpenedLinksPref, true);
 }
 
 std::string GetSidebarState(PrefService* prefs) {
@@ -43,6 +45,16 @@ bool GetThemedTitlebar(PrefService* prefs) {
 void SetThemedTitlebar(PrefService* prefs, bool themed) {
   if (prefs) {
     prefs->SetBoolean(kThemedTitlebarPref, themed);
+  }
+}
+
+bool GetGroupOpenedLinks(PrefService* prefs) {
+  return prefs && prefs->GetBoolean(kGroupOpenedLinksPref);
+}
+
+void SetGroupOpenedLinks(PrefService* prefs, bool grouped) {
+  if (prefs) {
+    prefs->SetBoolean(kGroupOpenedLinksPref, grouped);
   }
 }
 

@@ -3,8 +3,8 @@ import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_PROFILE_NAME} from './spaces.js';
 
-export type SpaceMenuCommand = 'change-icon'|'export'|'move'|'new-profile'|
-    'recolor'|'remove'|'rename'|'set-profile';
+export type SpaceMenuCommand = 'change-icon'|'export'|'move'|'new-group'|
+    'new-profile'|'recolor'|'remove'|'rename'|'set-profile';
 
 export interface SpaceMenuContext {
   space: Space;
@@ -40,6 +40,8 @@ function profileItems(context: SpaceMenuContext): NativeMenuItem[] {
 function buildItems(context: SpaceMenuContext): NativeMenuItem[] {
   return menuItems([
     {label: 'Space Context Menu'},
+    {command: 'new-group', label: 'New Group'},
+    separator(),
     {
       command: 'export',
       label: `Export “${context.space.name}” into Folder`,

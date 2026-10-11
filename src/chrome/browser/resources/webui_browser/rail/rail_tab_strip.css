@@ -333,49 +333,78 @@ webui-browser-tab {
 }
 
 .tidygroup {
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding-block-end: 6px;
+  transition: background-color 100ms ease-in-out,
+      gap 200ms cubic-bezier(0.42, 0, 0, 1),
+      padding-block-end 200ms cubic-bezier(0.42, 0, 0, 1);
+}
+
+@container not style(--rail-sidebar-icons: 1) {
+  .tidygroup:not([data-expanded]):not(:has(webui-browser-tab[active])) {
+    gap: 0;
+    padding-block-end: 0;
+  }
+}
+
+.tidygroup:hover {
+  background-color: var(--rail-elevated, rgb(255 255 255 / 6%));
 }
 
 .tidygroup-row {
   align-items: center;
   border-radius: 6px;
-  color: var(--rail-text-label, #8a8a8a);
+  color: var(--rail-text, #f2f2f2);
   cursor: default;
   display: flex;
-  font-size: 11px;
-  gap: 4px;
-  height: 22px;
-  letter-spacing: 0.02em;
-  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px;
   position: relative;
-  text-transform: uppercase;
   user-select: none;
 }
 
-.tidygroup-row:hover {
-  background: var(--rail-hover, rgb(255 255 255 / 10%));
+.tidygroup-favicon {
+  flex: none;
+  height: 14px;
+  margin: 0 3px;
+  width: 14px;
+}
+
+.tidygroup-favicon[src=''] {
+  display: none;
+}
+
+.tidygroup-row .folder-name-input {
+  field-sizing: content;
+  flex: 0 1 auto;
 }
 
 .tidygroup-name {
-  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tidygroup-row .folder-name-input {
-  text-transform: none;
-}
-
-.tidygroup-count {
+.tidygroup-chevron {
+  --iron-icon-height: 14px;
+  --iron-icon-width: 14px;
   color: var(--rail-text-label, #8a8a8a);
-  transition: opacity 300ms ease;
+  flex: none;
+  height: 14px;
+  margin-inline-start: -4px;
+  transition: transform 200ms cubic-bezier(0.42, 0, 0, 1);
+  width: 14px;
 }
 
-.tidygroup-row:hover .tidygroup-count {
-  opacity: 0;
+.tidygroup:not([data-expanded]) .tidygroup-chevron {
+  transform: rotate(-90deg);
 }
 
 .tidygroup-actions {
@@ -423,7 +452,7 @@ webui-browser-tab {
   flex-direction: column;
   gap: 2px;
   height: auto;
-  padding-inline-start: 9px;
+  padding-inline: 9px 6px;
   overflow: hidden;
   transition: height 200ms cubic-bezier(0.42, 0, 0, 1),
       opacity 200ms cubic-bezier(0.42, 0, 0, 1), visibility 0s;
@@ -542,9 +571,12 @@ webui-browser-tab {
     padding: 0;
   }
 
-  .folder-children,
-  .tidygroup-children {
+  .folder-children {
     padding-inline-start: 0;
+  }
+
+  .tidygroup-children {
+    padding-inline: 0;
   }
 
   .tidygroup:not([data-expanded]) .tidygroup-children {

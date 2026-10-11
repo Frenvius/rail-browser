@@ -799,6 +799,18 @@ export class Spaces {
     this.onChange_();
   }
 
+  groupWithOpener(
+      tabId: string, createGroup: (spaceId: string, name: string) => string) {
+    const row = this.byTab(tabId);
+    const opener = row ? this.rowFor(row.opener) : undefined;
+    if (!row || !opener || row.group) {
+      return;
+    }
+    const groupId = opener.group || createGroup(opener.space, opener.title);
+    this.setGroup(opener.key, groupId);
+    this.setGroup(row.key, groupId);
+  }
+
   clearGroup(groupId: string) {
     let changed = false;
     for (const row of this.rows_) {
@@ -945,6 +957,13 @@ export class Spaces {
       this.onChange_();
     }
     return changed;
+  }
+
+  clearOpener(tabId: string) {
+    const row = this.byTab(tabId);
+    if (row) {
+      row.opener = '';
+    }
   }
 
   forgetOpeners(spaceId: string) {

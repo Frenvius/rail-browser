@@ -95,6 +95,16 @@ ${this.openRow_ ? html`
       </option>
     </select>
   </div>
+  <div class="card">
+    <div class="rowtext">
+      <span class="cardtitle">Group tabs opened from links</span>
+      <span class="cardhint">
+        A link opened in a new tab joins a group with the tab it came from
+      </span>
+    </div>
+    <cr-toggle ?checked="${this.groupOpenedLinks_}"
+      @change="${this.onGroupOpenedLinksChange_}"></cr-toggle>
+  </div>
   <h2 class="section">Top Bar</h2>
   <div class="card">
     <div class="rowtext">

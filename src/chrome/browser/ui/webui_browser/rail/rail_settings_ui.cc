@@ -289,6 +289,15 @@ void RailSettingsUI::SetThemedTitlebar(bool themed) {
   rail::SetThemedTitlebar(PrefsFor(web_ui()), themed);
 }
 
+void RailSettingsUI::GetGroupOpenedLinks(
+    GetGroupOpenedLinksCallback callback) {
+  std::move(callback).Run(rail::GetGroupOpenedLinks(PrefsFor(web_ui())));
+}
+
+void RailSettingsUI::SetGroupOpenedLinks(bool grouped) {
+  rail::SetGroupOpenedLinks(PrefsFor(web_ui()), grouped);
+}
+
 void RailSettingsUI::OpenCredits() {
   rail::CreateTabInProfile(BrowserFor(web_ui()), std::string(),
                            GURL(kRailCreditsURL), base::DoNothing());
