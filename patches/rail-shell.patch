@@ -5872,10 +5872,10 @@ index 207b92cfae..e58d103e4b 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index 65d7e76ce5..924d8c99c6 100644
+index 65d7e76ce5..4afc6a38f5 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -4,27 +4,197 @@
+@@ -4,27 +4,199 @@
  
  import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
  
@@ -6002,19 +6002,21 @@ index 65d7e76ce5..924d8c99c6 100644
 +                @mousedown="${this.onTabMousedown_}"
 +                @contextmenu="${this.onTidyGroupContextmenu_}"
 +                @click="${this.onTidyGroupClick_}">
-+              <img class="tidygroup-favicon" alt=""
-+                  src="${this.groupFavicon_(entry.section)}">
-+              ${this.editingGroup_ === entry.section.group.id ? html`
-+                <input class="folder-name-input" spellcheck="false"
-+                    .value="${entry.section.group.name}"
-+                    @click="${this.onTidyGroupNameClick_}"
-+                    @keydown="${this.onTidyGroupNameKeydown_}"
-+                    @blur="${this.onTidyGroupNameBlur_}">
-+              ` : html`
-+                <span class="tidygroup-name">${entry.section.group.name}</span>
-+              `}
-+              <cr-icon class="tidygroup-chevron" icon="cr:expand-more">
-+              </cr-icon>
++              <div class="tidygroup-label">
++                <img class="tidygroup-favicon" alt=""
++                    src="${this.groupFavicon_(entry.section)}">
++                ${this.editingGroup_ === entry.section.group.id ? html`
++                  <input class="folder-name-input" spellcheck="false"
++                      .value="${entry.section.group.name}"
++                      @click="${this.onTidyGroupNameClick_}"
++                      @keydown="${this.onTidyGroupNameKeydown_}"
++                      @blur="${this.onTidyGroupNameBlur_}">
++                ` : html`
++                  <span class="tidygroup-name">${entry.section.group.name}</span>
++                `}
++                <cr-icon class="tidygroup-chevron" icon="cr:expand-more">
++                </cr-icon>
++              </div>
 +              <div class="tidygroup-actions">
 +                <button class="tidygroup-action"
 +                    data-group="${entry.section.group.id}" title="Save as folder"

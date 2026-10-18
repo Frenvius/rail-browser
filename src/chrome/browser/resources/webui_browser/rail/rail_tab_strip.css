@@ -369,6 +369,19 @@ webui-browser-tab {
   user-select: none;
 }
 
+.tidygroup-label {
+  align-items: center;
+  display: flex;
+  flex: 1 1 0%;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tidygroup-row:hover .tidygroup-label {
+  mask-image: linear-gradient(
+      to right, #000 calc(100% - 81px), transparent calc(100% - 53px));
+}
+
 .tidygroup-favicon {
   flex: none;
   height: 14px;
