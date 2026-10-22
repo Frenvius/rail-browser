@@ -6086,7 +6086,7 @@ index 65d7e76ce5..4afc6a38f5 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index aa4e0fe69e..855cf4cdfe 100644
+index aa4e0fe69e..fa7ec03c73 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6098,7 +6098,7 @@ index aa4e0fe69e..855cf4cdfe 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -11,20 +13,44 @@ import '//resources/cr_elements/icons.html.js';
+@@ -11,20 +13,45 @@ import '//resources/cr_elements/icons.html.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
@@ -6135,6 +6135,7 @@ index aa4e0fe69e..855cf4cdfe 100644
 +import {openFolderMenu, openGroupMenu, openTabMenu} from '../rail/tab_menu.js';
 +import {actsOnSelection, TabSelection} from '../rail/tab_selection.js';
 +import {TabSleep} from '../rail/tab_sleep.js';
++import type {SleepCandidate} from '../rail/tab_sleep.js';
 +import type {TidyGroupPlan, TidyTab} from '../rail/tidy_tabs.js';
 +import {buildPrompt, isOtherGroup, parsePlan} from '../rail/tidy_tabs.js';
 +import {TabAlertState} from '../tabs.mojom-webui.js';
@@ -6147,7 +6148,7 @@ index aa4e0fe69e..855cf4cdfe 100644
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-@@ -36,6 +62,8 @@ export interface TabStripElement {
+@@ -36,6 +63,8 @@ export interface TabStripElement {
    };
  }
  
@@ -6156,7 +6157,7 @@ index aa4e0fe69e..855cf4cdfe 100644
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -64,7 +92,7 @@ class TabStripItemFactory {
+@@ -64,7 +93,7 @@ class TabStripItemFactory {
  }
  
  export class TabStripElement extends CrLitElement implements TabStripObserver,
@@ -6165,7 +6166,7 @@ index aa4e0fe69e..855cf4cdfe 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -82,6 +110,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -82,6 +111,42 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        items_: {
          type: Array,
        },
@@ -6208,7 +6209,7 @@ index aa4e0fe69e..855cf4cdfe 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -90,21 +154,88 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -90,21 +155,90 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
          type: Boolean,
          state: true,
        },
@@ -6295,13 +6296,18 @@ index aa4e0fe69e..855cf4cdfe 100644
      this.tabStripService_ = TabStripService.getRemote();
 +    browserProxyFactory.getInstance().callbackRouter.onSidebarStateChanged
 +        .addListener(this.onSidebarStateChanged_.bind(this));
++    browserProxyFactory.getInstance().callbackRouter.onTabSleepChanged
++        .addListener(this.tabSleep_.setPolicy.bind(this.tabSleep_));
    }
  
    override connectedCallback() {
-@@ -112,11 +243,16 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -112,11 +246,19 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
++    browserProxyFactory.getInstance().handler.getTabSleep().then(
++        ({minutes, exceptions}) =>
++            this.tabSleep_.setPolicy(minutes, exceptions));
 +    this.tabSleep_.start();
    }
  
@@ -6315,7 +6321,7 @@ index aa4e0fe69e..855cf4cdfe 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -138,6 +274,102 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -138,6 +280,102 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6418,7 +6424,7 @@ index aa4e0fe69e..855cf4cdfe 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -159,20 +391,36 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -159,20 +397,36 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6456,7 +6462,7 @@ index aa4e0fe69e..855cf4cdfe 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -188,6 +436,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -188,6 +442,14 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6471,7 +6477,7 @@ index aa4e0fe69e..855cf4cdfe 100644
    private syncTabActiveStates_() {
      let hasChanges = false;
      const updatedItems = [...this.items_];
-@@ -234,23 +490,138 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -234,23 +496,138 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
      }
    }
  
@@ -6621,7 +6627,7 @@ index aa4e0fe69e..855cf4cdfe 100644
        this.setActiveTab_(tab.id);
      }
  
-@@ -258,149 +629,1695 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
+@@ -258,149 +635,1695 @@ export class TabStripElement extends CrLitElement implements TabStripObserver,
        id: tab.id,
        isActive: tab.isActive,
      });
@@ -6709,8 +6715,8 @@ index aa4e0fe69e..855cf4cdfe 100644
 -    if (updated) {
 -      if (tab.isActive) {
 -        this.setActiveTab_(tab.id);
-+  private sleepCandidates_(): string[] {
-+    const candidates: string[] = [];
++  private sleepCandidates_(): SleepCandidate[] {
++    const candidates: SleepCandidate[] = [];
 +    for (const item of this.items_) {
 +      if (item.type !== 'tab' || item.id === this.activeTab_ ||
 +          this.spaces_.isAsleep(item.id)) {
@@ -6721,7 +6727,7 @@ index aa4e0fe69e..855cf4cdfe 100644
 +        this.tabSleep_.touch(item.id);
 +        continue;
 +      }
-+      candidates.push(item.id);
++      candidates.push({id: item.id, url: item.tabData.url});
      }
 +    return candidates;
    }
@@ -9906,7 +9912,7 @@ index 3d4fe27f4f..5e9bdd6f6c 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 15a65f7152..bcb920a30a 100644
+index 15a65f7152..f7f6822739 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -9985,7 +9991,7 @@ index 15a65f7152..bcb920a30a 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,38 @@ interface Page {
+@@ -44,6 +91,40 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -10012,6 +10018,8 @@ index 15a65f7152..bcb920a30a 100644
 +
 +  OnThemedTitlebarChanged(bool themed);
 +
++  OnTabSleepChanged(int32 minutes, array<string> exceptions);
++
 +  OnPageColorChanged(tabs_api.mojom.NodeId tab, bool has_color, uint32 color,
 +                     bool? animated);
 +
@@ -10024,7 +10032,7 @@ index 15a65f7152..bcb920a30a 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -55,7 +134,7 @@ interface PageHandler {
+@@ -55,7 +136,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -10033,7 +10041,7 @@ index 15a65f7152..bcb920a30a 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -90,6 +169,82 @@ interface PageHandler {
+@@ -90,6 +171,84 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -10093,6 +10101,8 @@ index 15a65f7152..bcb920a30a 100644
 +  SleepTab(tabs_api.mojom.NodeId id) => (bool asleep);
 +
 +  GetSleepingTabs() => (array<tabs_api.mojom.NodeId> ids);
++
++  GetTabSleep() => (int32 minutes, array<string> exceptions);
 +
 +  ShowRailMenu(array<RailMenuItem> items);
 +
@@ -10305,7 +10315,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..e8a3881003 100644
+index 3ba14e7289..c99a6ceb4a 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -10433,7 +10443,7 @@ index 3ba14e7289..e8a3881003 100644
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +415,285 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +415,301 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -10488,6 +10498,15 @@ index 3ba14e7289..e8a3881003 100644
 +    bool themed = rail::GetThemedTitlebar(browser->profile()->GetPrefs());
 +    TrackPageColor(themed);
 +    controller_->page()->OnThemedTitlebarChanged(themed);
++  }
++}
++
++void WebUIBrowserPageHandler::OnTabSleepChanged() {
++  Browser* browser = GetBrowser();
++  if (browser && controller_) {
++    PrefService* prefs = browser->profile()->GetPrefs();
++    controller_->page()->OnTabSleepChanged(rail::GetTabSleepMinutes(prefs),
++                                           rail::GetTabSleepExceptions(prefs));
 +  }
 +}
 +
@@ -10703,6 +10722,13 @@ index 3ba14e7289..e8a3881003 100644
 +  std::move(callback).Run(rail::SleepingTabs(GetBrowser()));
 +}
 +
++void WebUIBrowserPageHandler::GetTabSleep(GetTabSleepCallback callback) {
++  Browser* browser = GetBrowser();
++  PrefService* prefs = browser ? browser->profile()->GetPrefs() : nullptr;
++  std::move(callback).Run(rail::GetTabSleepMinutes(prefs),
++                          rail::GetTabSleepExceptions(prefs));
++}
++
 +void WebUIBrowserPageHandler::OnTabDragMoved(const gfx::Point& point) {
 +  if (controller_) {
 +    controller_->page()->OnTabDragMoved(point);
@@ -10719,7 +10745,7 @@ index 3ba14e7289..e8a3881003 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -339,7 +701,23 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -339,7 +717,31 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -10739,13 +10765,21 @@ index 3ba14e7289..e8a3881003 100644
 +        rail::kThemedTitlebarPref,
 +        base::BindRepeating(&WebUIBrowserPageHandler::OnThemedTitlebarChanged,
 +                            weak_factory_.GetWeakPtr()));
++    sidebar_state_registrar_.Add(
++        rail::kTabSleepMinutesPref,
++        base::BindRepeating(&WebUIBrowserPageHandler::OnTabSleepChanged,
++                            weak_factory_.GetWeakPtr()));
++    sidebar_state_registrar_.Add(
++        rail::kTabSleepExceptionsPref,
++        base::BindRepeating(&WebUIBrowserPageHandler::OnTabSleepChanged,
++                            weak_factory_.GetWeakPtr()));
 +  }
 +}
  
  Browser* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..ba3831e1ad 100644
+index 859da4ef00..4c9dcbb9a9 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -9,8 +9,11 @@
@@ -10771,7 +10805,7 @@ index 859da4ef00..ba3831e1ad 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +63,81 @@ class WebUIBrowserPageHandler
+@@ -56,8 +63,83 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -10820,6 +10854,7 @@ index 859da4ef00..ba3831e1ad 100644
 +                    ListLiveTabsCallback callback) override;
 +  void SleepTab(const tabs_api::NodeId& id, SleepTabCallback callback) override;
 +  void GetSleepingTabs(GetSleepingTabsCallback callback) override;
++  void GetTabSleep(GetTabSleepCallback callback) override;
 +  void ShowRailMenu(
 +      std::vector<webui_browser::mojom::RailMenuItemPtr> items) override;
 +  void IsDefaultBrowser(IsDefaultBrowserCallback callback) override;
@@ -10842,6 +10877,7 @@ index 859da4ef00..ba3831e1ad 100644
 +  void OnSidebarStateChanged();
 +  void OnSidebarIconsOnlyChanged();
 +  void OnThemedTitlebarChanged();
++  void OnTabSleepChanged();
 +  void TrackPageColor(bool themed);
 +  void OnPageColorChanged(const tabs_api::NodeId& tab,
 +                          std::optional<SkColor> color,
@@ -10853,7 +10889,7 @@ index 859da4ef00..ba3831e1ad 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +149,8 @@ class WebUIBrowserPageHandler
+@@ -69,6 +151,8 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -10862,7 +10898,7 @@ index 859da4ef00..ba3831e1ad 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -77,11 +159,17 @@ class WebUIBrowserPageHandler
+@@ -77,11 +161,17 @@ class WebUIBrowserPageHandler
    std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
  
    std::unique_ptr<content::WebContents> glic_contents_;

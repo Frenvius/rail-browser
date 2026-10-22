@@ -59,6 +59,12 @@ interface PageHandler {
 
   SetGroupOpenedLinks(bool grouped);
 
+  GetTabSleep() => (int32 minutes, array<string> exceptions);
+
+  SetTabSleepMinutes(int32 minutes);
+
+  SetTabSleepExceptions(array<string> exceptions);
+
   OpenCredits();
 
   Close();

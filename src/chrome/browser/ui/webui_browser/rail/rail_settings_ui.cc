@@ -298,6 +298,21 @@ void RailSettingsUI::SetGroupOpenedLinks(bool grouped) {
   rail::SetGroupOpenedLinks(PrefsFor(web_ui()), grouped);
 }
 
+void RailSettingsUI::GetTabSleep(GetTabSleepCallback callback) {
+  PrefService* prefs = PrefsFor(web_ui());
+  std::move(callback).Run(rail::GetTabSleepMinutes(prefs),
+                          rail::GetTabSleepExceptions(prefs));
+}
+
+void RailSettingsUI::SetTabSleepMinutes(int32_t minutes) {
+  rail::SetTabSleepMinutes(PrefsFor(web_ui()), minutes);
+}
+
+void RailSettingsUI::SetTabSleepExceptions(
+    const std::vector<std::string>& exceptions) {
+  rail::SetTabSleepExceptions(PrefsFor(web_ui()), exceptions);
+}
+
 void RailSettingsUI::OpenCredits() {
   rail::CreateTabInProfile(BrowserFor(web_ui()), std::string(),
                            GURL(kRailCreditsURL), base::DoNothing());

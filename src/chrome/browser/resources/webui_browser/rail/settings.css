@@ -190,7 +190,8 @@ h2.section {
 }
 
 #engine,
-#sidebarcollapse {
+#sidebarcollapse,
+#sleepafter {
   background: rgb(255 255 255 / 8%);
   border: 0;
   border-radius: 6px;
@@ -215,7 +216,8 @@ h2.section {
 }
 
 #apikey,
-#model {
+#model,
+#sleepsite {
   background: rgb(255 255 255 / 8%);
   border: 0;
   border-radius: 6px;
@@ -227,7 +229,8 @@ h2.section {
   width: 220px;
 }
 
-#clearkey {
+#clearkey,
+.sitebutton {
   background: rgb(255 255 255 / 8%);
   border: 0;
   border-radius: 6px;

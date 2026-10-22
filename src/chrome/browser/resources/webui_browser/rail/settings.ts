@@ -10,6 +10,7 @@ import {browserProxyFactory} from '../rail_settings.mojom-webui.js';
 import {getCss} from './settings.css.js';
 import {getHtml} from './settings.html.js';
 import {DEFAULT_PROFILE_NAME} from './spaces.js';
+import {normalizeSleepSite} from './tab_sleep.js';
 
 export interface ProfileRow {
   id: string;
@@ -66,6 +67,8 @@ export class RailSettingsElement extends CrLitElement {
       sidebarIconsOnly_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
       groupOpenedLinks_: {type: Boolean, state: true},
+      sleepMinutes_: {type: Number, state: true},
+      sleepSites_: {type: Array, state: true},
     };
   }
 
@@ -80,6 +83,16 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor sidebarIconsOnly_ = false;
   protected accessor themedTitlebar_ = true;
   protected accessor groupOpenedLinks_ = true;
+  protected accessor sleepMinutes_ = 30;
+  protected accessor sleepSites_: string[] = [];
+  protected readonly sleepChoices_ = [
+    {minutes: 0, label: 'Never'},
+    {minutes: 15, label: '15 minutes'},
+    {minutes: 30, label: '30 minutes'},
+    {minutes: 60, label: '1 hour'},
+    {minutes: 120, label: '2 hours'},
+    {minutes: 360, label: '6 hours'},
+  ];
 
   override connectedCallback() {
     super.connectedCallback();
@@ -97,6 +110,9 @@ export class RailSettingsElement extends CrLitElement {
     this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
     this.groupOpenedLinks_ = (await handler.getGroupOpenedLinks()).grouped;
+    const sleep = await handler.getTabSleep();
+    this.sleepMinutes_ = sleep.minutes;
+    this.sleepSites_ = sleep.exceptions;
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -136,6 +152,41 @@ export class RailSettingsElement extends CrLitElement {
   protected onGroupOpenedLinksChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setGroupOpenedLinks(e.detail);
     this.groupOpenedLinks_ = e.detail;
+  }
+
+  protected onSleepMinutesChange_(e: Event) {
+    const minutes = Number((e.target as HTMLSelectElement).value);
+    browserProxyFactory.getInstance().handler.setTabSleepMinutes(minutes);
+    this.sleepMinutes_ = minutes;
+  }
+
+  protected onSleepSiteKeydown_(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      this.onAddSleepSiteClick_();
+    }
+  }
+
+  protected onAddSleepSiteClick_() {
+    const input = this.shadowRoot.querySelector<HTMLInputElement>('#sleepsite');
+    if (!input) {
+      return;
+    }
+    const site = normalizeSleepSite(input.value);
+    input.value = '';
+    if (!site || this.sleepSites_.includes(site)) {
+      return;
+    }
+    this.setSleepSites_([...this.sleepSites_, site]);
+  }
+
+  protected onRemoveSleepSiteClick_(e: Event) {
+    const site = (e.currentTarget as HTMLElement).dataset['site'];
+    this.setSleepSites_(this.sleepSites_.filter(entry => entry !== site));
+  }
+
+  private setSleepSites_(sites: string[]) {
+    browserProxyFactory.getInstance().handler.setTabSleepExceptions(sites);
+    this.sleepSites_ = sites;
   }
 
   protected onCreditsClick_() {

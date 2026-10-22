@@ -2,6 +2,7 @@
 #define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SIDEBAR_STATE_H_
 
 #include <string>
+#include <vector>
 
 class PrefService;
 
@@ -14,6 +15,8 @@ namespace rail {
 extern const char kSidebarStatePref[];
 extern const char kSidebarIconsOnlyPref[];
 extern const char kThemedTitlebarPref[];
+extern const char kTabSleepMinutesPref[];
+extern const char kTabSleepExceptionsPref[];
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
@@ -33,6 +36,15 @@ void SetThemedTitlebar(PrefService* prefs, bool themed);
 bool GetGroupOpenedLinks(PrefService* prefs);
 
 void SetGroupOpenedLinks(PrefService* prefs, bool grouped);
+
+int GetTabSleepMinutes(PrefService* prefs);
+
+void SetTabSleepMinutes(PrefService* prefs, int minutes);
+
+std::vector<std::string> GetTabSleepExceptions(PrefService* prefs);
+
+void SetTabSleepExceptions(PrefService* prefs,
+                           const std::vector<std::string>& sites);
 
 }
 

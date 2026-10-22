@@ -105,6 +105,43 @@ ${this.openRow_ ? html`
     <cr-toggle ?checked="${this.groupOpenedLinks_}"
       @change="${this.onGroupOpenedLinksChange_}"></cr-toggle>
   </div>
+  <h2 class="section">Tab Sleep</h2>
+  <div class="card">
+    <div class="rowtext">
+      <span class="cardtitle">Sleep inactive tabs after</span>
+      <span class="cardhint">
+        A sleeping tab frees its memory and reloads when you open it
+      </span>
+    </div>
+    <select id="sleepafter" @change="${this.onSleepMinutesChange_}">
+      ${this.sleepChoices_.map(choice => html`
+        <option value="${choice.minutes}"
+          ?selected="${choice.minutes === this.sleepMinutes_}">
+          ${choice.label}
+        </option>
+      `)}
+    </select>
+  </div>
+  <div class="card">
+    <div class="rowtext">
+      <span class="cardtitle">Never sleep these sites</span>
+      <span class="cardhint">Covers the site and its subdomains</span>
+    </div>
+    <div class="control">
+      <input id="sleepsite" placeholder="example.com"
+          @keydown="${this.onSleepSiteKeydown_}">
+      <button class="sitebutton" @click="${this.onAddSleepSiteClick_}">
+        Add
+      </button>
+    </div>
+  </div>
+  ${this.sleepSites_.map(site => html`
+    <div class="card">
+      <span class="cardtitle">${site}</span>
+      <button class="sitebutton" data-site="${site}"
+          @click="${this.onRemoveSleepSiteClick_}">Remove</button>
+    </div>
+  `)}
   <h2 class="section">Top Bar</h2>
   <div class="card">
     <div class="rowtext">

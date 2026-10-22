@@ -1,5 +1,8 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 
+#include <algorithm>
+
+#include "base/values.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 
@@ -9,6 +12,8 @@ const char kSidebarStatePref[] = "rail.sidebar_state";
 const char kSidebarIconsOnlyPref[] = "rail.sidebar_icons_only";
 const char kThemedTitlebarPref[] = "rail.titlebar_themed";
 const char kGroupOpenedLinksPref[] = "rail.group_opened_links";
+const char kTabSleepMinutesPref[] = "rail.tab_sleep_minutes";
+const char kTabSleepExceptionsPref[] = "rail.tab_sleep_exceptions";
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
@@ -16,6 +21,8 @@ void RegisterSidebarStateProfilePrefs(
   registry->RegisterBooleanPref(kSidebarIconsOnlyPref, false);
   registry->RegisterBooleanPref(kThemedTitlebarPref, true);
   registry->RegisterBooleanPref(kGroupOpenedLinksPref, true);
+  registry->RegisterIntegerPref(kTabSleepMinutesPref, 30);
+  registry->RegisterListPref(kTabSleepExceptionsPref);
 }
 
 std::string GetSidebarState(PrefService* prefs) {
@@ -56,6 +63,43 @@ void SetGroupOpenedLinks(PrefService* prefs, bool grouped) {
   if (prefs) {
     prefs->SetBoolean(kGroupOpenedLinksPref, grouped);
   }
+}
+
+int GetTabSleepMinutes(PrefService* prefs) {
+  return prefs ? prefs->GetInteger(kTabSleepMinutesPref) : 30;
+}
+
+void SetTabSleepMinutes(PrefService* prefs, int minutes) {
+  if (prefs) {
+    prefs->SetInteger(kTabSleepMinutesPref, std::max(minutes, 0));
+  }
+}
+
+std::vector<std::string> GetTabSleepExceptions(PrefService* prefs) {
+  std::vector<std::string> sites;
+  if (!prefs) {
+    return sites;
+  }
+  for (const base::Value& site : prefs->GetList(kTabSleepExceptionsPref)) {
+    if (site.is_string()) {
+      sites.push_back(site.GetString());
+    }
+  }
+  return sites;
+}
+
+void SetTabSleepExceptions(PrefService* prefs,
+                           const std::vector<std::string>& sites) {
+  if (!prefs) {
+    return;
+  }
+  base::ListValue list;
+  for (const std::string& site : sites) {
+    if (!site.empty()) {
+      list.Append(site);
+    }
+  }
+  prefs->SetList(kTabSleepExceptionsPref, std::move(list));
 }
 
 }
