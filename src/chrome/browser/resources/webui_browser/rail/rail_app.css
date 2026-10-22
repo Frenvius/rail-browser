@@ -643,6 +643,12 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   z-index: -1;
 }
 
+:host([titlebar-themed]:not([sidebar-collapsed])) #backButton,
+:host([titlebar-themed][sidebar-icons-only]) #backButton,
+:host([titlebar-themed][mini]) #backButton {
+  margin-inline-start: 4px;
+}
+
 :host([titlebar-themed][page-color-animated]) {
   --rail-page-transition: 150ms;
 }
