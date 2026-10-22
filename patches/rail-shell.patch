@@ -9449,6 +9449,71 @@ index 7a0111c300..5c73765231 100644
      return std::unique_ptr<BrowserWindow, BrowserWindowDeleter>(
          new WebUIBrowserWindow(browser));
    }
+diff --git a/chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.cc b/chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.cc
+index bf27452e8e..bcc5b39791 100644
+--- a/chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.cc
++++ b/chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.cc
+@@ -11,13 +11,13 @@
+ #include "chrome/browser/ui/color/chrome_color_id.h"
+ #include "chrome/browser/ui/views/chrome_layout_provider.h"
+ #include "chrome/browser/ui/views/chrome_widget_sublevel.h"
+-#include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/permissions/permission_prompt_observer.h"
+ #include "chrome/browser/ui/views/sub_apps_permission_explanation.h"
+ #include "components/permissions/features.h"
+ #include "components/permissions/permission_util.h"
+ #include "content/public/browser/render_widget_host.h"
+ #include "content/public/browser/render_widget_host_view.h"
++#include "content/public/browser/web_contents.h"
+ #include "third_party/blink/public/common/features_generated.h"
+ #include "ui/base/interaction/element_identifier.h"
+ #include "ui/base/l10n/l10n_util.h"
+@@ -87,20 +87,14 @@ int GetPermissionIconSize() {
+   return 20;
+ }
+ 
+-float GetScreenScaleFactor(Browser* browser) {
+-  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
+-  return browser_view ? display::Screen::Get()
++float GetScreenScaleFactor(content::WebContents* web_contents) {
++  return web_contents ? display::Screen::Get()
+                             ->GetPreferredScaleFactorForWindow(
+-                                browser_view->GetNativeWindow())
++                                web_contents->GetTopLevelNativeWindow())
+                             .value_or(1.0f)
+                       : 1.0f;
+ }
+ 
+-views::View* GetContentsWebView(Browser* browser) {
+-  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
+-  return browser_view ? browser_view->contents_web_view() : nullptr;
+-}
+-
+ }  // namespace
+ 
+ EmbeddedPermissionPromptBaseView::EmbeddedPermissionPromptBaseView(
+@@ -125,13 +119,17 @@ EmbeddedPermissionPromptBaseView::EmbeddedPermissionPromptBaseView(
+         element_rect_.size());
+   }
+ 
++  content::WebContents* web_contents =
++      delegate_->GetPermissionPromptDelegate()->GetAssociatedWebContents();
++
+   // Scale the element position according to the device scale factor.
+-  element_rect_ = gfx::ScaleToEnclosedRect(element_rect_,
+-                                           1.f / GetScreenScaleFactor(browser));
++  element_rect_ = gfx::ScaleToEnclosedRect(
++      element_rect_, 1.f / GetScreenScaleFactor(web_contents));
+ 
+   // Convert the position into screen coordinates.
+-  auto* content_view = GetContentsWebView(browser);
+-  views::View::ConvertRectToScreen(content_view, &element_rect_);
++  if (web_contents) {
++    element_rect_.Offset(web_contents->GetContainerBounds().OffsetFromOrigin());
++  }
+ }
+ 
+ EmbeddedPermissionPromptBaseView::~EmbeddedPermissionPromptBaseView() {
 diff --git a/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.cc b/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.cc
 index 625e3b90c0..6491b455cb 100644
 --- a/chrome/browser/ui/views/renderer_context_menu/render_view_context_menu_views.cc
