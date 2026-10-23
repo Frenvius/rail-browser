@@ -14,6 +14,7 @@ export interface NativeMenuItem {
 }
 
 let pending: ((command: string) => void)|null = null;
+let chosen: string|null = null;
 let listening = false;
 
 function toMojo(item: NativeMenuItem): RailMenuItem {
@@ -37,10 +38,16 @@ function listen() {
   listening = true;
   const router = browserProxyFactory.getInstance().callbackRouter;
   router.onRailMenuCommand.addListener((command: string) => {
-    pending?.(command);
+    chosen = command;
   });
   router.onRailMenuClosed.addListener(() => {
+    const run = pending;
+    const command = chosen;
     pending = null;
+    chosen = null;
+    if (run && command !== null) {
+      run(command);
+    }
   });
 }
 
@@ -48,6 +55,7 @@ export function showNativeMenu(
     items: NativeMenuItem[], onCommand: (command: string) => void) {
   listen();
   pending = onCommand;
+  chosen = null;
   browserProxyFactory.getInstance().handler.showRailMenu(items.map(toMojo));
 }
 

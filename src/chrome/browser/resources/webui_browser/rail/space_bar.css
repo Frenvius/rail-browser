@@ -9,8 +9,6 @@
 .dot,
 #more,
 #add,
-cr-action-menu,
-.dropdown-item,
 cr-dialog {
   -webkit-app-region: no-drag;
 }
@@ -161,34 +159,6 @@ cr-dialog {
   width: 6px;
 }
 
-cr-action-menu {
-  --cr-menu-background-color: #1c1c1c;
-  --cr-menu-background-focus-color: var(--rail-hover, #303048);
-  --cr-menu-border-radius: 8px;
-  --cr-menu-shadow: 0 8px 24px rgb(0 0 0 / 45%),
-      inset 0 0 0 1px rgb(255 255 255 / 8%);
-  --cr-primary-text-color: var(--rail-text-muted, #c0c0d8);
-}
-
-.dropdown-item {
-  color: var(--rail-text-muted, #c0c0d8);
-  font-size: 13px;
-  min-height: 30px;
-  padding: 0 16px;
-}
-
-.dropdown-item:hover,
-.dropdown-item:focus,
-.dropdown-item:focus-visible {
-  background: var(--rail-hover, #303048);
-  color: var(--rail-text, #f0f0ff);
-  outline: none;
-}
-
-.dropdown-item.danger {
-  color: var(--rail-danger, #e57);
-}
-
 #glyph {
   align-items: center;
   background: color-mix(in srgb, var(--space-color, transparent) 22%, transparent);
@@ -297,11 +267,4 @@ cr-dialog cr-button {
 cr-dialog cr-button.action-button {
   --cr-button-background-color: var(--rail-accent, #7c5cfc);
   --cr-button-text-color: #fff;
-}
-
-#confirm {
-  color: var(--rail-text-muted, #c0c0d8);
-  font-size: 12px;
-  max-width: 200px;
-  padding: 10px 16px 4px;
 }

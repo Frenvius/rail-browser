@@ -1,10 +1,8 @@
-import '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import '//resources/cr_elements/cr_button/cr_button.js';
 import '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import '//resources/cr_elements/cr_icon/cr_icon.js';
 import '//resources/cr_elements/icons.html.js';
 
-import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
@@ -12,7 +10,6 @@ import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
-import {announceMenuOpen} from './menu_overlay.js';
 import type {NativeMenuItem} from './native_menu.js';
 import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import {INCOGNITO} from './sidebar_state.js';
@@ -39,7 +36,6 @@ export interface SpaceCommandDetail {
 
 export interface SpaceBarElement {
   $: {
-    menu: CrActionMenuElement,
     profileDialog: CrDialogElement,
   };
 }
@@ -68,7 +64,6 @@ export class SpaceBarElement extends CrLitElement {
       compact_: {type: Boolean, state: true},
       visibleCount_: {type: Number, state: true},
       editing_: {type: Boolean, state: true},
-      confirming_: {type: Boolean, state: true},
       profileName_: {type: String, state: true},
       menuTarget_: {type: String, state: true},
     };
@@ -85,7 +80,6 @@ export class SpaceBarElement extends CrLitElement {
   protected accessor editing_ = false;
   private readonly resizeObserver_ = new ResizeObserver(() =>
     this.updateSpaceLayout_());
-  protected accessor confirming_ = false;
   protected accessor profileName_ = '';
   protected accessor menuTarget_ = '';
   private menuX_ = 0;
@@ -219,18 +213,12 @@ export class SpaceBarElement extends CrLitElement {
         return;
       case 'remove':
         if (this.removeCount_()) {
-          void this.openRemoveConfirm_();
+          this.openRemoveConfirm_();
           return;
         }
         this.fire_('remove', this.menuTarget_);
         return;
     }
-  }
-
-  private async openPanel_() {
-    await this.updateComplete;
-    this.$.menu.showAtPosition({top: this.menuY_, left: this.menuX_});
-    announceMenuOpen(this.$.menu);
   }
 
   private openPicker_(kind: 'color'|'icon') {
@@ -249,9 +237,23 @@ export class SpaceBarElement extends CrLitElement {
         {x: this.menuX_, y: this.menuY_});
   }
 
-  private async openRemoveConfirm_() {
-    this.confirming_ = true;
-    await this.openPanel_();
+  private openRemoveConfirm_() {
+    const count = this.removeCount_();
+    showNativeMenu(
+        [
+          {
+            label: `Delete ${this.targetSpace_()?.name ?? ''} and close ${
+                count} tab${count === 1 ? '' : 's'}?`,
+          },
+          separator(),
+          {command: 'cancel', label: 'Cancel'},
+          {command: 'remove', label: 'Delete Space', danger: true},
+        ],
+        command => {
+          if (command === 'remove') {
+            this.fire_('remove', this.menuTarget_);
+          }
+        });
   }
 
   private async openProfileDialog_() {
@@ -350,19 +352,6 @@ export class SpaceBarElement extends CrLitElement {
   protected onNameContextmenu_(e: MouseEvent) {
     e.preventDefault();
     this.openMenuAt(e.clientX, e.clientY);
-  }
-
-  protected onConfirmRemoveClick_() {
-    this.$.menu.close();
-    this.fire_('remove', this.menuTarget_);
-  }
-
-  protected onCancelRemoveClick_() {
-    this.$.menu.close();
-  }
-
-  protected onMenuClose_() {
-    this.confirming_ = false;
   }
 
   protected onInputKeydown_(e: KeyboardEvent) {

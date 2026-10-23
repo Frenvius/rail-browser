@@ -4515,7 +4515,7 @@ index f4c33684da..2fc51e082b 100644
    // OCCLUDED. Will require checking that the tab reload correctly when it
    // becomes VISIBLE.
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index a75d80b00c..6a4144c3ef 100644
+index a75d80b00c..31acd8e5a5 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,16 @@ assert(!is_android)
@@ -4536,7 +4536,7 @@ index a75d80b00c..6a4144c3ef 100644
  
    ts_files = [
      "app.html.ts",
-@@ -23,6 +32,40 @@ build_webui("build") {
+@@ -23,6 +32,39 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4549,7 +4549,6 @@ index a75d80b00c..6a4144c3ef 100644
 +    "rail/folders.ts",
 +    "rail/format_url.ts",
 +    "rail/logo_menu.ts",
-+    "rail/menu_overlay.ts",
 +    "rail/mini_window.ts",
 +    "rail/native_groups.ts",
 +    "rail/native_menu.ts",
@@ -4577,7 +4576,7 @@ index a75d80b00c..6a4144c3ef 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -48,6 +91,15 @@ build_webui("build") {
+@@ -48,6 +90,15 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4593,7 +4592,7 @@ index a75d80b00c..6a4144c3ef 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -62,6 +114,9 @@ build_webui("build") {
+@@ -62,6 +113,9 @@ build_webui("build") {
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/browser.mojom-webui.ts",
@@ -4943,7 +4942,7 @@ index 8ebad94626..182a9b0806 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index caed98ffda..fe56822960 100644
+index caed98ffda..097a754bd7 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -4954,7 +4953,7 @@ index caed98ffda..fe56822960 100644
  import './content_region.js';
  import './extensions_bar.js';
  import './icons.html.js';
-@@ -10,36 +9,47 @@ import './side_panel.js';
+@@ -10,7 +9,6 @@ import './side_panel.js';
  import '/strings.m.js';
  import './tab_strip/tab_strip.js';
  import './webview.js';
@@ -4962,8 +4961,7 @@ index caed98ffda..fe56822960 100644
  import 'chrome://resources/cr_elements/cr_button/cr_button.js';
  import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
- 
-+import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
+@@ -18,28 +16,38 @@ import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
  import {ColorChangeUpdater} from '//resources/cr_components/color_change_listener/colors_css_updater.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import {loadTimeData} from '//resources/js/load_time_data.js';
@@ -4981,7 +4979,6 @@ index caed98ffda..fe56822960 100644
 +import type {CommandBarHost} from './rail/command_registry.js';
 +import {formatDisplayUrl} from './rail/format_url.js';
 +import {openLogoMenu} from './rail/logo_menu.js';
-+import {MENU_OPEN_EVENT} from './rail/menu_overlay.js';
 +import {adoptMiniWindow, MINI, miniMatchProfile, miniProfileName, miniSetTargetSpace, miniSpaces, miniTargetSpace} from './rail/mini_window.js';
 +import {showNativeMenu} from './rail/native_menu.js';
 +import {initPageColor} from './rail/page_color.js';
@@ -5008,7 +5005,7 @@ index caed98ffda..fe56822960 100644
      sidePanel: SidePanelElement,
      tabstrip: TabStripElement,
    };
-@@ -61,9 +71,15 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -61,9 +69,14 @@ export class WebuiBrowserAppElement extends CrLitElement {
    static override get properties() {
      return {
        backButtonDisabled_: {state: true, type: Boolean},
@@ -5017,32 +5014,29 @@ index caed98ffda..fe56822960 100644
        forwardButtonDisabled_: {state: true, type: Boolean},
        fullscreenMode_:
            {type: String, reflect: true, attribute: 'fullscreen-mode'},
-+      menuOpen_: {type: Boolean, reflect: true, attribute: 'menu-open'},
 +      mini_: {type: Boolean, reflect: true, attribute: 'mini'},
 +      miniProfile_: {state: true, type: String},
 +      miniSpace_: {state: true, type: String},
        showingSidePanel_: {state: true, type: Boolean},
        reloadOrStopIcon_: {state: true, type: String},
        showLocationIconButton_: {type: Boolean, reflect: true},
-@@ -74,9 +90,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -74,9 +87,15 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    private trackedElementManager_: TrackedElementManager;
    private longPressTimer_: number = 0;
-+  private openMenus_: Set<EventTarget> = new Set();
 +  private readonly activeProfile_ = new ActiveProfile();
    protected accessor backButtonDisabled_: boolean = true;
 +  protected accessor displayUrl_: string = '';
 +  protected accessor empty_: boolean = false;
    protected accessor forwardButtonDisabled_: boolean = true;
    protected accessor fullscreenMode_: string = '';
-+  protected accessor menuOpen_: boolean = false;
 +  protected accessor mini_: boolean = MINI;
 +  protected accessor miniProfile_: string = '';
 +  protected accessor miniSpace_: string = '';
    protected accessor reloadOrStopIcon_: string = 'icon-refresh';
    protected accessor showingSidePanel_: boolean = false;
    protected accessor showLocationIconButton_: boolean = false;
-@@ -92,8 +116,18 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -92,6 +111,10 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const callbackRouter = browserProxyFactory.getInstance().callbackRouter;
      callbackRouter.showSidePanel.addListener(this.showSidePanel_.bind(this));
      callbackRouter.closeSidePanel.addListener(this.closeSidePanel_.bind(this));
@@ -5052,16 +5046,8 @@ index caed98ffda..fe56822960 100644
 +        this.closeDockedDevTools_.bind(this));
      callbackRouter.onFullscreenModeChanged.addListener(
          this.onFullscreenModeChanged_.bind(this));
-+
-+    this.addEventListener(
-+        MENU_OPEN_EVENT, this.onMenuOpened_.bind(this));
-+    this.addEventListener('close', this.onMenuClosed_.bind(this));
-+    this.addEventListener(
-+        'click', this.onMenuLightDismiss_.bind(this), /*capture=*/ true);
    }
- 
-   override async connectedCallback() {
-@@ -101,11 +135,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -101,11 +124,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // super.connectedCallback().
      super.connectedCallback();
      this.trackedElementManager_.startTracking(
@@ -5074,7 +5060,7 @@ index caed98ffda..fe56822960 100644
      this.trackedElementManager_.startTracking(
          this.$.backButton, 'kToolbarBackButtonElementId');
      this.trackedElementManager_.startTracking(
-@@ -119,6 +149,35 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -119,6 +138,35 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const {width} =
          await browserProxyFactory.getInstance().handler.getTabStripInset();
      this.tabStripInset_ = width;
@@ -5110,7 +5096,7 @@ index caed98ffda..fe56822960 100644
    }
  
    // TabStripControllerDelegate:
-@@ -143,12 +202,12 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -143,12 +191,12 @@ export class WebuiBrowserAppElement extends CrLitElement {
      [SecurityIcon.OfflinePin, 'OfflinePin'],
    ]);
  
@@ -5127,7 +5113,7 @@ index caed98ffda..fe56822960 100644
    }
  
    protected onMinimizeClick_(_: Event) {
-@@ -232,15 +291,86 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -232,15 +280,60 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -5148,32 +5134,6 @@ index caed98ffda..fe56822960 100644
      this.refreshLayout();
    }
  
-+  private onMenuOpened_(e: Event) {
-+    const menu = e.composedPath()[0];
-+    if (menu) {
-+      this.openMenus_.add(menu);
-+      this.menuOpen_ = true;
-+    }
-+  }
-+
-+  private onMenuClosed_(e: Event) {
-+    const menu = e.composedPath()[0];
-+    if (menu) {
-+      this.openMenus_.delete(menu);
-+    }
-+    this.menuOpen_ = this.openMenus_.size > 0;
-+  }
-+
-+  private onMenuLightDismiss_(e: Event) {
-+    const target = e.composedPath()[0];
-+    if (!(target instanceof HTMLElement) || target.localName !== 'dialog') {
-+      return;
-+    }
-+    for (const menu of [...this.openMenus_]) {
-+      (menu as CrActionMenuElement).close();
-+    }
-+  }
-+
 +  protected onNewTabRequested_() {
 +    this.openCommandBarForNewTab();
 +  }
@@ -5214,7 +5174,7 @@ index caed98ffda..fe56822960 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -252,6 +382,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -252,6 +345,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -5222,7 +5182,7 @@ index caed98ffda..fe56822960 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -270,7 +401,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -270,7 +364,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // is typing and the tab navigates.
      const isNTP = activeTabUrl.startsWith('chrome://newtab');
      if (!isNTP) {
@@ -5231,7 +5191,7 @@ index caed98ffda..fe56822960 100644
  
        const tabWebView = this.$.contentRegion.activeWebview;
        if (tabWebView) {
-@@ -287,7 +418,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -287,7 +381,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -5244,7 +5204,7 @@ index caed98ffda..fe56822960 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -305,44 +440,89 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -305,44 +403,89 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -5361,7 +5321,7 @@ index caed98ffda..fe56822960 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -361,6 +541,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -361,6 +504,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5378,7 +5338,7 @@ index caed98ffda..fe56822960 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -390,7 +580,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -390,7 +543,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -9317,6 +9277,75 @@ index e17b41f80f..e7fddbb661 100644
    // Set is_attempting_to_close_browser_ here, so that extensions, etc, do not
    // attempt to add tabs to the browser before it closes.
    is_attempting_to_close_browser_ = true;
+diff --git a/chrome/browser/ui/views/extensions/extension_context_menu_controller.cc b/chrome/browser/ui/views/extensions/extension_context_menu_controller.cc
+index 369bdf5d8e..b8244c488d 100644
+--- a/chrome/browser/ui/views/extensions/extension_context_menu_controller.cc
++++ b/chrome/browser/ui/views/extensions/extension_context_menu_controller.cc
+@@ -9,6 +9,7 @@
+ 
+ #include "chrome/browser/extensions/extension_context_menu_model.h"
+ #include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_menu_skin.h"
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/mojom/menu_source_type.mojom-forward.h"
+ #include "ui/gfx/paint_vector_icon.h"
+@@ -59,16 +60,22 @@ void ExtensionContextMenuController::ShowContextMenuForViewImpl(
+                           base::Unretained(this)));
+ 
+   std::unique_ptr<views::MenuItemView> menu = menu_adapter_->CreateMenu();
++  views::MenuItemView* menu_view = menu.get();
+   menu_runner_ =
+       std::make_unique<views::MenuRunner>(std::move(menu), run_types);
+ 
+   observer_->OnContextMenuShown();
++  const gfx::Rect anchor_bounds = source->GetAnchorBoundsInScreen();
++  skin_ = std::make_unique<rail::MenuSkin>(parent->GetPrimaryWindowWidget(),
++                                           menu_view,
++                                           anchor_bounds.bottom_left(), false);
++  skin_->Attach();
+   menu_runner_->RunMenuAt(
+       parent,
+       static_cast<views::MenuButtonController*>(
+           views::Button::AsButton(source)->button_controller()),
+-      source->GetAnchorBoundsInScreen(), views::MenuAnchorPosition::kTopLeft,
+-      source_type);
++      anchor_bounds, views::MenuAnchorPosition::kTopLeft, source_type);
++  skin_->Style(menu_view);
+ }
+ 
+ bool ExtensionContextMenuController::IsMenuRunning() const {
+@@ -76,6 +83,7 @@ bool ExtensionContextMenuController::IsMenuRunning() const {
+ }
+ 
+ void ExtensionContextMenuController::OnMenuClosed() {
++  skin_.reset();
+   menu_runner_.reset();
+   observer_->OnContextMenuClosed();
+   menu_adapter_.reset();
+diff --git a/chrome/browser/ui/views/extensions/extension_context_menu_controller.h b/chrome/browser/ui/views/extensions/extension_context_menu_controller.h
+index d5bed7ca9e..cf3e20aa37 100644
+--- a/chrome/browser/ui/views/extensions/extension_context_menu_controller.h
++++ b/chrome/browser/ui/views/extensions/extension_context_menu_controller.h
+@@ -19,6 +19,10 @@ class MenuModelAdapter;
+ class MenuRunner;
+ }  // namespace views
+ 
++namespace rail {
++class MenuSkin;
++}
++
+ class ExtensionContextMenuController : public views::ContextMenuController {
+  public:
+   class Observer {
+@@ -64,6 +68,8 @@ class ExtensionContextMenuController : public views::ContextMenuController {
+   // Responsible for running the menu.
+   std::unique_ptr<views::MenuRunner> menu_runner_;
+ 
++  std::unique_ptr<rail::MenuSkin> skin_;
++
+   // This controller contains the data for the extension's context menu.
+   const raw_ptr<ToolbarActionViewModel> action_model_;
+ 
 diff --git a/chrome/browser/ui/views/extensions/extensions_menu_coordinator.cc b/chrome/browser/ui/views/extensions/extensions_menu_coordinator.cc
 index 62ecb764b6..e0fc08e148 100644
 --- a/chrome/browser/ui/views/extensions/extensions_menu_coordinator.cc
@@ -9624,7 +9653,7 @@ index bced2aebb3..6f46b98a02 100644
    map.AddWebUIConfig(std::make_unique<WebuiGalleryUIConfig>());
    map.AddWebUIConfig(std::make_unique<WebUIJsErrorUIConfig>());
 diff --git a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
-index 42725ab442..3382f6b9d4 100644
+index 42725ab442..cf626180b7 100644
 --- a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 +++ b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 @@ -11,6 +11,7 @@
@@ -9635,7 +9664,54 @@ index 42725ab442..3382f6b9d4 100644
  #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window.h"
-@@ -174,14 +175,45 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
+@@ -20,6 +21,7 @@
+ #include "chrome/browser/ui/views/extensions/extension_action_delegate_desktop.h"
+ #include "chrome/browser/ui/views/extensions/extensions_menu_coordinator.h"
+ #include "chrome/browser/ui/webui/util/image_util.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_menu_skin.h"  // nogncheck
+ #include "content/public/browser/web_ui.h"
+ #include "ui/base/models/image_model_utils.h"
+ #include "ui/base/mojom/menu_source_type.mojom.h"
+@@ -125,14 +127,20 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
+         views::MenuRunner::HAS_MNEMONICS | views::MenuRunner::CONTEXT_MENU;
+ 
+     std::unique_ptr<views::MenuItemView> menu = menu_adapter_->CreateMenu();
++    views::MenuItemView* menu_view = menu.get();
+     menu_runner_ =
+         std::make_unique<views::MenuRunner>(std::move(menu), run_types);
+ 
+     extensions_container_->OnContextMenuShownFromToolbar(action_id_);
+ 
+-    menu_runner_->RunMenuAt(main_widget, nullptr,
+-                            action_info_->GetAnchor()->GetScreenBounds(),
++    const gfx::Rect anchor_bounds =
++        action_info_->GetAnchor()->GetScreenBounds();
++    skin_ = std::make_unique<rail::MenuSkin>(
++        main_widget, menu_view, anchor_bounds.bottom_left(), false);
++    skin_->Attach();
++    menu_runner_->RunMenuAt(main_widget, nullptr, anchor_bounds,
+                             views::MenuAnchorPosition::kTopLeft, source);
++    skin_->Style(menu_view);
+   }
+ 
+   const std::string& action_id() const { return action_id_; }
+@@ -151,6 +159,7 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
+   }
+ 
+   void OnMenuClosed() {
++    skin_.reset();
+     menu_runner_.reset();
+     menu_adapter_.reset();
+ 
+@@ -163,6 +172,7 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
+   const raw_ref<WebUIToolbarExtensionsContainer> extensions_container_;
+   std::unique_ptr<views::MenuModelAdapter> menu_adapter_;
+   std::unique_ptr<views::MenuRunner> menu_runner_;
++  std::unique_ptr<rail::MenuSkin> skin_;
+ 
+   base::WeakPtrFactory<ContextMenu> weak_ptr_factory_{this};
+ };
+@@ -174,14 +184,45 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
      : browser_(browser),
        widget_(widget),
        web_contents_(web_contents),
@@ -9683,7 +9759,7 @@ index 42725ab442..3382f6b9d4 100644
    for (const auto& [_, action] : actions_) {
      action->model()->UnregisterCommand();
    }
-@@ -293,7 +325,10 @@ views::BubbleAnchor WebUIToolbarExtensionsContainer::GetReferenceButtonForPopup(
+@@ -293,7 +334,10 @@ views::BubbleAnchor WebUIToolbarExtensionsContainer::GetReferenceButtonForPopup(
      const extensions::ExtensionId& action_id) {
    auto it = actions_.find(action_id);
    CHECK(it != actions_.end());
@@ -9695,7 +9771,7 @@ index 42725ab442..3382f6b9d4 100644
  }
  
  void WebUIToolbarExtensionsContainer::CollapseConfirmation() {
-@@ -437,7 +472,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
+@@ -437,7 +481,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
        ExtensionActionViewModel::Create(
            action_id, &browser_.get(),
            std::make_unique<ExtensionActionDelegateDesktop>(&browser_.get(),
@@ -10315,7 +10391,7 @@ index 5e6d29db20..76021aed12 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index 3ba14e7289..c99a6ceb4a 100644
+index 3ba14e7289..de93256681 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,7 @@
@@ -10326,7 +10402,7 @@ index 3ba14e7289..c99a6ceb4a 100644
  #include "chrome/browser/ui/browser.h"
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
-@@ -26,12 +27,25 @@
+@@ -26,12 +27,26 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
@@ -10334,6 +10410,7 @@ index 3ba14e7289..c99a6ceb4a 100644
 +#include "chrome/browser/ui/webui_browser/rail/rail_default_browser.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_drag_ghost.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_menu.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_menu_skin.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
@@ -10352,7 +10429,15 @@ index 3ba14e7289..c99a6ceb4a 100644
  #include "components/vector_icons/vector_icons.h"
  #include "content/public/browser/devtools_agent_host.h"
  #include "content/public/browser/navigation_controller.h"
-@@ -198,12 +212,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -40,6 +55,7 @@
+ #include "ui/base/interaction/element_tracker.h"
+ #include "ui/base/ui_base_features.h"
+ #include "ui/gfx/vector_icon_types.h"
++#include "ui/views/controls/menu/menu_item_view.h"
+ #include "ui/views/controls/menu/menu_model_adapter.h"
+ #include "ui/views/controls/menu/menu_runner.h"
+ #include "ui/views/interaction/element_tracker_views.h"
+@@ -198,12 +214,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
    }
  
    if (!tab) {
@@ -10367,7 +10452,7 @@ index 3ba14e7289..c99a6ceb4a 100644
      return;
    }
  
-@@ -288,6 +302,75 @@ void WebUIBrowserPageHandler::Close() {
+@@ -288,7 +304,77 @@ void WebUIBrowserPageHandler::Close() {
    GetBrowserWindow()->Close();
  }
  
@@ -10441,9 +10526,35 @@ index 3ba14e7289..c99a6ceb4a 100644
 +}
 +
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
++  back_forward_menu_skin_.reset();
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
-@@ -332,6 +415,301 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+   back_forward_menu_model_.reset();
+@@ -312,12 +398,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
+                             : BackForwardMenuModel::ModelType::kForward);
+   back_forward_menu_model_adapter_ =
+       std::make_unique<views::MenuModelAdapter>(back_forward_menu_model_.get());
++  std::unique_ptr<views::MenuItemView> menu =
++      back_forward_menu_model_adapter_->CreateMenu();
++  views::MenuItemView* menu_view = menu.get();
+   back_forward_menu_runner_ = std::make_unique<views::MenuRunner>(
+-      back_forward_menu_model_adapter_->CreateMenu(),
+-      views::MenuRunner::HAS_MNEMONICS);
++      std::move(menu), views::MenuRunner::HAS_MNEMONICS);
++  const gfx::Rect button_bounds = button_element->GetScreenBounds();
++  back_forward_menu_skin_ = std::make_unique<rail::MenuSkin>(
++      GetBrowserWindow()->widget(), menu_view, button_bounds.bottom_left(),
++      false);
++  back_forward_menu_skin_->Attach();
+   back_forward_menu_runner_->RunMenuAt(
+-      GetBrowserWindow()->widget(), nullptr, button_element->GetScreenBounds(),
++      GetBrowserWindow()->widget(), nullptr, button_bounds,
+       views::MenuAnchorPosition::kTopLeft, ui::mojom::MenuSourceType::kMouse);
++  back_forward_menu_skin_->Style(menu_view);
+ }
+ 
+ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -332,6 +426,301 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    );
  }
  
@@ -10745,7 +10856,7 @@ index 3ba14e7289..c99a6ceb4a 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -339,7 +717,31 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -339,7 +728,31 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -10779,7 +10890,7 @@ index 3ba14e7289..c99a6ceb4a 100644
  Browser* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 859da4ef00..4c9dcbb9a9 100644
+index 859da4ef00..f367c53e39 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -9,8 +9,11 @@
@@ -10794,18 +10905,19 @@ index 859da4ef00..4c9dcbb9a9 100644
  #include "content/public/browser/document_service.h"
  #include "content/public/browser/web_contents.h"
  #include "mojo/public/cpp/bindings/pending_receiver.h"
-@@ -25,6 +28,10 @@ class MenuModelAdapter;
+@@ -25,6 +28,11 @@ class MenuModelAdapter;
  class MenuRunner;
  }  // namespace views
  
 +namespace rail {
++class MenuSkin;
 +class RailMenu;
 +}
 +
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,8 +63,83 @@ class WebUIBrowserPageHandler
+@@ -56,8 +64,83 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -10889,7 +11001,7 @@ index 859da4ef00..4c9dcbb9a9 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -69,6 +151,8 @@ class WebUIBrowserPageHandler
+@@ -69,19 +152,28 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -10898,7 +11010,9 @@ index 859da4ef00..4c9dcbb9a9 100644
    std::unique_ptr<BackForwardMenuModel> back_forward_menu_model_;
    std::unique_ptr<views::MenuModelAdapter> back_forward_menu_model_adapter_;
    std::unique_ptr<views::MenuRunner> back_forward_menu_runner_;
-@@ -77,11 +161,17 @@ class WebUIBrowserPageHandler
++  std::unique_ptr<rail::MenuSkin> back_forward_menu_skin_;
+ 
+   std::unique_ptr<content::WebContents> tab_search_contents_;
    std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
  
    std::unique_ptr<content::WebContents> glic_contents_;

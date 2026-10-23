@@ -759,7 +759,6 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   position: fixed;
 }
 
-:host([menu-open]) #dragBlocker,
 :host([sidebar-resizing]) #dragBlocker {
   display: block;
 }

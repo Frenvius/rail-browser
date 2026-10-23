@@ -57,21 +57,6 @@ ${this.variant === 'title' ? html`
     `}
   </div>
 `}
-<cr-action-menu id="menu" @close="${this.onMenuClose_}">
-  ${this.confirming_ ? html`
-    <div id="confirm">
-      Delete ${this.targetSpace_()?.name ?? ''} and close
-      ${this.removeCount_()} tab${this.removeCount_() === 1 ? '' : 's'}?
-    </div>
-    <button class="dropdown-item" @click="${this.onCancelRemoveClick_}">
-      Cancel
-    </button>
-    <button class="dropdown-item danger"
-      @click="${this.onConfirmRemoveClick_}">
-      Delete Space
-    </button>
-  ` : ''}
-</cr-action-menu>
 <cr-dialog id="profileDialog">
   <div slot="title">
     <div id="profileMark">
