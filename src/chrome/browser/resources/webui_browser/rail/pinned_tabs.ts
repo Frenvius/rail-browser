@@ -84,11 +84,13 @@ export class PinnedTabs {
           previous.delete(existing.key);
         }
         const remote = byUrl ? '' : pin.tab ?? '';
-        const tab = tabs.find(
-            candidate => !claimed.has(candidate.id) &&
-                (candidate.id === existing?.tabId ||
-                 (remote ? candidate.id === remote :
-                           !this.restored_ && candidate.url === pin.url)));
+        const unclaimed = tabs.filter(candidate => !claimed.has(candidate.id));
+        const byUrlMatch = !existing && !this.restored_;
+        const tab =
+            unclaimed.find(candidate => candidate.id === existing?.tabId) ??
+            unclaimed.find(
+                candidate => remote ? candidate.id === remote :
+                                      byUrlMatch && candidate.url === pin.url);
         if (tab) {
           claimed.add(tab.id);
         }
