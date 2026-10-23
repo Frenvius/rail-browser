@@ -6,7 +6,7 @@
 #include "base/functional/callback.h"
 #include "components/browser_apis/tab_strip/types/node_id.h"
 
-class Browser;
+class BrowserWindowInterface;
 
 namespace content {
 class WebContents;
@@ -32,7 +32,7 @@ struct DragGhostObserver {
   EndedCallback ended;
 };
 
-void StartDragGhost(Browser* source,
+void StartDragGhost(BrowserWindowInterface* source,
                     content::WebContents* shell,
                     const gfx::Rect& row,
                     const gfx::Point& grab_offset,

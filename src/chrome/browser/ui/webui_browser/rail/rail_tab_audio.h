@@ -3,13 +3,15 @@
 
 #include "components/browser_apis/tab_strip/types/node_id.h"
 
-class Browser;
+class BrowserWindowInterface;
 
 namespace rail {
 
-bool ToggleTabMuted(Browser* browser, const tabs_api::NodeId& tab_id);
+bool ToggleTabMuted(BrowserWindowInterface* browser,
+                    const tabs_api::NodeId& tab_id);
 
-bool IsTabMuted(Browser* browser, const tabs_api::NodeId& tab_id);
+bool IsTabMuted(BrowserWindowInterface* browser,
+                const tabs_api::NodeId& tab_id);
 
 }
 

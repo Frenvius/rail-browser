@@ -5,13 +5,13 @@
 
 #include "components/browser_apis/tab_strip/types/node_id.h"
 
-class Browser;
+class BrowserWindowInterface;
 
 namespace rail {
 
-bool SleepTab(Browser* browser, const tabs_api::NodeId& tab_id);
+bool SleepTab(BrowserWindowInterface* browser, const tabs_api::NodeId& tab_id);
 
-std::vector<tabs_api::NodeId> SleepingTabs(Browser* browser);
+std::vector<tabs_api::NodeId> SleepingTabs(BrowserWindowInterface* browser);
 
 }
 

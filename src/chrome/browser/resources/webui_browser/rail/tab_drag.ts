@@ -96,7 +96,8 @@ export interface PinnedDragRows {
   rowIds: string[];
 }
 
-export interface RailDragHost extends TabDragHost {
+export interface RailDragHost extends Omit<
+    TabDragHost, 'tabDragService'|'commitDrag'|'getDragContainerBounds'> {
   pinnedItemsForDrag: TabStripItem[];
   setPinnedItemsForDrag(items: TabStripItem[]): void;
   dragSlots(pinned: boolean, groupDrag: boolean): DragSlot[];

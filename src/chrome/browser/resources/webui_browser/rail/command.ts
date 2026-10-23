@@ -97,7 +97,7 @@ export class RailCommandElement extends CrLitElement {
     if (selectAll) {
       this.$.address.selectAll();
     }
-    this.$.address.queryAutocomplete(text);
+    this.$.address.queryAutocomplete(text, false, false);
 
     const tabsLoaded = this.loadTabs_();
     this.refreshRows_();

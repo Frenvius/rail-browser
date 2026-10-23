@@ -8,6 +8,7 @@ source_set("sampler") {
 
 mojom("mojom") {
   sources = [ "top_band_color.mojom" ]
+  generate_blink = true
 }
 
 blink_core_sources("rail") {

@@ -1,6 +1,7 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SEARCHBOX_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SEARCHBOX_HANDLER_H_
 
+#include <optional>
 #include <string>
 
 #include "chrome/browser/ui/webui/cr_components/searchbox/contextual_searchbox_handler.h"
@@ -32,17 +33,22 @@ class RailSearchboxHandler : public ContextualSearchboxHandler {
 
   void OnThumbnailRemoved() override {}
 
-  void QueryAutocomplete(const std::u16string& input,
+  void QueryAutocomplete(int32_t query_id,
+                         std::optional<int32_t> tab_id,
+                         const std::u16string& input,
                          bool prevent_inline_autocomplete,
-                         uint32_t cursor_position) override;
-  void OpenAutocompleteMatch(uint8_t line,
+                         uint32_t cursor_position,
+                         omnibox::SuggestInventory suggest_inventory,
+                         bool is_on_focus,
+                         const std::string& keyword,
+                         searchbox::mojom::InputMethod input_method) override;
+  void OpenAutocompleteMatch(uint32_t result_sequence_id,
+                             uint8_t line,
                              const GURL& url,
                              bool are_matches_showing,
                              uint8_t mouse_button,
-                             bool alt_key,
-                             bool ctrl_key,
-                             bool meta_key,
-                             bool shift_key) override;
+                             searchbox::mojom::ActionModifiersPtr modifiers,
+                             bool via_keyboard) override;
 
   void set_open_in_new_tab(bool open_in_new_tab) {
     open_in_new_tab_ = open_in_new_tab;

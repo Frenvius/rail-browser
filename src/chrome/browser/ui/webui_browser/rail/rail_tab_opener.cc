@@ -1,17 +1,17 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_opener.h"
 
-#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/tabs/public/tab_interface.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/browser/web_contents_delegate.h"
 #include "ui/base/page_transition_types.h"
 
 namespace rail {
 
-std::optional<tabs_api::NodeId> OpenerOfTab(Browser* browser,
+std::optional<tabs_api::NodeId> OpenerOfTab(BrowserWindowInterface* browser,
                                             const tabs_api::NodeId& tab_id) {
   if (!browser) {
     return std::nullopt;
@@ -21,7 +21,7 @@ std::optional<tabs_api::NodeId> OpenerOfTab(Browser* browser,
   if (!tab) {
     return std::nullopt;
   }
-  TabStripModel* model = browser->tab_strip_model();
+  TabStripModel* model = browser->GetTabStripModel();
   const int index = model->GetIndexOfTab(tab);
   if (index == TabStripModel::kNoTab) {
     return std::nullopt;
@@ -49,12 +49,12 @@ bool OpenedFromLink(const tabs_api::NodeId& tab_id) {
                                                ui::PAGE_TRANSITION_LINK);
 }
 
-void ForgetOpeners(Browser* browser,
+void ForgetOpeners(BrowserWindowInterface* browser,
                    const std::vector<tabs_api::NodeId>& tab_ids) {
   if (!browser) {
     return;
   }
-  TabStripModel* model = browser->tab_strip_model();
+  TabStripModel* model = browser->GetTabStripModel();
   for (const tabs_api::NodeId& tab_id : tab_ids) {
     std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
     tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
@@ -66,12 +66,12 @@ void ForgetOpeners(Browser* browser,
 }
 
 std::vector<std::pair<tabs_api::NodeId, tabs_api::NodeId>> OpenersOfTabs(
-    Browser* browser) {
+    BrowserWindowInterface* browser) {
   std::vector<std::pair<tabs_api::NodeId, tabs_api::NodeId>> openers;
   if (!browser) {
     return openers;
   }
-  TabStripModel* model = browser->tab_strip_model();
+  TabStripModel* model = browser->GetTabStripModel();
   for (int index = 0; index < model->count(); ++index) {
     tabs::TabInterface* tab = model->GetTabAtIndex(index);
     tabs::TabInterface* opener = model->GetOpenerOfTabAt(index);
@@ -84,14 +84,14 @@ std::vector<std::pair<tabs_api::NodeId, tabs_api::NodeId>> OpenersOfTabs(
 }
 
 content::WebContents* OpenFromShell(
-    Browser* browser,
+    BrowserWindowInterface* browser,
     const content::OpenURLParams& params,
     base::OnceCallback<void(content::NavigationHandle&)> navigation_callback) {
   content::WebContents* source =
       params.disposition == WindowOpenDisposition::CURRENT_TAB
-          ? browser->tab_strip_model()->GetActiveWebContents()
+          ? browser->GetTabStripModel()->GetActiveWebContents()
           : nullptr;
-  return static_cast<content::WebContentsDelegate*>(browser)->OpenURLFromTab(
+  return BrowserWebContentsDelegate::From(browser)->OpenURLFromTab(
       source, params, std::move(navigation_callback));
 }
 

@@ -4,10 +4,10 @@
 #include <vector>
 
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+#include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
@@ -26,11 +26,11 @@ constexpr int kMiniWindowWidth = 720;
 constexpr int kMiniWindowHeight = 620;
 
 BrowserWindowInterface* LastActiveShellWindow(Profile* profile,
-                                              Browser* except) {
+                                              BrowserWindowInterface* except) {
   BrowserWindowInterface* found = nullptr;
   ProfileBrowserCollection::GetForProfile(profile)->ForEach(
       [&](BrowserWindowInterface* browser) {
-        if (browser->GetBrowserForMigrationOnly() == except ||
+        if (browser == except ||
             browser->GetType() != BrowserWindowInterface::TYPE_NORMAL) {
           return true;
         }
@@ -41,7 +41,7 @@ BrowserWindowInterface* LastActiveShellWindow(Profile* profile,
   return found;
 }
 
-void ClaimTabsForSpace(Browser* target,
+void ClaimTabsForSpace(BrowserWindowInterface* target,
                        const std::vector<tabs_api::NodeId>& ids,
                        const std::string& space_id) {
   WebUIBrowserWindow* window = WebUIBrowserWindow::FromBrowser(target);
@@ -55,62 +55,71 @@ void ClaimTabsForSpace(Browser* target,
   }
 }
 
+bool CanCreateWindow(Profile* profile) {
+  return profile && GetBrowserWindowCreationStatusForProfile(*profile) ==
+                        BrowserWindowInterface::CreationStatus::kOk;
 }
 
-bool IsMiniWindow(const Browser* browser) {
-  return browser && browser->is_type_popup();
 }
 
-bool ShouldOpenLinkInMiniWindow(const Browser* source) {
-  return source && source->is_type_normal() &&
-         WebUIBrowserWindow::FromBrowser(const_cast<Browser*>(source));
+bool IsMiniWindow(const BrowserWindowInterface* browser) {
+  return browser &&
+         browser->GetType() == BrowserWindowInterface::Type::TYPE_POPUP;
 }
 
-gfx::Rect MiniWindowBoundsNear(const Browser* source) {
+bool ShouldOpenLinkInMiniWindow(BrowserWindowInterface* source) {
+  return source && source->GetType() == BrowserWindowInterface::TYPE_NORMAL &&
+         WebUIBrowserWindow::FromBrowser(source);
+}
+
+gfx::Rect MiniWindowBoundsNear(const BrowserWindowInterface* source) {
   const gfx::Size size(kMiniWindowWidth, kMiniWindowHeight);
-  if (!source || !source->window()) {
+  if (!source || !source->GetWindow()) {
     return gfx::Rect(size);
   }
-  const gfx::Rect area = source->window()->GetBounds();
+  const gfx::Rect area = source->GetWindow()->GetBounds();
   return gfx::Rect(area.x() + (area.width() - size.width()) / 2,
                    area.y() + (area.height() - size.height()) / 2,
                    size.width(), size.height());
 }
 
-Browser* CreateMiniWindow(Profile* profile, const gfx::Rect& bounds) {
-  if (!profile || Browser::GetCreationStatusForProfile(profile) !=
-                      Browser::CreationStatus::kOk) {
+BrowserWindowInterface* CreateMiniWindow(Profile* profile,
+                                         const gfx::Rect& bounds) {
+  if (!CanCreateWindow(profile)) {
     return nullptr;
   }
-  Browser::CreateParams params(Browser::TYPE_POPUP, profile,
-                               /*user_gesture=*/true);
+  BrowserWindowCreateParams params(BrowserWindowInterface::TYPE_POPUP, profile,
+                                   /*from_user_gesture=*/true);
   params.initial_bounds =
       bounds.IsEmpty() ? gfx::Rect(0, 0, kMiniWindowWidth, kMiniWindowHeight)
                        : bounds;
-  return Browser::Create(params);
+  return CreateBrowserWindow(std::move(params));
 }
 
-Browser* OpenMiniWindow(Profile* profile,
-                        const GURL& url,
-                        const gfx::Rect& bounds) {
-  Browser* browser = CreateMiniWindow(profile, bounds);
+BrowserWindowInterface* OpenMiniWindow(Profile* profile,
+                                       const GURL& url,
+                                       const gfx::Rect& bounds) {
+  BrowserWindowInterface* browser = CreateMiniWindow(profile, bounds);
   if (!browser) {
     return nullptr;
   }
   chrome::AddTabAt(browser, url, -1, /*foreground=*/true);
-  browser->window()->Show();
+  browser->GetWindow()->Show();
   return browser;
 }
 
-Browser* OpenMiniWindowNear(Browser* source, const GURL& url) {
+BrowserWindowInterface* OpenMiniWindowNear(BrowserWindowInterface* source,
+                                           const GURL& url) {
   if (!source) {
     return nullptr;
   }
-  return OpenMiniWindow(source->profile(), url, MiniWindowBoundsNear(source));
+  return OpenMiniWindow(source->GetProfile(), url,
+                        MiniWindowBoundsNear(source));
 }
 
-Browser* OpenExternalUrlsInMiniWindows(Profile* profile,
-                                       const std::vector<GURL>& urls) {
+BrowserWindowInterface* OpenExternalUrlsInMiniWindows(
+    Profile* profile,
+    const std::vector<GURL>& urls) {
   if (!profile || urls.empty()) {
     return nullptr;
   }
@@ -124,38 +133,40 @@ Browser* OpenExternalUrlsInMiniWindows(Profile* profile,
     return nullptr;
   }
 
-  const gfx::Rect bounds =
-      MiniWindowBoundsNear(shell->GetBrowserForMigrationOnly());
-  Browser* last = nullptr;
+  const gfx::Rect bounds = MiniWindowBoundsNear(shell);
+  BrowserWindowInterface* last = nullptr;
   for (const GURL& url : urls) {
-    if (Browser* mini = OpenMiniWindow(profile, url, bounds)) {
+    if (BrowserWindowInterface* mini = OpenMiniWindow(profile, url, bounds)) {
       last = mini;
     }
   }
   if (last) {
-    last->window()->Activate();
+    last->GetWindow()->Activate();
   }
   return last;
 }
 
-bool AdoptMiniWindow(Browser* mini, const std::string& space_id) {
+bool AdoptMiniWindow(BrowserWindowInterface* mini,
+                     const std::string& space_id) {
   if (!IsMiniWindow(mini)) {
     return false;
   }
-  TabStripModel* model = mini->tab_strip_model();
+  TabStripModel* model = mini->GetTabStripModel();
   if (model->empty()) {
     return false;
   }
 
   BrowserWindowInterface* target =
-      LastActiveShellWindow(mini->profile(), mini);
+      LastActiveShellWindow(mini->GetProfile(), mini);
   if (!target) {
-    if (Browser::GetCreationStatusForProfile(mini->profile()) !=
-        Browser::CreationStatus::kOk) {
+    if (!CanCreateWindow(mini->GetProfile())) {
       return false;
     }
-    target = Browser::Create(
-        Browser::CreateParams(mini->profile(), /*user_gesture=*/true));
+    target = CreateBrowserWindow(BrowserWindowCreateParams(
+        mini->GetProfile(), /*from_user_gesture=*/true));
+    if (!target) {
+      return false;
+    }
     target->GetWindow()->Show();
   }
 
@@ -175,7 +186,7 @@ bool AdoptMiniWindow(Browser* mini, const std::string& space_id) {
     targets->ActivateTabAt(landed);
   }
   if (!space_id.empty()) {
-    ClaimTabsForSpace(target->GetBrowserForMigrationOnly(), moved, space_id);
+    ClaimTabsForSpace(target, moved, space_id);
   }
   target->GetWindow()->Activate();
   return true;

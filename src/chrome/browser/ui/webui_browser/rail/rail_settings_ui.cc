@@ -16,7 +16,6 @@
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
 #include "url/gurl.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
@@ -34,7 +33,7 @@ namespace rail {
 
 namespace {
 
-Browser* BrowserFor(content::WebUI* web_ui) {
+BrowserWindowInterface* BrowserFor(content::WebUI* web_ui) {
   BrowserWindowInterface* window =
       webui::GetBrowserWindowInterface(web_ui->GetWebContents());
   WebUIBrowserWindow* browser_window =
@@ -43,8 +42,8 @@ Browser* BrowserFor(content::WebUI* web_ui) {
 }
 
 PrefService* PrefsFor(content::WebUI* web_ui) {
-  Browser* browser = BrowserFor(web_ui);
-  return browser ? browser->profile()->GetPrefs() : nullptr;
+  BrowserWindowInterface* browser = BrowserFor(web_ui);
+  return browser ? browser->GetProfile()->GetPrefs() : nullptr;
 }
 
 std::string ProfileName(Profile* profile) {
@@ -106,9 +105,9 @@ void RailSettingsUI::ListProfiles(ListProfilesCallback callback) {
 }
 
 void RailSettingsUI::GetSidebarState(GetSidebarStateCallback callback) {
-  Browser* browser = BrowserFor(web_ui());
+  BrowserWindowInterface* browser = BrowserFor(web_ui());
   std::move(callback).Run(rail::GetSidebarState(
-      browser ? browser->profile()->GetPrefs() : nullptr));
+      browser ? browser->GetProfile()->GetPrefs() : nullptr));
 }
 
 void RailSettingsUI::CreateProfile(const std::string& name,
@@ -264,8 +263,8 @@ void RailSettingsUI::GetOrganizeSettings(
 }
 
 void RailSettingsUI::SetOpenRouterKey(const std::string& key) {
-  Browser* browser = BrowserFor(web_ui());
-  rail::SetOpenRouterKey(browser ? browser->profile() : nullptr, key);
+  BrowserWindowInterface* browser = BrowserFor(web_ui());
+  rail::SetOpenRouterKey(browser ? browser->GetProfile() : nullptr, key);
 }
 
 void RailSettingsUI::SetOrganizeModel(const std::string& model) {

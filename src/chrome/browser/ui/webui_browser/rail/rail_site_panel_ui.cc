@@ -189,7 +189,7 @@ void RailSitePanelUI::Open(const gfx::Point& anchor,
   space_color_ = space_color;
   WebUIBrowserWindow* window = Window();
   content::WebContents* contents =
-      window ? window->browser()->tab_strip_model()->GetActiveWebContents()
+      window ? window->browser()->GetTabStripModel()->GetActiveWebContents()
              : nullptr;
   if (!contents) {
     return;
@@ -443,7 +443,7 @@ void RailSitePanelUI::ActivateExtension(const std::string& id) {
   WebUIToolbarExtensionsContainer* container = Extensions();
   Close();
   if (container && container->GetActionForId(id)) {
-    container->ExecuteUserAction(id);
+    container->ExecuteUserAction(id, /*is_pointer_interaction=*/false);
   }
 }
 

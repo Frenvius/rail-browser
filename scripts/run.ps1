@@ -25,8 +25,7 @@ if ($FreshProfile -and (Test-Path -LiteralPath $profile)) {
 $features = @(
     "Webium",
     "AttachUnownedInnerWebContents",
-    "ExtensionsMenuAccessControl",
-    "Windows11MicaTitlebar"
+    "ExtensionsMenuAccessControl"
 ) -join ","
 
 & $chrome `

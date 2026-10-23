@@ -113,7 +113,7 @@ void RailSpacePanel::EnsureContents() {
     return;
   }
   contents_ = std::make_unique<Contents>(GURL(kRailSpacePanelURL),
-                                         window_->browser()->profile());
+                                         window_->browser()->GetProfile());
   webui::SetBrowserWindowInterface(contents_->web_contents(),
                                    window_->browser());
   contents_->SetHost(weak_factory_.GetWeakPtr());
@@ -203,7 +203,7 @@ void RailSpacePanel::CreateWidget() {
   widget_->Init(std::move(params));
 
   auto web_view =
-      std::make_unique<views::WebView>(window_->browser()->profile());
+      std::make_unique<views::WebView>(window_->browser()->GetProfile());
   web_view->SetWebContents(contents_->web_contents());
   web_view->SetBackground(nullptr);
   web_view_ = widget_->SetContentsView(std::move(web_view));

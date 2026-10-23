@@ -18,6 +18,8 @@ import re
 import shutil
 import subprocess
 import ctypes
+import io
+import tarfile
 import urllib.request
 from pathlib import Path
 
@@ -292,6 +294,42 @@ def _ensure_chromium_clang_format(source_tree):
     download_file.replace(output_file)
 
 
+def _ensure_chromium_libclang(source_tree):
+    """Install the libclang package pinned in Chromium's DEPS for V8's metagen and bindgen."""
+    deps_source = (source_tree / 'DEPS').read_text(encoding=ENCODING)
+    win_libclang = re.search(
+        r"'src/third_party/llvm-libclang':\s*\{.*?"
+        r"'object_name':\s*'(Win/[^']+)',\s*"
+        r"'sha256sum':\s*'([0-9a-f]{64})'",
+        deps_source,
+        re.DOTALL)
+    if not win_libclang:
+        raise RuntimeError('Could not read Chromium\'s pinned libclang object')
+
+    object_name, expected_sha256 = win_libclang.groups()
+    output_dir = source_tree / 'third_party' / 'llvm-libclang'
+    stamp_file = output_dir / 'cr_package_sha256'
+    if not stamp_file.exists() or stamp_file.read_text(encoding=ENCODING).strip() != expected_sha256:
+        get_logger().info('Installing Chromium\'s pinned libclang...')
+        url = 'https://commondatastorage.googleapis.com/chromium-browser-clang/' + object_name
+        with urllib.request.urlopen(url, timeout=300) as response:
+            package = response.read()
+        if hashlib.sha256(package).hexdigest() != expected_sha256:
+            raise RuntimeError('Downloaded libclang failed Chromium\'s SHA-256 check')
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        output_dir.mkdir(parents=True)
+        with tarfile.open(fileobj=io.BytesIO(package), mode='r:xz') as archive:
+            archive.extractall(output_dir, filter='data')
+        stamp_file.write_text(expected_sha256, encoding=ENCODING)
+
+    # tools/rust/build_bindgen.py only looks for libclang inside llvm-build.
+    llvm_dir = source_tree / 'third_party' / 'llvm-build' / 'Release+Asserts'
+    for relpath in ('bin/libclang.dll', 'lib/libclang.lib'):
+        (llvm_dir / relpath).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(output_dir / relpath, llvm_dir / relpath)
+
+
 _UBLOCK_VERSION = '1.74.0'
 _UBLOCK_SHA256 = 'b6be71ed3e3e85eaad8f02710b9071d06428e141d942c43d5f65d4526e82dc3e'
 _UBLOCK_URL = 'https://github.com/gorhill/uBlock/releases/download/{}/{}'
@@ -507,6 +545,12 @@ def main():
             None
         )
 
+        patches.apply_patches(
+            [_ROOT_DIR / 'patches' / 'rail-shell.patch'],
+            source_tree,
+            patch_bin_path=(source_tree / _PATCH_BIN_RELPATH)
+        )
+
     # Check if rust-toolchain folder has been populated
     HOST_CPU_IS_64BIT = sys.maxsize > 2**32
     RUST_DIR_DST = source_tree / 'third_party' / 'rust-toolchain'
@@ -547,6 +591,7 @@ def main():
     _copy_branding(source_tree)
     _ensure_chromium_clang(source_tree)
     _ensure_chromium_clang_format(source_tree)
+    _ensure_chromium_libclang(source_tree)
 
     if args.prepare_only:
         get_logger().info('Source preparation complete (--prepare-only)')
@@ -561,12 +606,21 @@ def main():
         windows_flags = (_PLATFORM_DIR / flags_file).read_text(encoding=ENCODING)
         if args.x86:
             windows_flags = windows_flags.replace('x64', 'x86')
+            windows_flags += '\nv8_enable_drumbrake=false\n'
         elif args.arm:
             windows_flags = windows_flags.replace('x64', 'arm64')
         if args.tarball:
             windows_flags += '\nchrome_pgo_phase=0\n'
         gn_flags += windows_flags
         (source_tree / output_dir / 'args.gn').write_text(gn_flags, encoding=ENCODING)
+
+    expected_debug_flag = 'is_debug={}'.format('true' if args.dev else 'false')
+    args_gn = source_tree / output_dir / 'args.gn'
+    args_lines = args_gn.read_text(encoding=ENCODING).split() if args_gn.exists() else []
+    if expected_debug_flag not in args_lines:
+        raise RuntimeError(
+            '{} does not set {}; rerun with --regenerate to rewrite it'.format(
+                args_gn, expected_debug_flag))
 
     # Enter source tree to run build commands
     os.chdir(source_tree)
@@ -577,6 +631,11 @@ def main():
         _run_build_process(
             sys.executable, 'tools\\gn\\bootstrap\\bootstrap.py', '-o', str(gn_exe),
             '--skip-generate-buildfiles')
+
+    # V8's metagen action runs `gn desc` and only looks under buildtools or PATH.
+    buildtools_gn = Path('buildtools') / 'win' / 'gn.exe'
+    buildtools_gn.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(gn_exe, buildtools_gn)
 
     if (args.regenerate or not reuse or
             not (source_tree / output_dir / 'build.ninja').exists()):

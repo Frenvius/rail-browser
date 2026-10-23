@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_muted_utils.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -14,14 +14,14 @@ namespace rail {
 
 namespace {
 
-content::WebContents* ContentsOf(Browser* browser,
+content::WebContents* ContentsOf(BrowserWindowInterface* browser,
                                  const tabs_api::NodeId& tab_id) {
   if (!browser) {
     return nullptr;
   }
   std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
   tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
-  if (!tab || browser->tab_strip_model()->GetIndexOfTab(tab) ==
+  if (!tab || browser->GetTabStripModel()->GetIndexOfTab(tab) ==
                   TabStripModel::kNoTab) {
     return nullptr;
   }
@@ -30,7 +30,8 @@ content::WebContents* ContentsOf(Browser* browser,
 
 }
 
-bool ToggleTabMuted(Browser* browser, const tabs_api::NodeId& tab_id) {
+bool ToggleTabMuted(BrowserWindowInterface* browser,
+                    const tabs_api::NodeId& tab_id) {
   content::WebContents* contents = ContentsOf(browser, tab_id);
   if (!contents) {
     return false;
@@ -40,7 +41,8 @@ bool ToggleTabMuted(Browser* browser, const tabs_api::NodeId& tab_id) {
   return contents->IsAudioMuted();
 }
 
-bool IsTabMuted(Browser* browser, const tabs_api::NodeId& tab_id) {
+bool IsTabMuted(BrowserWindowInterface* browser,
+                const tabs_api::NodeId& tab_id) {
   content::WebContents* contents = ContentsOf(browser, tab_id);
   return contents && contents->IsAudioMuted();
 }

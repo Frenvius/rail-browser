@@ -7,31 +7,34 @@
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
-class Browser;
+class BrowserWindowInterface;
 class Profile;
 
 namespace rail {
 
 inline constexpr char kRailMiniShellURL[] = "chrome://webui-browser/?mini";
 
-bool IsMiniWindow(const Browser* browser);
+bool IsMiniWindow(const BrowserWindowInterface* browser);
 
-bool ShouldOpenLinkInMiniWindow(const Browser* source);
+bool ShouldOpenLinkInMiniWindow(BrowserWindowInterface* source);
 
-gfx::Rect MiniWindowBoundsNear(const Browser* source);
+gfx::Rect MiniWindowBoundsNear(const BrowserWindowInterface* source);
 
-Browser* CreateMiniWindow(Profile* profile, const gfx::Rect& bounds);
+BrowserWindowInterface* CreateMiniWindow(Profile* profile,
+                                         const gfx::Rect& bounds);
 
-Browser* OpenMiniWindow(Profile* profile,
-                        const GURL& url,
-                        const gfx::Rect& bounds);
+BrowserWindowInterface* OpenMiniWindow(Profile* profile,
+                                       const GURL& url,
+                                       const gfx::Rect& bounds);
 
-Browser* OpenMiniWindowNear(Browser* source, const GURL& url);
+BrowserWindowInterface* OpenMiniWindowNear(BrowserWindowInterface* source,
+                                           const GURL& url);
 
-Browser* OpenExternalUrlsInMiniWindows(Profile* profile,
-                                       const std::vector<GURL>& urls);
+BrowserWindowInterface* OpenExternalUrlsInMiniWindows(
+    Profile* profile,
+    const std::vector<GURL>& urls);
 
-bool AdoptMiniWindow(Browser* mini, const std::string& space_id);
+bool AdoptMiniWindow(BrowserWindowInterface* mini, const std::string& space_id);
 
 }
 

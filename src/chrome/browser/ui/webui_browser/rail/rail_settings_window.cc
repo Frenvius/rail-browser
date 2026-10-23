@@ -214,7 +214,7 @@ void RailSettingsWindow::EnsureContents() {
     return;
   }
   contents_ = std::make_unique<Contents>(GURL(kRailSettingsURL),
-                                         window_->browser()->profile());
+                                         window_->browser()->GetProfile());
   webui::SetBrowserWindowInterface(contents_->web_contents(),
                                    window_->browser());
   contents_->SetHost(weak_factory_.GetWeakPtr());
@@ -230,7 +230,7 @@ void RailSettingsWindow::CreateWidget() {
   }
 
   auto web_view =
-      std::make_unique<views::WebView>(window_->browser()->profile());
+      std::make_unique<views::WebView>(window_->browser()->GetProfile());
   web_view->SetWebContents(contents_->web_contents());
   web_view->SetBackground(nullptr);
   web_view_ = web_view.get();

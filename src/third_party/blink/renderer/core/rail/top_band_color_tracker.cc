@@ -209,7 +209,7 @@ class TopBandColorTracker final
                 scoped_refptr<Image> image,
                 std::optional<SkColor> color)
         : object(&object),
-          style(object.Style()),
+          style(&object.StyleRef()),
           image(std::move(image)),
           box(object.AbsoluteBoundingBoxRect().size()),
           time(base::TimeTicks::Now()),
@@ -546,7 +546,7 @@ class TopBandColorTracker final
       return nullptr;
     }
     for (const auto& sample : image_samples_) {
-      if (sample->object == &object && sample->style == object.Style() &&
+      if (sample->object == &object && sample->style == &object.StyleRef() &&
           sample->image == image && sample->box == box) {
         return sample.Get();
       }

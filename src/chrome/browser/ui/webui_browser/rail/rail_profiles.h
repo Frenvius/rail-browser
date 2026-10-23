@@ -8,7 +8,6 @@
 #include "base/functional/callback.h"
 #include "components/browser_apis/tab_strip/types/node_id.h"
 
-class Browser;
 class BrowserWindowInterface;
 class GURL;
 class Profile;
@@ -24,7 +23,7 @@ struct ProfileEntry {
   std::string name;
 };
 
-std::vector<ProfileEntry> ListProfiles(Browser* browser);
+std::vector<ProfileEntry> ListProfiles(BrowserWindowInterface* browser);
 
 using ProfileCreatedCallback =
     base::OnceCallback<void(std::optional<ProfileEntry>)>;
@@ -35,23 +34,24 @@ void DeleteProfile(const std::string& profile_id);
 
 using ProfileResolvedCallback = base::OnceCallback<void(Profile*)>;
 
-void ResolveProfile(Browser* browser,
+void ResolveProfile(BrowserWindowInterface* browser,
                     const std::string& profile_id,
                     ProfileResolvedCallback callback);
 
 using TabCreatedCallback = base::OnceCallback<void(content::WebContents*)>;
 
-void CreateTabInProfile(Browser* browser,
+void CreateTabInProfile(BrowserWindowInterface* browser,
                         const std::string& profile_id,
                         const GURL& url,
                         TabCreatedCallback callback);
 
-void MoveTabToProfile(Browser* browser,
+void MoveTabToProfile(BrowserWindowInterface* browser,
                       const tabs_api::NodeId& tab_id,
                       const std::string& profile_id,
                       TabCreatedCallback callback);
 
-std::string ProfileIdOfTab(Browser* browser, const tabs_api::NodeId& tab_id);
+std::string ProfileIdOfTab(BrowserWindowInterface* browser,
+                           const tabs_api::NodeId& tab_id);
 
 void SetActiveProfile(BrowserWindowInterface* browser, Profile* profile);
 

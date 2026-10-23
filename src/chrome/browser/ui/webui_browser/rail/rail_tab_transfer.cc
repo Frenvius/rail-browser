@@ -6,7 +6,6 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
@@ -44,13 +43,14 @@ std::u16string TitleOf(BrowserWindowInterface* browser) {
   return contents ? contents->GetTitle() : std::u16string();
 }
 
-tabs::TabInterface* RemoteTab(Browser* caller, const tabs_api::NodeId& id) {
+tabs::TabInterface* RemoteTab(BrowserWindowInterface* caller,
+                              const tabs_api::NodeId& id) {
   std::optional<tabs::TabHandle> handle = id.ToTabHandle();
   tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
   BrowserWindowInterface* owner =
       tab ? tab->GetBrowserWindowInterface() : nullptr;
   if (!caller || !owner || owner == caller ||
-      owner->GetProfile() != caller->profile()) {
+      owner->GetProfile() != caller->GetProfile()) {
     return nullptr;
   }
   return tab;
@@ -58,16 +58,16 @@ tabs::TabInterface* RemoteTab(Browser* caller, const tabs_api::NodeId& id) {
 
 }
 
-BrowserWindowInterface* WindowUnderPoint(Browser* source,
+BrowserWindowInterface* WindowUnderPoint(BrowserWindowInterface* source,
                                          const gfx::Point& screen_point) {
   BrowserWindowInterface* found = nullptr;
-  ProfileBrowserCollection::GetForProfile(source->profile())
+  ProfileBrowserCollection::GetForProfile(source->GetProfile())
       ->ForEach(
           [&](BrowserWindowInterface* browser) {
             if (browser == source) {
               return true;
             }
-            if (IsMiniWindow(browser->GetBrowserForMigrationOnly())) {
+            if (IsMiniWindow(browser)) {
               return true;
             }
             ui::BaseWindow* window = browser->GetWindow();
@@ -82,13 +82,13 @@ BrowserWindowInterface* WindowUnderPoint(Browser* source,
   return found;
 }
 
-void DropTabsAtScreenPoint(Browser* source,
+void DropTabsAtScreenPoint(BrowserWindowInterface* source,
                            const gfx::Point& screen_point,
                            const std::vector<tabs_api::NodeId>& ids) {
   if (!source) {
     return;
   }
-  TabStripModel* model = source->tab_strip_model();
+  TabStripModel* model = source->GetTabStripModel();
   const std::vector<int> indices = IndicesForIds(model, ids);
   if (indices.empty()) {
     return;
@@ -104,7 +104,8 @@ void DropTabsAtScreenPoint(Browser* source,
 
   gfx::Rect bounds = MiniWindowBoundsNear(source);
   bounds.set_origin(screen_point);
-  Browser* mini = CreateMiniWindow(source->profile(), bounds);
+  BrowserWindowInterface* mini =
+      CreateMiniWindow(source->GetProfile(), bounds);
   if (!mini) {
     return;
   }
@@ -112,12 +113,12 @@ void DropTabsAtScreenPoint(Browser* source,
   mini->GetWindow()->Show();
 }
 
-bool MoveTabsToNewWindow(Browser* source,
+bool MoveTabsToNewWindow(BrowserWindowInterface* source,
                          const std::vector<tabs_api::NodeId>& ids) {
   if (!source) {
     return false;
   }
-  TabStripModel* model = source->tab_strip_model();
+  TabStripModel* model = source->GetTabStripModel();
   const std::vector<int> indices = IndicesForIds(model, ids);
   if (indices.empty() ||
       indices.size() >= static_cast<size_t>(model->count())) {
@@ -127,17 +128,18 @@ bool MoveTabsToNewWindow(Browser* source,
   return true;
 }
 
-bool MoveTabsToMiniWindow(Browser* source,
+bool MoveTabsToMiniWindow(BrowserWindowInterface* source,
                           const std::vector<tabs_api::NodeId>& ids) {
   if (!source) {
     return false;
   }
-  const std::vector<int> indices = IndicesForIds(source->tab_strip_model(), ids);
+  const std::vector<int> indices =
+      IndicesForIds(source->GetTabStripModel(), ids);
   if (indices.empty()) {
     return false;
   }
-  Browser* mini =
-      CreateMiniWindow(source->profile(), MiniWindowBoundsNear(source));
+  BrowserWindowInterface* mini =
+      CreateMiniWindow(source->GetProfile(), MiniWindowBoundsNear(source));
   if (!mini) {
     return false;
   }
@@ -146,16 +148,15 @@ bool MoveTabsToMiniWindow(Browser* source,
   return true;
 }
 
-std::vector<WindowEntry> OtherWindows(Browser* source) {
+std::vector<WindowEntry> OtherWindows(BrowserWindowInterface* source) {
   std::vector<WindowEntry> entries;
   if (!source) {
     return entries;
   }
-  ProfileBrowserCollection::GetForProfile(source->profile())
+  ProfileBrowserCollection::GetForProfile(source->GetProfile())
       ->ForEach(
           [&](BrowserWindowInterface* browser) {
-            if (browser != source &&
-                !IsMiniWindow(browser->GetBrowserForMigrationOnly())) {
+            if (browser != source && !IsMiniWindow(browser)) {
               entries.push_back({browser->GetSessionID().id(),
                                  base::UTF16ToUTF8(TitleOf(browser))});
             }
@@ -165,7 +166,7 @@ std::vector<WindowEntry> OtherWindows(Browser* source) {
   return entries;
 }
 
-bool MoveTabsToWindow(Browser* source,
+bool MoveTabsToWindow(BrowserWindowInterface* source,
                       int window_id,
                       const std::vector<tabs_api::NodeId>& ids) {
   BrowserWindowInterface* target =
@@ -175,7 +176,7 @@ bool MoveTabsToWindow(Browser* source,
     return false;
   }
   const std::vector<int> indices =
-      IndicesForIds(source->tab_strip_model(), ids);
+      IndicesForIds(source->GetTabStripModel(), ids);
   if (indices.empty()) {
     return false;
   }
@@ -183,14 +184,13 @@ bool MoveTabsToWindow(Browser* source,
   return true;
 }
 
-bool TakeTab(Browser* target, const tabs_api::NodeId& id) {
+bool TakeTab(BrowserWindowInterface* target, const tabs_api::NodeId& id) {
   tabs::TabInterface* tab = RemoteTab(target, id);
   if (!tab) {
     return false;
   }
-  Browser* source =
-      tab->GetBrowserWindowInterface()->GetBrowserForMigrationOnly();
-  const int index = source->tab_strip_model()->GetIndexOfTab(tab);
+  BrowserWindowInterface* source = tab->GetBrowserWindowInterface();
+  const int index = source->GetTabStripModel()->GetIndexOfTab(tab);
   if (index == TabStripModel::kNoTab) {
     return false;
   }
@@ -198,7 +198,8 @@ bool TakeTab(Browser* target, const tabs_api::NodeId& id) {
   return true;
 }
 
-bool CloseRemoteTab(Browser* caller, const tabs_api::NodeId& id) {
+bool CloseRemoteTab(BrowserWindowInterface* caller,
+                    const tabs_api::NodeId& id) {
   tabs::TabInterface* tab = RemoteTab(caller, id);
   if (!tab) {
     return false;

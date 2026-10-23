@@ -4,7 +4,6 @@
 #include <utility>
 
 #include "base/functional/bind.h"
-#include "chrome/browser/ui/omnibox/omnibox_controller.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 
 namespace rail {
@@ -33,13 +32,6 @@ class RailOmniboxClient : public ContextualOmniboxClient {
   bool search_only_ = true;
 };
 
-std::unique_ptr<OmniboxController> CreateController(
-    Profile* profile,
-    content::WebContents* web_contents) {
-  return std::make_unique<OmniboxController>(
-      std::make_unique<RailOmniboxClient>(profile, web_contents));
-}
-
 }  // namespace
 
 RailSearchboxHandler::RailSearchboxHandler(
@@ -48,47 +40,58 @@ RailSearchboxHandler::RailSearchboxHandler(
     Profile* profile,
     content::WebContents* web_contents,
     GetSessionHandleCallback get_session_callback)
-    : ContextualSearchboxHandler(std::move(pending_page_handler),
-                                 std::move(pending_page),
-                                 profile,
-                                 web_contents,
-                                 CreateController(profile, web_contents),
-                                 std::move(get_session_callback)) {
-  static_cast<ContextualOmniboxClient*>(omnibox_controller()->client())
-      ->SetSuggestInputsCallback(
-          base::BindRepeating(&RailSearchboxHandler::GetSuggestInputs,
-                              base::Unretained(this)));
+    : ContextualSearchboxHandler(
+          std::move(pending_page_handler),
+          std::move(pending_page),
+          profile,
+          web_contents,
+          std::make_unique<RailOmniboxClient>(profile, web_contents),
+          std::move(get_session_callback)) {
+  static_cast<ContextualOmniboxClient*>(client())->SetSuggestInputsCallback(
+      base::BindRepeating(&RailSearchboxHandler::GetSuggestInputs,
+                          base::Unretained(this)));
   autocomplete_controller_observation_.Observe(autocomplete_controller());
 }
 
 RailSearchboxHandler::~RailSearchboxHandler() = default;
 
-void RailSearchboxHandler::QueryAutocomplete(const std::u16string& input,
-                                             bool prevent_inline_autocomplete,
-                                             uint32_t cursor_position) {
-  static_cast<RailOmniboxClient*>(omnibox_controller()->client())
-      ->set_search_only(input.empty() || input.front() == u'@');
+void RailSearchboxHandler::QueryAutocomplete(
+    int32_t query_id,
+    std::optional<int32_t> tab_id,
+    const std::u16string& input,
+    bool prevent_inline_autocomplete,
+    uint32_t cursor_position,
+    omnibox::SuggestInventory suggest_inventory,
+    bool is_on_focus,
+    const std::string& keyword,
+    searchbox::mojom::InputMethod input_method) {
+  static_cast<RailOmniboxClient*>(client())->set_search_only(
+      input.empty() || input.front() == u'@');
   ContextualSearchboxHandler::QueryAutocomplete(
-      input, prevent_inline_autocomplete, cursor_position);
+      query_id, tab_id, input, prevent_inline_autocomplete, cursor_position,
+      suggest_inventory, is_on_focus, keyword, input_method);
 }
 
 void RailSearchboxHandler::OpenAutocompleteMatch(
+    uint32_t result_sequence_id,
     uint8_t line,
     const GURL& url,
     bool are_matches_showing,
     uint8_t mouse_button,
-    bool alt_key,
-    bool ctrl_key,
-    bool meta_key,
-    bool shift_key) {
+    searchbox::mojom::ActionModifiersPtr modifiers,
+    bool via_keyboard) {
   if (open_in_new_tab_) {
+    auto new_tab = searchbox::mojom::ActionModifiers::New();
+    new_tab->ctrl_key = true;
+    new_tab->shift_key = true;
     ContextualSearchboxHandler::OpenAutocompleteMatch(
-        line, url, are_matches_showing, 0, false, true, false, true);
+        result_sequence_id, line, url, are_matches_showing, 0,
+        std::move(new_tab), via_keyboard);
     return;
   }
   ContextualSearchboxHandler::OpenAutocompleteMatch(
-      line, url, are_matches_showing, mouse_button, alt_key, ctrl_key,
-      meta_key, shift_key);
+      result_sequence_id, line, url, are_matches_showing, mouse_button,
+      std::move(modifiers), via_keyboard);
 }
 
 }  // namespace rail

@@ -19,8 +19,8 @@
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_metrics.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
@@ -76,7 +76,7 @@ std::optional<ProfileEntry> EntryForProfile(Profile* profile) {
   };
 }
 
-content::WebContents* InsertTab(Browser* browser,
+content::WebContents* InsertTab(BrowserWindowInterface* browser,
                                 Profile* profile,
                                 const GURL& url,
                                 int index) {
@@ -85,7 +85,7 @@ content::WebContents* InsertTab(Browser* browser,
   }
 
   const bool mini = IsMiniWindow(browser);
-  if (profile == browser->profile() && !mini) {
+  if (profile == browser->GetProfile() && !mini) {
     return chrome::AddAndReturnTabAt(browser, url, index, true, std::nullopt,
                                      false);
   }
@@ -97,7 +97,7 @@ content::WebContents* InsertTab(Browser* browser,
 
   if (mini) {
     content::WebContents* inserted = contents.get();
-    TabStripModel* model = browser->tab_strip_model();
+    TabStripModel* model = browser->GetTabStripModel();
     model->InsertWebContentsAt(index < 0 ? model->count() : index,
                                std::move(contents), AddTabTypes::ADD_ACTIVE);
     return inserted;
@@ -111,14 +111,14 @@ content::WebContents* InsertTab(Browser* browser,
   return params.navigated_or_inserted_contents;
 }
 
-void OnProfileResolved(base::WeakPtr<Browser> browser,
+void OnProfileResolved(base::WeakPtr<BrowserWindowInterface> browser,
                        GURL url,
                        TabCreatedCallback callback,
                        Profile* profile) {
   std::move(callback).Run(InsertTab(browser.get(), profile, url, -1));
 }
 
-void OnMoveProfileResolved(base::WeakPtr<Browser> browser,
+void OnMoveProfileResolved(base::WeakPtr<BrowserWindowInterface> browser,
                            tabs::TabHandle handle,
                            GURL url,
                            TabCreatedCallback callback,
@@ -128,7 +128,7 @@ void OnMoveProfileResolved(base::WeakPtr<Browser> browser,
     std::move(callback).Run(nullptr);
     return;
   }
-  TabStripModel* model = browser->tab_strip_model();
+  TabStripModel* model = browser->GetTabStripModel();
   const int index = model->GetIndexOfTab(tab);
   if (index == TabStripModel::kNoTab) {
     std::move(callback).Run(nullptr);
@@ -143,11 +143,11 @@ void OnMoveProfileResolved(base::WeakPtr<Browser> browser,
   std::move(callback).Run(created);
 }
 
-void OnFallbackToShell(base::WeakPtr<Browser> browser,
+void OnFallbackToShell(base::WeakPtr<BrowserWindowInterface> browser,
                        ProfileResolvedCallback callback,
                        Profile* profile) {
   if (!profile && browser) {
-    profile = browser->profile();
+    profile = browser->GetProfile();
   }
   std::move(callback).Run(profile);
 }
@@ -163,14 +163,14 @@ void OnProfileCreated(ProfileCreatedCallback callback, Profile* profile) {
 
 }  // namespace
 
-std::vector<ProfileEntry> ListProfiles(Browser* browser) {
+std::vector<ProfileEntry> ListProfiles(BrowserWindowInterface* browser) {
   std::vector<ProfileEntry> entries;
   ProfileManager* manager = g_browser_process->profile_manager();
   if (!browser || !manager) {
     return entries;
   }
 
-  const base::FilePath shell_path = browser->profile()->GetPath();
+  const base::FilePath shell_path = browser->GetProfile()->GetPath();
   for (ProfileAttributesEntry* attributes :
        manager->GetProfileAttributesStorage()
            .GetAllProfilesAttributesSortedForDisplay()) {
@@ -209,7 +209,7 @@ void DeleteProfile(const std::string& profile_id) {
       path, base::DoNothing(), ProfileMetrics::DELETE_PROFILE_SETTINGS);
 }
 
-void ResolveProfile(Browser* browser,
+void ResolveProfile(BrowserWindowInterface* browser,
                     const std::string& profile_id,
                     ProfileResolvedCallback callback) {
   if (!browser) {
@@ -221,7 +221,7 @@ void ResolveProfile(Browser* browser,
   const base::FilePath path =
       profile_id.empty() ? base::FilePath() : PathForId(profile_id);
   if (!manager || path.empty()) {
-    std::move(callback).Run(browser->profile());
+    std::move(callback).Run(browser->GetProfile());
     return;
   }
 
@@ -231,18 +231,19 @@ void ResolveProfile(Browser* browser,
   }
 
   manager->CreateProfileAsync(
-      path, base::BindOnce(&OnFallbackToShell, browser->AsWeakPtr(),
+      path, base::BindOnce(&OnFallbackToShell, browser->GetWeakPtr(),
                            std::move(callback)));
 }
 
-std::string ProfileIdOfTab(Browser* browser, const tabs_api::NodeId& tab_id) {
+std::string ProfileIdOfTab(BrowserWindowInterface* browser,
+                           const tabs_api::NodeId& tab_id) {
   if (!browser) {
     return std::string();
   }
   std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
   tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
   content::WebContents* contents = tab ? tab->GetContents() : nullptr;
-  if (!contents || contents->GetBrowserContext() == browser->profile()) {
+  if (!contents || contents->GetBrowserContext() == browser->GetProfile()) {
     return std::string();
   }
   return IdForPath(
@@ -301,7 +302,7 @@ BrowserWindowInterface* WindowHostingProfile(Profile* profile) {
   return nullptr;
 }
 
-void CreateTabInProfile(Browser* browser,
+void CreateTabInProfile(BrowserWindowInterface* browser,
                         const std::string& profile_id,
                         const GURL& url,
                         TabCreatedCallback callback) {
@@ -311,11 +312,11 @@ void CreateTabInProfile(Browser* browser,
   }
 
   ResolveProfile(browser, profile_id,
-                 base::BindOnce(&OnProfileResolved, browser->AsWeakPtr(), url,
+                 base::BindOnce(&OnProfileResolved, browser->GetWeakPtr(), url,
                                 std::move(callback)));
 }
 
-void MoveTabToProfile(Browser* browser,
+void MoveTabToProfile(BrowserWindowInterface* browser,
                       const tabs_api::NodeId& tab_id,
                       const std::string& profile_id,
                       TabCreatedCallback callback) {
@@ -334,7 +335,7 @@ void MoveTabToProfile(Browser* browser,
     url = GURL(url::kAboutBlankURL);
   }
   ResolveProfile(browser, profile_id,
-                 base::BindOnce(&OnMoveProfileResolved, browser->AsWeakPtr(),
+                 base::BindOnce(&OnMoveProfileResolved, browser->GetWeakPtr(),
                                 *handle, url, std::move(callback)));
 }
 

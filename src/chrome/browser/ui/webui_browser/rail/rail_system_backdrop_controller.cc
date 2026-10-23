@@ -28,8 +28,8 @@
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "base/win/windows_version.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
-#include "chrome/browser/win/mica_titlebar.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/color/color_provider_key.h"
 #include "ui/views/widget/widget.h"
@@ -221,7 +221,8 @@ class SystemBackdropController::Impl {
   }
 
   bool Initialize() {
-    if (!widget_ || !hwnd_ || !SystemTitlebarCanUseMicaMaterial()) {
+    if (!widget_ || !hwnd_ ||
+        base::win::GetVersion() < base::win::Version::WIN11_22H2) {
       return false;
     }
     if (config_.popup) {

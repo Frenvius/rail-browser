@@ -4,4 +4,3 @@ restore-webstore-install.patch
 enable-search-suggestions.patch
 preinstall-ublock-origin.patch
 installer-compare-modification-time.patch
-rail-shell.patch

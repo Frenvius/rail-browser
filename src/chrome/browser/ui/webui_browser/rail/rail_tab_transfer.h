@@ -6,7 +6,6 @@
 
 #include "components/browser_apis/tab_strip/types/node_id.h"
 
-class Browser;
 class BrowserWindowInterface;
 
 namespace gfx {
@@ -20,28 +19,29 @@ struct WindowEntry {
   std::string title;
 };
 
-BrowserWindowInterface* WindowUnderPoint(Browser* source,
+BrowserWindowInterface* WindowUnderPoint(BrowserWindowInterface* source,
                                          const gfx::Point& screen_point);
 
-void DropTabsAtScreenPoint(Browser* source,
+void DropTabsAtScreenPoint(BrowserWindowInterface* source,
                            const gfx::Point& screen_point,
                            const std::vector<tabs_api::NodeId>& ids);
 
-bool MoveTabsToNewWindow(Browser* source,
+bool MoveTabsToNewWindow(BrowserWindowInterface* source,
                          const std::vector<tabs_api::NodeId>& ids);
 
-bool MoveTabsToMiniWindow(Browser* source,
+bool MoveTabsToMiniWindow(BrowserWindowInterface* source,
                           const std::vector<tabs_api::NodeId>& ids);
 
-std::vector<WindowEntry> OtherWindows(Browser* source);
+std::vector<WindowEntry> OtherWindows(BrowserWindowInterface* source);
 
-bool MoveTabsToWindow(Browser* source,
+bool MoveTabsToWindow(BrowserWindowInterface* source,
                       int window_id,
                       const std::vector<tabs_api::NodeId>& ids);
 
-bool TakeTab(Browser* target, const tabs_api::NodeId& id);
+bool TakeTab(BrowserWindowInterface* target, const tabs_api::NodeId& id);
 
-bool CloseRemoteTab(Browser* caller, const tabs_api::NodeId& id);
+bool CloseRemoteTab(BrowserWindowInterface* caller,
+                    const tabs_api::NodeId& id);
 
 std::vector<tabs_api::NodeId> LiveTabs(
     const std::vector<tabs_api::NodeId>& ids);

@@ -6,12 +6,12 @@
 
 --- a/build/toolchain/win/midl.py
 +++ b/build/toolchain/win/midl.py
-@@ -359,7 +359,7 @@
- 
-   for source_file in common_files:
-     file_path = os.path.join(source, source_file)
--    if not os.path.isfile(file_path):
-+    if not os.path.isfile(file_path) or os.path.getsize(file_path) == 0:
-       source_exists = False
-       if sys.platform != 'win32':
-         print('File %s needs to be generated from Windows first' % file_path)
+@@ -399,7 +399,7 @@
+
+     for source_file in common_files:
+         file_path = os.path.join(source, source_file)
+-        if not os.path.isfile(file_path):
++        if not os.path.isfile(file_path) or os.path.getsize(file_path) == 0:
+             source_exists = False
+             if sys.platform != 'win32':
+                 print(

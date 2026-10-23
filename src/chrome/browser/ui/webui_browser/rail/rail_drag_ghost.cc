@@ -7,7 +7,6 @@
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_transfer.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
@@ -84,7 +83,7 @@ void SetDropTarget(BrowserWindowInterface* browser, bool visible) {
 }
 
 struct PollState {
-  base::WeakPtr<Browser> source;
+  base::WeakPtr<BrowserWindowInterface> source;
   base::WeakPtr<content::WebContents> shell;
   DragGhostObserver::MovedCallback moved;
   bool detachable = false;
@@ -116,7 +115,7 @@ void Poll(PollState* state) {
   }
 }
 
-void RunGhostLoop(base::WeakPtr<Browser> source,
+void RunGhostLoop(base::WeakPtr<BrowserWindowInterface> source,
                   base::WeakPtr<content::WebContents> shell,
                   DragGhostObserver observer,
                   std::vector<tabs_api::NodeId> ids,
@@ -175,7 +174,7 @@ DragGhostObserver::DragGhostObserver() = default;
 DragGhostObserver::DragGhostObserver(const DragGhostObserver&) = default;
 DragGhostObserver::~DragGhostObserver() = default;
 
-void StartDragGhost(Browser* source,
+void StartDragGhost(BrowserWindowInterface* source,
                     content::WebContents* shell,
                     const gfx::Rect& row,
                     const gfx::Point& grab_offset,
@@ -191,7 +190,7 @@ void StartDragGhost(Browser* source,
 
   view->CopyFromSurface(
       row, row.size(), kSnapshotTimeout,
-      base::BindOnce(&RunGhostLoop, source->AsWeakPtr(), shell->GetWeakPtr(),
+      base::BindOnce(&RunGhostLoop, source->GetWeakPtr(), shell->GetWeakPtr(),
                      std::move(observer), ids, row.size(),
                      grab_offset.OffsetFromOrigin()));
 }

@@ -47,7 +47,7 @@ std::vector<tabs_api::NodeId> TabsInProfile(WebUIBrowserWindow* window,
   if (!window || !profile) {
     return ids;
   }
-  TabStripModel* model = window->browser()->tab_strip_model();
+  TabStripModel* model = window->browser()->GetTabStripModel();
   for (int index = 0; index < model->count(); ++index) {
     tabs::TabInterface* tab = model->GetTabAtIndex(index);
     content::WebContents* contents = tab ? tab->GetContents() : nullptr;
@@ -107,8 +107,7 @@ void RailCommandUI::BindInterface(
   if (!window) {
     return;
   }
-  auto* feature =
-      window->browser()->browser_window_features()->tab_strip_service_feature();
+  auto* feature = TabStripServiceFeature::From(window->browser());
   if (feature) {
     feature->Accept(std::move(receiver));
   }
