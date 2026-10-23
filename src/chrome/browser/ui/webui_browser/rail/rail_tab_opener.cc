@@ -49,6 +49,20 @@ bool OpenedFromLink(const tabs_api::NodeId& tab_id) {
                                                ui::PAGE_TRANSITION_LINK);
 }
 
+bool RestoredTab(const tabs_api::NodeId& tab_id) {
+  std::optional<tabs::TabHandle> handle = tab_id.ToTabHandle();
+  tabs::TabInterface* tab = handle ? handle->Get() : nullptr;
+  if (!tab) {
+    return false;
+  }
+  content::NavigationController& controller =
+      tab->GetContents()->GetController();
+  content::NavigationEntry* pending = controller.GetPendingEntry();
+  content::NavigationEntry* committed = controller.GetLastCommittedEntry();
+  return (pending && pending->IsRestored()) ||
+         (committed && committed->IsRestored());
+}
+
 void ForgetOpeners(BrowserWindowInterface* browser,
                    const std::vector<tabs_api::NodeId>& tab_ids) {
   if (!browser) {

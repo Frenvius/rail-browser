@@ -1,5 +1,9 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_accelerators.h"
 
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+#endif
+
 #include <utility>
 
 #include "chrome/app/chrome_command_ids.h"
@@ -105,9 +109,26 @@ const char* RailCommandForBrowserCommand(int command_id) {
       return "select-tab:last";
     case IDC_CLOSE_TAB:
       return "close-tab";
+    case IDC_BACK:
+      return "back";
     default:
       return nullptr;
   }
+}
+
+const char* RailCommandForAppCommand(int app_command) {
+#if BUILDFLAG(IS_WIN)
+  switch (app_command) {
+    case APPCOMMAND_BROWSER_BACKWARD:
+      return "back";
+    case APPCOMMAND_BROWSER_FORWARD:
+      return "forward";
+    default:
+      return nullptr;
+  }
+#else
+  return nullptr;
+#endif
 }
 
 bool HandleRailAccelerator(const ui::Accelerator& accelerator,

@@ -297,6 +297,14 @@ void RailSettingsUI::SetGroupOpenedLinks(bool grouped) {
   rail::SetGroupOpenedLinks(PrefsFor(web_ui()), grouped);
 }
 
+void RailSettingsUI::GetTrailDepth(GetTrailDepthCallback callback) {
+  std::move(callback).Run(rail::GetTrailDepth(PrefsFor(web_ui())));
+}
+
+void RailSettingsUI::SetTrailDepth(int32_t depth) {
+  rail::SetTrailDepth(PrefsFor(web_ui()), depth);
+}
+
 void RailSettingsUI::GetTabSleep(GetTabSleepCallback callback) {
   PrefService* prefs = PrefsFor(web_ui());
   std::move(callback).Run(rail::GetTabSleepMinutes(prefs),

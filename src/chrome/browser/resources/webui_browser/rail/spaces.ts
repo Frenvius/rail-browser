@@ -203,6 +203,7 @@ export interface TabRow {
   pending: boolean;
   asleep: boolean;
   opener: string;
+  trail: string;
   group: string;
   owner: string;
   remote: string;
@@ -421,6 +422,9 @@ export class Spaces {
       const opener = previous.find(other => other.key === old.opener);
       const restored = opener ? this.byTab(opener.tabId) : undefined;
       row.opener = restored?.space === row.space ? restored.key : '';
+      const parent = previous.find(other => other.key === old.trail);
+      const back = parent?.tabId ? this.byTab(parent.tabId) : undefined;
+      row.trail = back?.space === row.space ? back.key : '';
     }
     for (const space of this.spaces_) {
       const key = activeKeys.get(space.id);
@@ -595,6 +599,48 @@ export class Spaces {
     }
     row.opener = opener.key;
     this.onChange_();
+  }
+
+  startTrail(tabId: string) {
+    const row = this.byTab(tabId);
+    if (!row?.opener || row.trail === row.opener) {
+      return;
+    }
+    row.trail = row.opener;
+    this.onChange_();
+  }
+
+  trailParent(tabId: string): TabRow|undefined {
+    const row = this.byTab(tabId);
+    const parent = row?.trail ? this.rowFor(row.trail) : undefined;
+    return parent?.tabId && parent.space === row!.space ? parent : undefined;
+  }
+
+  rejoin(tabId: string, group: string, trail: string) {
+    const row = this.byTab(tabId);
+    if (!row) {
+      return;
+    }
+    const parent = trail ? this.rowFor(trail) : undefined;
+    row.group = group;
+    row.trail = parent?.tabId && parent.space === row.space ? parent.key : '';
+    this.onChange_();
+  }
+
+  trailLevel(id: string, depth: number): number {
+    const seen = new Set<TabRow>();
+    let row = this.rowFor(id);
+    let level = 0;
+    while (row?.trail && !seen.has(row)) {
+      seen.add(row);
+      const parent = this.rowFor(row.trail);
+      if (!parent || parent.group !== row.group || parent.space !== row.space) {
+        break;
+      }
+      level++;
+      row = parent;
+    }
+    return depth ? Math.min(level, depth - 1) : level;
   }
 
   assign(tabId: string, spaceId: string, url: string) {
@@ -992,11 +1038,14 @@ export class Spaces {
     if (at < 0) {
       return;
     }
+    const family = new Set([opener.key]);
     for (let next = at + 1; next < rows.length; next++) {
       const candidate = rows[next]!;
-      if (candidate === row || candidate.opener !== opener.key) {
+      if (candidate === row ||
+          (!family.has(candidate.opener) && !family.has(candidate.trail))) {
         break;
       }
+      family.add(candidate.key);
       at = next;
     }
     this.placeRow_(row, rows[at]!, 1);
@@ -1111,6 +1160,7 @@ export class Spaces {
       pending: fields.pending ?? false,
       asleep: false,
       opener: fields.opener ?? '',
+      trail: '',
       group: fields.group ?? '',
       owner: fields.owner ?? '',
       remote: fields.remote ?? '',

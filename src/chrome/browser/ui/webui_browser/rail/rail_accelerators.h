@@ -25,6 +25,8 @@ bool IsCommandDisabledInShell(int command_id);
 
 const char* RailCommandForBrowserCommand(int command_id);
 
+const char* RailCommandForAppCommand(int app_command);
+
 void RunBrowserCommand(BrowserWindowInterface* browser,
                        std::string_view command);
 

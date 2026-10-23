@@ -23,6 +23,8 @@ std::optional<tabs_api::NodeId> OpenerOfTab(BrowserWindowInterface* browser,
 
 bool OpenedFromLink(const tabs_api::NodeId& tab_id);
 
+bool RestoredTab(const tabs_api::NodeId& tab_id);
+
 std::vector<std::pair<tabs_api::NodeId, tabs_api::NodeId>> OpenersOfTabs(
     BrowserWindowInterface* browser);
 

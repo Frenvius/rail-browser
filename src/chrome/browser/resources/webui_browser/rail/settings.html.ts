@@ -36,14 +36,32 @@ ${this.section_ === 'general' ? html`
     </div>
     <div class="item">
       <div class="rowtext">
-        <span class="cardtitle">Group tabs opened from links</span>
+        <span class="cardtitle">Tab trails</span>
         <span class="cardhint">
-          A link opened in a new tab joins a group with the tab it came from
+          A link opened in a new tab joins a trail with the tab it came from
         </span>
       </div>
       <cr-toggle ?checked="${this.groupOpenedLinks_}"
         @change="${this.onGroupOpenedLinksChange_}"></cr-toggle>
     </div>
+    ${this.groupOpenedLinks_ ? html`
+      <div class="item">
+        <div class="rowtext">
+          <span class="cardtitle">Trail depth</span>
+          <span class="cardhint">
+            How many levels a trail nests before new links line up as siblings
+          </span>
+        </div>
+        <select id="traildepth" @change="${this.onTrailDepthChange_}">
+          ${this.trailDepthChoices_.map(choice => html`
+            <option value="${choice.depth}"
+              ?selected="${choice.depth === this.trailDepth_}">
+              ${choice.label}
+            </option>
+          `)}
+        </select>
+      </div>
+    ` : ''}
   </div>
   <h2 class="section">Tab Sleep</h2>
   <div class="group">

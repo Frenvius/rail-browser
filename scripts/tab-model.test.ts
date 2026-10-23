@@ -8,8 +8,8 @@ const load = (file: string, name: string, mini = false) => {
       .replace(/^export /gm, '');
   const compiled = new Bun.Transpiler({loader: 'ts'}).transformSync(source);
   return new Function('SystemBackdropMaterial', 'INCOGNITO', 'MINI',
-      `${compiled}\nreturn ${name};`)(
-      {kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false, mini);
+      'WINDOW_ID', `${compiled}\nreturn ${name};`)(
+      {kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false, mini, 'test-window');
 };
 
 const Spaces = load('spaces', 'Spaces');
@@ -155,6 +155,65 @@ test('sidebar refresh preserves local opener and sleep state', () => {
   spaces.restore(state, tabs, new Set());
   expect(spaces.byTab('b').opener).toBe(spaces.byTab('a').key);
   expect(spaces.isAsleep('b')).toBe(true);
+});
+
+test('a trail outlives forgotten openers and a sidebar refresh', () => {
+  const spaces = new Spaces(() => {});
+  const tabs = [tab('a'), tab('b')];
+  spaces.restore(state, tabs, new Set());
+  expect(spaces.trailParent('b')).toBeUndefined();
+  spaces.setOpener('b', 'a');
+  spaces.startTrail('b');
+  spaces.forgetOpeners('s');
+  spaces.restore(state, tabs, new Set());
+  expect(spaces.trailParent('b')?.tabId).toBe('a');
+  spaces.restore(state, [tab('b')], new Set());
+  expect(spaces.trailParent('b')).toBeUndefined();
+});
+
+test('trail level nests by generation and caps at the depth', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(state, [tab('a'), tab('b'), tab('c'), tab('d')], new Set());
+  for (const [child, parent] of [['b', 'a'], ['c', 'b'], ['d', 'c']]) {
+    spaces.setOpener(child, parent);
+    spaces.startTrail(child);
+    spaces.setGroup(spaces.byTab(child).key, 'g');
+  }
+  spaces.setGroup(spaces.byTab('a').key, 'g');
+  expect(['a', 'b', 'c', 'd'].map(id => spaces.trailLevel(id, 0)))
+      .toEqual([0, 1, 2, 3]);
+  expect(['a', 'b', 'c', 'd'].map(id => spaces.trailLevel(id, 1)))
+      .toEqual([0, 0, 0, 0]);
+  expect(['a', 'b', 'c', 'd'].map(id => spaces.trailLevel(id, 3)))
+      .toEqual([0, 1, 2, 2]);
+  spaces.setGroup(spaces.byTab('b').key, '');
+  expect(spaces.trailLevel('c', 0)).toBe(0);
+});
+
+test('a reopened tab rejoins its group and a live trail parent', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(state, [tab('a'), tab('b')], new Set());
+  const parent = spaces.byTab('a').key;
+  spaces.rejoin('b', 'g', parent);
+  expect(spaces.byTab('b').group).toBe('g');
+  expect(spaces.trailParent('b')?.tabId).toBe('a');
+  spaces.rejoin('b', '', 'gone');
+  expect(spaces.byTab('b').group).toBe('');
+  expect(spaces.trailParent('b')).toBeUndefined();
+});
+
+test('a link lands after its opener\'s whole trail', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(state, [tab('a'), tab('b'), tab('c'), tab('x'), tab('d')],
+                 new Set());
+  spaces.setOpener('b', 'a');
+  spaces.startTrail('b');
+  spaces.setOpener('c', 'b');
+  spaces.startTrail('c');
+  spaces.forgetOpeners('s');
+  spaces.setOpener('d', 'a');
+  spaces.placeAfterOpener('d');
+  expect(spaces.tabsIn('s')).toEqual(['a', 'b', 'c', 'd', 'x']);
 });
 
 test('sidebar refresh keeps an open tab in its own space', () => {

@@ -67,6 +67,7 @@ export class RailSettingsElement extends CrLitElement {
       sidebarIconsOnly_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
       groupOpenedLinks_: {type: Boolean, state: true},
+      trailDepth_: {type: Number, state: true},
       sleepMinutes_: {type: Number, state: true},
       sleepSites_: {type: Array, state: true},
       section_: {type: String, state: true},
@@ -94,6 +95,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor sidebarIconsOnly_ = false;
   protected accessor themedTitlebar_ = true;
   protected accessor groupOpenedLinks_ = true;
+  protected accessor trailDepth_ = 1;
   protected accessor sleepMinutes_ = 30;
   protected accessor sleepSites_: string[] = [];
   protected accessor customModel_ = false;
@@ -123,6 +125,14 @@ export class RailSettingsElement extends CrLitElement {
       price: '$0.30 / $2.50',
     },
   ];
+  protected readonly trailDepthChoices_ = [
+    {depth: 1, label: '1 level'},
+    {depth: 2, label: '2 levels'},
+    {depth: 3, label: '3 levels'},
+    {depth: 4, label: '4 levels'},
+    {depth: 5, label: '5 levels'},
+    {depth: 0, label: 'Unlimited'},
+  ];
   protected readonly sleepChoices_ = [
     {minutes: 0, label: 'Never'},
     {minutes: 15, label: '15 minutes'},
@@ -148,6 +158,7 @@ export class RailSettingsElement extends CrLitElement {
     this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
     this.groupOpenedLinks_ = (await handler.getGroupOpenedLinks()).grouped;
+    this.trailDepth_ = (await handler.getTrailDepth()).depth;
     const sleep = await handler.getTabSleep();
     this.sleepMinutes_ = sleep.minutes;
     this.sleepSites_ = sleep.exceptions;
@@ -239,6 +250,12 @@ export class RailSettingsElement extends CrLitElement {
   protected onGroupOpenedLinksChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setGroupOpenedLinks(e.detail);
     this.groupOpenedLinks_ = e.detail;
+  }
+
+  protected onTrailDepthChange_(e: Event) {
+    const depth = Number((e.target as HTMLSelectElement).value);
+    browserProxyFactory.getInstance().handler.setTrailDepth(depth);
+    this.trailDepth_ = depth;
   }
 
   protected onSleepMinutesChange_(e: Event) {

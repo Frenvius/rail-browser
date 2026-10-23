@@ -78,6 +78,8 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetThemedTitlebar(bool themed) override;
   void GetGroupOpenedLinks(GetGroupOpenedLinksCallback callback) override;
   void SetGroupOpenedLinks(bool grouped) override;
+  void GetTrailDepth(GetTrailDepthCallback callback) override;
+  void SetTrailDepth(int32_t depth) override;
   void GetTabSleep(GetTabSleepCallback callback) override;
   void SetTabSleepMinutes(int32_t minutes) override;
   void SetTabSleepExceptions(

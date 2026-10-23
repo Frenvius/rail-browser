@@ -12,6 +12,7 @@ const char kSidebarStatePref[] = "rail.sidebar_state";
 const char kSidebarIconsOnlyPref[] = "rail.sidebar_icons_only";
 const char kThemedTitlebarPref[] = "rail.titlebar_themed";
 const char kGroupOpenedLinksPref[] = "rail.group_opened_links";
+const char kTrailDepthPref[] = "rail.trail_depth";
 const char kTabSleepMinutesPref[] = "rail.tab_sleep_minutes";
 const char kTabSleepExceptionsPref[] = "rail.tab_sleep_exceptions";
 
@@ -21,6 +22,7 @@ void RegisterSidebarStateProfilePrefs(
   registry->RegisterBooleanPref(kSidebarIconsOnlyPref, false);
   registry->RegisterBooleanPref(kThemedTitlebarPref, true);
   registry->RegisterBooleanPref(kGroupOpenedLinksPref, true);
+  registry->RegisterIntegerPref(kTrailDepthPref, 1);
   registry->RegisterIntegerPref(kTabSleepMinutesPref, 30);
   registry->RegisterListPref(kTabSleepExceptionsPref);
 }
@@ -62,6 +64,16 @@ bool GetGroupOpenedLinks(PrefService* prefs) {
 void SetGroupOpenedLinks(PrefService* prefs, bool grouped) {
   if (prefs) {
     prefs->SetBoolean(kGroupOpenedLinksPref, grouped);
+  }
+}
+
+int GetTrailDepth(PrefService* prefs) {
+  return prefs ? std::clamp(prefs->GetInteger(kTrailDepthPref), 0, 5) : 1;
+}
+
+void SetTrailDepth(PrefService* prefs, int depth) {
+  if (prefs) {
+    prefs->SetInteger(kTrailDepthPref, std::clamp(depth, 0, 5));
   }
 }
 
