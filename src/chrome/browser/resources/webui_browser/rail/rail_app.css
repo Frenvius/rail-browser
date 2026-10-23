@@ -254,6 +254,21 @@ webui-browser-tab-strip {
   transition: background-color 100ms ease;
 }
 
+:host(:not([mini])) #addressBox {
+  bottom: 0;
+  left: calc((var(--rail-content-left) + 100% - var(--rail-content-right)) / 2);
+  margin: auto 0;
+  max-width: min(60%,
+      100% - var(--rail-content-left) - var(--rail-content-right) - 300px);
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+:host(:not([mini])) #extensionsBar {
+  margin-inline-start: auto;
+}
+
 #addressBox:hover {
   background: var(--rail-hover);
 }
@@ -680,6 +695,10 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
 :host([titlebar-themed][page-color-light]) #addressText,
 :host([titlebar-themed][page-color-dark]) #addressText {
   color: var(--rail-page-foreground-primary);
+}
+
+:host([titlebar-themed]:not([mini])) #addressBox {
+  top: 6px;
 }
 
 :host([titlebar-themed]) #railLogoHit {
