@@ -192,8 +192,51 @@
     opacity: 1;
 }
 
-.close:hover {
+.close:hover,
+.reset:hover {
     background: var(--rail-hover-strong, #3d3d5c);
+}
+
+.reset {
+    border: none;
+    border-radius: 5px;
+    opacity: 0;
+    position: absolute;
+    right: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2px;
+    --cr-icon-button-fill-color: transparent;
+    --cr-icon-button-icon-size: 13px;
+    --cr-icon-button-margin-end: 0;
+    --cr-icon-button-margin-start: 0;
+    --cr-icon-button-size: 20px;
+    --cr-icon-button-stroke-color: var(--rail-text-dim, #b0b0c8);
+}
+
+.reset[hidden] {
+    display: none;
+}
+
+.tab:hover .reset,
+.reset:focus-visible {
+    opacity: 1;
+}
+
+.reset:focus-visible {
+    outline: 2px solid var(--rail-accent, #7c5cfc);
+    outline-offset: 1px;
+}
+
+:host([resettable]) .tab:hover #title {
+    mask-image: linear-gradient(
+        to right, #000 calc(100% - 78px), transparent calc(100% - 50px));
+}
+
+:host([resettable]) .tab:hover #audio {
+    margin-right: 48px;
 }
 
 :host([dormant]) #faviconContainer {
@@ -292,7 +335,8 @@ cr-icon {
 }
 
 :host([tile]) #title,
-:host([tile]) .close {
+:host([tile]) .close,
+:host([tile]) .reset {
     display: none;
 }
 
@@ -315,12 +359,14 @@ cr-icon {
     }
 
     #title,
-    .close {
+    .close,
+    .reset {
         display: none;
     }
 
     #alert,
-    #audio {
+    #audio,
+    :host([resettable]) .tab:hover #audio {
         bottom: 1px;
         margin-right: 0;
         position: absolute;

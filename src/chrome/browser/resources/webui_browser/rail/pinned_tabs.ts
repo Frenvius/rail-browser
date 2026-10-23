@@ -202,6 +202,32 @@ export class PinnedTabs {
     this.onChange_();
   }
 
+  remove(key: string): ClosedPin|undefined {
+    const index = this.entries_.findIndex(entry => entry.key === key);
+    if (index < 0) {
+      return undefined;
+    }
+    const [entry] = this.entries_.splice(index, 1);
+    this.onChange_();
+    return {entry: {...entry!}, index};
+  }
+
+  reinstate(closed: ClosedPin): PinnedEntry {
+    const existing = this.byKey(closed.entry.key);
+    if (existing) {
+      return existing;
+    }
+    const entry = {...closed.entry, tabId: ''};
+    this.entries_.splice(Math.min(closed.index, this.entries_.length), 0, entry);
+    this.onChange_();
+    return entry;
+  }
+
+  hasLeftHome(id: string): boolean {
+    const entry = this.byKey(id) ?? this.byTab(id);
+    return !!entry?.tabId && pageOf(entry.url) !== pageOf(entry.home);
+  }
+
   reorder(spaceId: string, ids: string[]) {
     const rows = this.entriesIn(spaceId);
     const ordered = [...new Set(
@@ -325,6 +351,55 @@ export class PinnedTabs {
 
   private mintKey_(): string {
     return `pinned-${crypto.randomUUID()}`;
+  }
+}
+
+export interface ClosedPin {
+  entry: PinnedEntry;
+  index: number;
+}
+
+const REOPEN_LIMIT = 25;
+
+export class ReopenHistory {
+  private order_: Array<ClosedPin|null> = [];
+  private pinTabs_: Array<{key: string, url: string}> = [];
+
+  closedTab() {
+    this.push_(null);
+  }
+
+  closedPinTab(key: string, url: string) {
+    this.closedTab();
+    this.pinTabs_.push({key, url});
+    this.pinTabs_.splice(0, this.pinTabs_.length - REOPEN_LIMIT);
+  }
+
+  removedPin(pin: ClosedPin) {
+    this.push_(pin);
+  }
+
+  next(): ClosedPin|null {
+    return this.order_.pop() ?? null;
+  }
+
+  claimPinTab(url: string): string|undefined {
+    const at = this.pinTabs_.findLastIndex(one => one.url === url);
+    return at < 0 ? undefined : this.pinTabs_.splice(at, 1)[0]!.key;
+  }
+
+  private push_(record: ClosedPin|null) {
+    this.order_.push(record);
+    this.order_.splice(0, this.order_.length - REOPEN_LIMIT * 2);
+  }
+}
+
+function pageOf(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.host.toLowerCase() + parsed.pathname.replace(/\/$/, '');
+  } catch {
+    return url;
   }
 }
 

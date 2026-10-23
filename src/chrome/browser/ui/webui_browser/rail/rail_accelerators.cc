@@ -38,7 +38,6 @@ constexpr Binding kMiniBindings[] = {
 constexpr std::pair<std::string_view, int> kMenuBrowserCommands[] = {
     {"new-window", IDC_NEW_WINDOW},
     {"new-incognito-window", IDC_NEW_INCOGNITO_WINDOW},
-    {"restore-tab", IDC_RESTORE_TAB},
     {"import-settings", IDC_IMPORT_SETTINGS},
     {"history", IDC_SHOW_HISTORY},
     {"downloads", IDC_SHOW_DOWNLOADS},
@@ -59,6 +58,10 @@ constexpr std::pair<std::string_view, int> kMenuBrowserCommands[] = {
 void RunBrowserCommand(BrowserWindowInterface* browser,
                        std::string_view command) {
   if (!browser) {
+    return;
+  }
+  if (command == "restore-tab") {
+    chrome::RestoreTab(browser);
     return;
   }
   for (const auto& [name, command_id] : kMenuBrowserCommands) {
@@ -111,6 +114,8 @@ const char* RailCommandForBrowserCommand(int command_id) {
       return "close-tab";
     case IDC_BACK:
       return "back";
+    case IDC_RESTORE_TAB:
+      return "reopen-tab";
     default:
       return nullptr;
   }

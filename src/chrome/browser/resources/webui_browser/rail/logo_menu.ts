@@ -47,7 +47,7 @@ export async function openLogoMenu(host: CommandBarHost) {
     {
       label: 'Tabs',
       children: menuItems([
-        browserCommand('restore-tab', 'Reopen Closed Tab', 'Ctrl+Shift+T'),
+        shellCommand('reopen-tab', tab),
         separator(),
         shellCommand('duplicate-tab', tab),
         shellCommand('pin-tab', tab),

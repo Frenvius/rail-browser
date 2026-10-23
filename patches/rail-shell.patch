@@ -4892,7 +4892,7 @@ index aa165c7..4c3672a 100644
 -  border-radius: 0 16px 0 0;
 -}
 diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser/resources/webui_browser/app.html.ts
-index 5e48dff..ee8736a 100644
+index 5e48dff..e9d08d3 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
 @@ -11,34 +11,13 @@ export function getHtml(this: WebuiBrowserAppElement) {
@@ -4936,7 +4936,7 @@ index 5e48dff..ee8736a 100644
        <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
          ?disabled="${this.backButtonDisabled_}"
          @click="${this.onBackClick_}"
-@@ -50,37 +29,84 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -50,37 +29,85 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button class="${this.reloadOrStopIcon_}"
          title="${this.reloadOrStopTooltip_()}"
          @click="${this.onReloadOrStopClick_}"></cr-icon-button>
@@ -5013,6 +5013,7 @@ index 5e48dff..ee8736a 100644
 +          @tab-added="${this.onTabAdded_}"
 +          @tab-closed="${this.onTabClosed_}"
 +          @tab-closing="${this.onTabClosing_}"
++          @tab-navigate="${this.onTabNavigate_}"
 +          @tab-updated="${this.onTabUpdated_}">
 +      </webui-browser-tab-strip>
 +    </div>
@@ -5037,7 +5038,7 @@ index 5e48dff..ee8736a 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..0aca2cb 100644
+index 922ef29..7a7ca69 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -5251,7 +5252,7 @@ index 922ef29..0aca2cb 100644
    }
  
    protected onBackContextmenu_(e: Event) {
-@@ -253,16 +310,61 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -253,16 +310,65 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -5264,6 +5265,10 @@ index 922ef29..0aca2cb 100644
 +      this.$.contentRegion.removeTab(id);
 +    }
 +    this.updateEmptyState_();
++  }
++
++  protected onTabNavigate_(event: CustomEvent<{id: string, url: string}>) {
++    this.$.contentRegion.webviewFor(event.detail.id)?.navigate(event.detail.url);
 +  }
 +
    protected onTabClosed_(event: CustomEvent<TabClosed>) {
@@ -5314,7 +5319,7 @@ index 922ef29..0aca2cb 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -274,6 +376,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -274,6 +380,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -5322,7 +5327,7 @@ index 922ef29..0aca2cb 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -292,7 +395,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -292,7 +399,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // is typing and the tab navigates.
      const isNTP = activeTabUrl.startsWith('chrome://newtab');
      if (!isNTP) {
@@ -5331,7 +5336,7 @@ index 922ef29..0aca2cb 100644
  
        const tabWebView = this.$.contentRegion.activeWebview;
        if (tabWebView) {
-@@ -309,7 +412,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -309,7 +416,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -5344,7 +5349,7 @@ index 922ef29..0aca2cb 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -318,7 +425,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -318,7 +429,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      if (webview) {
        const [canGoBack, canGoForward] =
            await Promise.all([webview.canGoBack(), webview.canGoForward()]);
@@ -5354,7 +5359,7 @@ index 922ef29..0aca2cb 100644
        this.forwardButtonDisabled_ = !canGoForward;
      } else {
        this.backButtonDisabled_ = true;
-@@ -327,32 +435,89 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -327,32 +439,90 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -5416,6 +5421,7 @@ index 922ef29..0aca2cb 100644
 +      newSpace: () => strip.newSpace(),
 +      openUrl: (url: string) => strip.openTab(url),
 +      reload: () => region.activeWebview?.reload(),
++      reopenClosedTab: () => strip.reopenClosedTab(),
 +      runTabCommand: (command: TabCommand, target: TabMenuTarget) =>
 +          strip.runTabCommand(command, target),
 +      selectTabAt: (index: number) => strip.selectTabAt(index),
@@ -5462,7 +5468,7 @@ index 922ef29..0aca2cb 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -371,6 +536,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -371,6 +541,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5479,7 +5485,7 @@ index 922ef29..0aca2cb 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -400,9 +575,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -400,9 +580,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -5656,10 +5662,10 @@ index 7b64d40..ab31e36 100644
     * Context menus.
     * Disabled icons.
 diff --git a/chrome/browser/resources/webui_browser/icons.html.ts b/chrome/browser/resources/webui_browser/icons.html.ts
-index 06dfcf1..73e46c3 100644
+index 06dfcf1..8207b08 100644
 --- a/chrome/browser/resources/webui_browser/icons.html.ts
 +++ b/chrome/browser/resources/webui_browser/icons.html.ts
-@@ -69,6 +69,12 @@ if (document.documentElement.hasAttribute('webui-rounded-icons')) {
+@@ -69,6 +69,16 @@ if (document.documentElement.hasAttribute('webui-rounded-icons')) {
        <g id="bookmark-filled">
          <path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
        </g>
@@ -5668,6 +5674,10 @@ index 06dfcf1..73e46c3 100644
 +        <path d="M14.734 13.841a2 2 0 0 0-.314-2.42L12.58 9.58a2 2 0 0 0-2.421-.314l-7.657 4.461A1 1 0 0 0 2.3 15.3l6.403 6.403a1 1 0 0 0 1.571-.204z"/>
 +        <path d="m5 18 2-2"/>
 +        <path d="m7.699 10.7 5.602 5.601"/>
++      </g>
++      <g id="pinned-reset">
++        <path d="M9 14 4 9l5-5"/>
++        <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
 +      </g>
        <g id="chrome-minimize"><path d="M 5 12 L 19 12" /></g>
        <g id="chrome-maximize"><rect x="5" y="5" width="14" height="14" /></g>
@@ -5794,10 +5804,10 @@ index 2038cab..0ded2ee 100644
 -        transparent 12px, var(--color-tab-background-active-frame-inactive) 13px);
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
-index dd460df..d68878a 100644
+index dd460df..7d6c078 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
-@@ -4,19 +4,42 @@
+@@ -4,19 +4,49 @@
  
  import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
  
@@ -5836,6 +5846,13 @@ index dd460df..d68878a 100644
 +      <path d="M4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73L19.73 21 21 19.73 4.27 3zM12 4 9.91 6.09 12 8.18V4z"></path>
 +    </svg>
 +  </button>
++  <cr-icon-button
++      class="reset"
++      iron-icon="webui-browser:pinned-reset"
++      title="Back to pinned page"
++      ?hidden="${!this.resettable}"
++      @click="${this.onResetClick_}">
++  </cr-icon-button>
    <cr-icon-button
        class="close"
 -      iron-icon="cr:close"
@@ -5844,7 +5861,7 @@ index dd460df..d68878a 100644
    </cr-icon-button>
    <div id="bottomCorners" ?hidden="${!this.tabData.isActive}">
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
-index d1e297c..39e581d 100644
+index d1e297c..5ef8fd9 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
 @@ -3,14 +3,14 @@
@@ -5866,7 +5883,7 @@ index d1e297c..39e581d 100644
  
  import {getCss} from './tab.css.js';
  import {getHtml} from './tab.html.js';
-@@ -39,10 +39,33 @@ export class TabElement extends CrLitElement {
+@@ -39,10 +39,37 @@ export class TabElement extends CrLitElement {
          type: Boolean,
          reflect: true,
        },
@@ -5880,6 +5897,10 @@ index d1e297c..39e581d 100644
 +        reflect: true,
 +      },
 +      dormant: {
++        type: Boolean,
++        reflect: true,
++      },
++      resettable: {
 +        type: Boolean,
 +        reflect: true,
 +      },
@@ -5902,7 +5923,7 @@ index d1e297c..39e581d 100644
        },
      };
    }
-@@ -53,6 +76,7 @@ export class TabElement extends CrLitElement {
+@@ -53,6 +80,7 @@ export class TabElement extends CrLitElement {
      id: '',
      isActive: false,
      isBlocked: false,
@@ -5910,7 +5931,7 @@ index d1e297c..39e581d 100644
      isSelected: false,
      networkState: TabNetworkState.kNone,
      title: '',
-@@ -61,37 +85,108 @@ export class TabElement extends CrLitElement {
+@@ -61,37 +89,109 @@ export class TabElement extends CrLitElement {
  
    protected accessor dragInProgress = false;
    protected accessor active = false;
@@ -5926,6 +5947,7 @@ index d1e297c..39e581d 100644
 +  accessor pinned = false;
 +  accessor tile = false;
 +  accessor dormant = false;
++  accessor resettable = false;
 +  accessor selected = false;
 +  protected accessor loading = false;
 +  protected accessor blocked = false;
@@ -6032,7 +6054,7 @@ index d1e297c..39e581d 100644
      }
    }
  
-@@ -115,7 +210,8 @@ export class TabElement extends CrLitElement {
+@@ -115,9 +215,15 @@ export class TabElement extends CrLitElement {
      return matrix.m41;
    }
  
@@ -6041,7 +6063,14 @@ index d1e297c..39e581d 100644
 +    e.stopPropagation();
      this.fire('tab-close-click', {id: this.tabData.id});
    }
++
++  protected onResetClick_(e: Event) {
++    e.stopPropagation();
++    this.fire('tab-reset-click', {id: this.tabData.id});
++  }
  }
+ 
+ declare global {
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css
 index 0fbaf6c..e58d103 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.css
@@ -6092,10 +6121,10 @@ index 0fbaf6c..e58d103 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index a15445b..9f3cefc 100644
+index a15445b..dba3c50 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -2,30 +2,202 @@
+@@ -2,30 +2,206 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
  
@@ -6171,10 +6200,12 @@ index a15445b..9f3cefc 100644
 +                      .dragInProgress="${this.dragInProgress_}"
 +                      .pinned="${true}"
 +                      .dormant="${row.dormant}"
++                      .resettable="${this.hasLeftHome_(row.item.id)}"
 +                      .selected="${this.isSelected_(row.item.id)}"
 +                      @mousedown="${this.onTabMousedown_}"
 +                      @tab-audio-click="${this.onTabAudioClick_}"
 +                      @tab-close-click="${this.onTabCloseClick}"
++                      @tab-reset-click="${this.onTabResetClick_}"
 +                      @tab-context-menu="${this.onTabContextMenu_}"
 +                      @tab-select="${this.onTabSelect_}">
 +                  </webui-browser-tab>
@@ -6188,10 +6219,12 @@ index a15445b..9f3cefc 100644
 +              .dragInProgress="${this.dragInProgress_}"
 +              .pinned="${true}"
 +              .dormant="${entry.row.dormant}"
++              .resettable="${this.hasLeftHome_(entry.row.item.id)}"
 +              .selected="${this.isSelected_(entry.row.item.id)}"
 +              @mousedown="${this.onTabMousedown_}"
 +              @tab-audio-click="${this.onTabAudioClick_}"
 +              @tab-close-click="${this.onTabCloseClick}"
++              @tab-reset-click="${this.onTabResetClick_}"
 +              @tab-context-menu="${this.onTabContextMenu_}"
 +              @tab-select="${this.onTabSelect_}">
 +          </webui-browser-tab>
@@ -6312,7 +6345,7 @@ index a15445b..9f3cefc 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..b93920c 100644
+index b7a5099..6c92b5a 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6349,7 +6382,7 @@ index b7a5099..b93920c 100644
 +import {miniMatchProfile} from '../rail/mini_window.js';
 +import {NativeGroupLinks, readNativeGroups} from '../rail/native_groups.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
-+import {favoritesKey, isFavorites, PinnedTabs} from '../rail/pinned_tabs.js';
++import {favoritesKey, isFavorites, PinnedTabs, ReopenHistory} from '../rail/pinned_tabs.js';
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow, TidySection} from '../rail/sections.js';
 +import {splitSections} from '../rail/sections.js';
 +import type {SidebarState} from '../rail/sidebar_state.js';
@@ -6442,7 +6475,7 @@ index b7a5099..b93920c 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -95,32 +157,101 @@ export class TabStripElement extends CrLitElement implements
+@@ -95,32 +157,102 @@ export class TabStripElement extends CrLitElement implements
          reflect: true,
          attribute: 'drag-in-progress',
        },
@@ -6519,6 +6552,7 @@ index b7a5099..b93920c 100644
 +  private readonly typedTabs_ = new Set<string>();
 +  private readonly closedTrails_:
 +      Array<{url: string, space: string, group: string, trail: string}> = [];
++  private readonly reopenHistory_ = new ReopenHistory();
 +
 +  private slidingSpace_ = false;
 +  private backdropKey_ = '';
@@ -6554,7 +6588,7 @@ index b7a5099..b93920c 100644
    }
  
    override connectedCallback() {
-@@ -128,11 +259,21 @@ export class TabStripElement extends CrLitElement implements
+@@ -128,11 +260,21 @@ export class TabStripElement extends CrLitElement implements
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -6576,7 +6610,7 @@ index b7a5099..b93920c 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +295,102 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +296,102 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6679,7 +6713,7 @@ index b7a5099..b93920c 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -175,18 +412,7 @@ export class TabStripElement extends CrLitElement implements
+@@ -175,18 +413,7 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6699,7 +6733,7 @@ index b7a5099..b93920c 100644
    }
  
  
-@@ -194,14 +420,37 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +421,43 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -6714,6 +6748,12 @@ index b7a5099..b93920c 100644
 +    const groups = new Set(nodesClosedEvent.nodeIds.map(
 +        nodeId => this.spaces_.byTab(nodeId)?.group ?? ''));
 +    for (const nodeId of nodesClosedEvent.nodeIds) {
++      const pin = this.pinnedTabs_.byTab(nodeId);
++      if (pin) {
++        this.reopenHistory_.closedPinTab(pin.key, pin.url);
++      } else {
++        this.reopenHistory_.closedTab();
++      }
 +      const row = this.spaces_.byTab(nodeId);
 +      if (row && (row.group || row.trail)) {
 +        this.closedTrails_.push(
@@ -6738,7 +6778,7 @@ index b7a5099..b93920c 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -217,48 +466,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +473,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -6750,13 +6790,13 @@ index b7a5099..b93920c 100644
 -  private async registerDropTarget_() {
 -    this.dropTargetReceiver_ = new DropTargetReceiver(this);
 -    const pendingRemote = this.dropTargetReceiver_.$.associateAndPassRemote();
--
--    this.dropTargetRegistration_ = new DropTargetRegistrationRemote();
--    const pendingReceiver =
--        this.dropTargetRegistration_.$.associateAndPassReceiver();
 +  override updated(changedProperties: PropertyValues<this>) {
 +    super.updated(changedProperties);
  
+-    this.dropTargetRegistration_ = new DropTargetRegistrationRemote();
+-    const pendingReceiver =
+-        this.dropTargetRegistration_.$.associateAndPassReceiver();
+-
 -    await this.tabDragService_.registerDropTarget(
 -        pendingRemote, pendingReceiver);
 -    this.setupResizeObserver_();
@@ -6792,7 +6832,7 @@ index b7a5099..b93920c 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +521,1899 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +528,1944 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7230,6 +7270,18 @@ index b7a5099..b93920c 100644
 +    if (!row) {
 +      return;
 +    }
++    const key = this.reopenHistory_.claimPinTab(row.url);
++    const entry = key ? this.pinnedTabs_.byKey(key) : undefined;
++    if (entry && !entry.tabId) {
++      this.spaces_.claim(tabId, entry.space);
++      this.pinnedTabs_.attach(entry.key, tabId);
++      const item = this.findItem_<TabItem>(tabId, 'tab');
++      if (item) {
++        this.pinnedTabs_.track(item.tabData);
++      }
++      this.refreshSections_();
++      return;
++    }
 +    let at = this.closedTrails_.length - 1;
 +    while (at >= 0 &&
 +           (this.closedTrails_[at]!.url !== row.url ||
@@ -7269,21 +7321,12 @@ index b7a5099..b93920c 100644
 +    }
 +    this.spaces_.clearOpener(tabId);
 +    browserProxyFactory.getInstance().handler.forgetOpeners([tabId]);
-   }
- 
--  // DropTargetInterface implementation
--  onDragEntered(
--      sourceTabIds: NodeId[], localPoint: Point, mouseToTabXRatio: number) {
--    this.dragInProgress_ = true;
--    const nodeId = sourceTabIds[0]!;
--    this.dragDelegate_.onMojoDragEntered(nodeId, localPoint, mouseToTabXRatio);
++  }
++
 +  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
 +    this.closeTarget_(e.detail.id);
-   }
- 
--  onDrag(localPoint: Point) {
--    this.dragDelegate_.onMojoDrag(localPoint);
--  }
++  }
++
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -8183,7 +8226,10 @@ index b7a5099..b93920c 100644
 +      return;
 +    }
 +    if (entry && !entry.tabId) {
-+      this.pinnedTabs_.unpin(entry.key);
++      const removed = this.pinnedTabs_.remove(entry.key);
++      if (removed) {
++        this.reopenHistory_.removedPin(removed);
++      }
 +      this.refreshSections_();
 +      return;
 +    }
@@ -8192,6 +8238,36 @@ index b7a5099..b93920c 100644
 +      return;
 +    }
 +    this.closeTabs_([entry ? entry.tabId : id]);
++  }
++
++  reopenClosedTab() {
++    const pin = this.reopenHistory_.next();
++    if (!pin) {
++      browserProxyFactory.getInstance().handler.runBrowserCommand(
++          'restore-tab');
++      return;
++    }
++    const space = isFavorites(pin.entry.space) ||
++            this.spaces_.byId(pin.entry.space) ?
++        pin.entry.space :
++        this.spaces_.activeId;
++    const folder =
++        this.folders_.byId(pin.entry.folder) ? pin.entry.folder : '';
++    const entry = this.pinnedTabs_.reinstate(
++        {...pin, entry: {...pin.entry, space, folder}});
++    this.refreshSections_();
++    this.selectRow_(entry.key);
++  }
++
++  protected hasLeftHome_(id: string): boolean {
++    return this.pinnedTabs_.hasLeftHome(id);
++  }
++
++  protected onTabResetClick_(e: CustomEvent<{id: string}>) {
++    const entry = this.entryFor_(e.detail.id);
++    if (entry?.tabId) {
++      this.fire('tab-navigate', {id: entry.tabId, url: entry.home});
++    }
 +  }
 +
 +  private entryFor_(id: string): PinnedEntry|undefined {
@@ -8215,8 +8291,14 @@ index b7a5099..b93920c 100644
 +  private newTabBelow_(target: TabMenuTarget) {
 +    this.pendingBelow_ = target.tabId ?? '';
 +    this.fire('new-tab-requested');
-+  }
-+
+   }
+ 
+-  // DropTargetInterface implementation
+-  onDragEntered(
+-      sourceTabIds: NodeId[], localPoint: Point, mouseToTabXRatio: number) {
+-    this.dragInProgress_ = true;
+-    const nodeId = sourceTabIds[0]!;
+-    this.dragDelegate_.onMojoDragEntered(nodeId, localPoint, mouseToTabXRatio);
 +  private async duplicateTab_(target: TabMenuTarget) {
 +    const created = await this.createTab_(target.url);
 +    if (target.tabId && this.canAnchor_(target.tabId)) {
@@ -8767,8 +8849,10 @@ index b7a5099..b93920c 100644
 +    }
 +    this.pinnedTabs_.setFolder(entry.key, folderId);
 +    this.refreshSections_();
-+  }
-+
+   }
+ 
+-  onDrag(localPoint: Point) {
+-    this.dragDelegate_.onMojoDrag(localPoint);
 +  setTabPinned(tabId: string, pinned: boolean): PinnedDragRows {
 +    const moved: PinnedDragRows = {tabId, rowIds: []};
 +    for (const id of this.dragRowIds_(tabId)) {
@@ -8788,7 +8872,7 @@ index b7a5099..b93920c 100644
 +      }
 +    }
 +    return moved;
-+  }
+   }
  
 -  onDragLeave() {
 -    this.dragInProgress_ = false;
@@ -8885,7 +8969,7 @@ index 6d1d6a0..33d7989 100644
      super.willUpdate(changedProperties);
  
 diff --git a/chrome/browser/resources/webui_browser/webview.ts b/chrome/browser/resources/webui_browser/webview.ts
-index 9069a86..2561e8a 100644
+index 9069a86..99ca059 100644
 --- a/chrome/browser/resources/webui_browser/webview.ts
 +++ b/chrome/browser/resources/webui_browser/webview.ts
 @@ -38,6 +38,16 @@ export class WebviewElement extends CrLitElement {
@@ -8933,7 +9017,7 @@ index 9069a86..2561e8a 100644
            return;
          }
          clearInterval(intervalId);
-@@ -148,6 +161,9 @@ export class TabWebviewElement extends WebviewElement {
+@@ -148,11 +161,18 @@ export class TabWebviewElement extends WebviewElement {
          .getGuestIdForTabId(
              this.tabId, this.guestHandler.$.bindNewPipeAndPassReceiver())
          .then(({guestId}) => {
@@ -8943,6 +9027,15 @@ index 9069a86..2561e8a 100644
            this.guestId = guestId;
            this.tryToAttach();
          });
+   }
+ 
++  navigate(url: string) {
++    this.guestHandler.navigate(url);
++  }
++
+   goBack() {
+     this.guestHandler.goBack();
+   }
 diff --git a/chrome/browser/taskbar/taskbar_decorator_win.cc b/chrome/browser/taskbar/taskbar_decorator_win.cc
 index 90969f7..e445d77 100644
 --- a/chrome/browser/taskbar/taskbar_decorator_win.cc

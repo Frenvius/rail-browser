@@ -14,6 +14,7 @@ const load = (file: string, name: string, mini = false) => {
 
 const Spaces = load('spaces', 'Spaces');
 const PinnedTabs = load('pinned_tabs', 'PinnedTabs');
+const ReopenHistory = load('pinned_tabs', 'ReopenHistory');
 const nativeTabMoves = load('tab_drag', 'nativeTabMoves');
 const TabDrag = load('tab_drag', 'TabDrag');
 const tab = (id: string) => ({id, url: 'https://example.test/', title: id,
@@ -364,6 +365,55 @@ test('reverting pins and rows drops tabs that left the window', () => {
   expect(pins.entries[0].tabId).toBe('');
   expect(spaces.byTab('a')).toBeUndefined();
   expect(spaces.byTab('b')).toBeDefined();
+});
+
+test('a pin has left home only when a live tab shows another page', () => {
+  const pins = new PinnedTabs(() => {});
+  const entry = pins.pin({...tab('p'), url: 'https://Example.test/docs/'}, 's');
+  expect(pins.hasLeftHome('p')).toBe(false);
+  pins.track({...tab('p'), url: 'https://example.test/docs?page=2#top'});
+  expect(pins.hasLeftHome('p')).toBe(false);
+  pins.track({...tab('p'), url: 'https://example.test/other'});
+  expect(pins.hasLeftHome('p')).toBe(true);
+  expect(pins.hasLeftHome(entry.key)).toBe(true);
+  pins.release('p');
+  expect(pins.hasLeftHome(entry.key)).toBe(false);
+});
+
+test('a removed pin comes back once, at its old position', () => {
+  const pins = new PinnedTabs(() => {});
+  const keys = ['a', 'b', 'c'].map(id => pins.pin(tab(id), 's').key);
+  pins.release('b');
+  const removed = pins.remove(keys[1]);
+  expect(pins.entries.map((entry: any) => entry.key)).toEqual([keys[0], keys[2]]);
+  pins.reinstate(removed);
+  pins.reinstate(removed);
+  expect(pins.entries.map((entry: any) => entry.key)).toEqual(keys);
+  expect(pins.entries[1].tabId).toBe('');
+});
+
+test('reopen walks pin removals and tab closes newest first', () => {
+  const history = new ReopenHistory();
+  const pin = {entry: {key: 'k'}, index: 0};
+  history.closedTab();
+  history.removedPin(pin);
+  history.closedPinTab('live', 'https://example.test/');
+  expect(history.next()).toBeNull();
+  expect(history.next()).toBe(pin);
+  expect(history.next()).toBeNull();
+  expect(history.next()).toBeNull();
+});
+
+test('a reopened pinned tab finds its own row by the page it showed', () => {
+  const pins = new PinnedTabs(() => {});
+  const history = new ReopenHistory();
+  const entry = pins.pin(tab('p'), 's');
+  pins.track({...tab('p'), url: 'https://example.test/away'});
+  history.closedPinTab(entry.key, pins.byTab('p').url);
+  pins.release('p');
+  expect(history.claimPinTab('https://example.test/')).toBeUndefined();
+  expect(history.claimPinTab('https://example.test/away')).toBe(entry.key);
+  expect(history.claimPinTab('https://example.test/away')).toBeUndefined();
 });
 
 test('merging native order keeps current items and drops stale ones', () => {

@@ -10,6 +10,7 @@ export interface CommandBarHost {
   newSpace(): void;
   openUrl(url: string): void;
   reload(): void;
+  reopenClosedTab(): void;
   runTabCommand(command: TabCommand, target: TabMenuTarget): void;
   selectTabAt(index: number): void;
   stepSpace(delta: number): void;
@@ -57,6 +58,13 @@ export const COMMANDS: Command[] = [
     keywords: 'quit',
     enabled: hasTab,
     run: onActiveTab('close'),
+  },
+  {
+    id: 'reopen-tab',
+    label: 'Reopen Closed Tab',
+    hint: 'Ctrl+Shift+T',
+    keywords: 'restore undo',
+    run: host => host.reopenClosedTab(),
   },
   {
     id: 'duplicate-tab',
