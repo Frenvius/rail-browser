@@ -4527,11 +4527,31 @@ index 65facca..7fb15fa 100644
    chrome_browser_net::NetErrorTabHelper::RegisterProfilePrefs(registry);
    chrome_prefs::RegisterProfilePrefs(registry);
    collaboration::prefs::RegisterProfilePrefs(registry);
+diff --git a/chrome/browser/resource_coordinator/BUILD.gn b/chrome/browser/resource_coordinator/BUILD.gn
+index 8fb038c..b5567a2 100644
+--- a/chrome/browser/resource_coordinator/BUILD.gn
++++ b/chrome/browser/resource_coordinator/BUILD.gn
+@@ -137,6 +137,7 @@ source_set("impl") {
+       "//chrome/browser/web_applications",
+       "//components/device_event_log",
+       "//components/discardable_memory/service",
++      "//components/guest_contents/browser",
+       "//components/ukm/content",
+       "//ui/message_center",
+     ]
 diff --git a/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc b/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc
-index 6f872ee..c9e2c49 100644
+index 6f872ee..aa86f39 100644
 --- a/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc
 +++ b/chrome/browser/resource_coordinator/tab_lifecycle_unit.cc
-@@ -271,7 +271,8 @@ void TabLifecycleUnitSource::TabLifecycleUnit::FinishDiscard(
+@@ -35,6 +35,7 @@
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+ #include "chrome/browser/web_applications/web_app_tab_helper.h"
+ #include "components/device_event_log/device_event_log.h"
++#include "components/guest_contents/browser/guest_contents_handle.h"
+ #include "components/performance_manager/public/decorators/page_live_state_decorator.h"
+ #include "components/performance_manager/public/features.h"
+ #include "components/performance_manager/public/mojom/lifecycle.mojom.h"
+@@ -271,7 +272,8 @@ void TabLifecycleUnitSource::TabLifecycleUnit::FinishDiscard(
      LifecycleUnitDiscardReason discard_reason,
      uint64_t tab_memory_footprint_estimate) {
    content::WebContents* const old_contents = web_contents();
@@ -4541,6 +4561,18 @@ index 6f872ee..c9e2c49 100644
    // TODO(fdoray): Consider setting |initially_hidden| to true when the tab is
    // OCCLUDED. Will require checking that the tab reload correctly when it
    // becomes VISIBLE.
+@@ -405,6 +407,11 @@ bool TabLifecycleUnitSource::TabLifecycleUnit::Discard(
+ 
+   discard_reason_ = reason;
+ 
++  if (auto* guest = guest_contents::GuestContentsHandle::FromWebContents(
++          web_contents())) {
++    guest->DetachFromOuterWebContents();
++  }
++
+   if (base::FeatureList::IsEnabled(features::kWebContentsDiscard)) {
+     FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
+                                         discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
 index 8b36341..1cd97f1 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
@@ -6280,7 +6312,7 @@ index a15445b..9f3cefc 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..732110c 100644
+index b7a5099..b93920c 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6410,7 +6442,7 @@ index b7a5099..732110c 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -95,32 +157,99 @@ export class TabStripElement extends CrLitElement implements
+@@ -95,32 +157,101 @@ export class TabStripElement extends CrLitElement implements
          reflect: true,
          attribute: 'drag-in-progress',
        },
@@ -6517,10 +6549,12 @@ index b7a5099..732110c 100644
 +        .addListener(this.tabSleep_.setPolicy.bind(this.tabSleep_));
 +    browserProxyFactory.getInstance().callbackRouter.onTrailDepthChanged
 +        .addListener((depth: number) => this.trailDepth_ = depth);
++    browserProxyFactory.getInstance().callbackRouter.onTabDiscarded
++        .addListener(this.onTabDiscarded_.bind(this));
    }
  
    override connectedCallback() {
-@@ -128,11 +257,21 @@ export class TabStripElement extends CrLitElement implements
+@@ -128,11 +259,21 @@ export class TabStripElement extends CrLitElement implements
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -6542,7 +6576,7 @@ index b7a5099..732110c 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +293,102 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +295,102 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6645,7 +6679,7 @@ index b7a5099..732110c 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -175,18 +410,7 @@ export class TabStripElement extends CrLitElement implements
+@@ -175,18 +412,7 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6665,7 +6699,7 @@ index b7a5099..732110c 100644
    }
  
  
-@@ -194,14 +418,37 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +420,37 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -6704,7 +6738,7 @@ index b7a5099..732110c 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -217,48 +464,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +466,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -6758,15 +6792,31 @@ index b7a5099..732110c 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,23 +519,138 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +521,1899 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
 -  onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {}
+-
+-  onNodeMoved(_onNodeMoved: OnNodeMovedEvent) {}
+-
+-  // End TabStripObserver impl:
+-
+-  private addTab(tab: Tab) {
+-    this.setItems_([
+-      ...this.items_,
+-      {
+-        type: 'tab',
+-        id: tab.id,
+-        tabData: tab,
+-      },
+-    ]);
 +  onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {
 +    this.syncNativeGroups_();
 +  }
-+
+ 
+-    if (tab.isActive) {
+-      this.setActiveTab_(tab.id);
 +  onNodeMoved(onNodeMoved: OnNodeMovedEvent) {
 +    const pending = this.ownMoves_.get(onNodeMoved.id) ?? 0;
 +    if (pending > 1) {
@@ -6775,10 +6825,13 @@ index b7a5099..732110c 100644
 +      this.ownMoves_.delete(onNodeMoved.id);
 +    } else {
 +      this.queueNativeOrder_();
-+    }
+     }
 +    this.syncNativeGroups_();
 +  }
-+
+ 
+-    this.fire<TabAdded>('tab-added', {
+-      id: tab.id,
+-      isActive: tab.isActive,
 +  private syncNativeGroups_() {
 +    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
 +      const groups = readNativeGroups(await this.readTabStrip_());
@@ -6788,9 +6841,11 @@ index b7a5099..732110c 100644
 +      }
 +    }).catch(error => {
 +      console.error('Failed to synchronize tab groups', error);
-+    });
-+  }
-+
+     });
+   }
+ 
+-  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
+-    this.tabStripService_.closeNodes([e.detail.id]);
 +  private updateNativeGroup_(
 +      tidyId: string, change: Partial<TabGroupVisualData>) {
 +    if (!this.nativeGroups_.nativeFor(tidyId)) {
@@ -6802,13 +6857,16 @@ index b7a5099..732110c 100644
 +    }).catch(error => {
 +      console.error('Failed to update tab group', error);
 +    });
-+  }
-+
+   }
+ 
+-  protected activateTab(tabId: NodeId) {
+-    const item = this.findItem_<TabItem>(tabId, 'tab');
+-    if (!item) {
 +  private ungroupNative_(tidyId: string) {
 +    const nativeId = this.nativeGroups_.release(tidyId);
 +    if (!nativeId) {
-+      return;
-+    }
+       return;
+     }
 +    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
 +      await this.nativeGroups_.ungroup(
 +          nativeId, this.tabStripService_, await this.readTabStrip_());
@@ -6816,7 +6874,10 @@ index b7a5099..732110c 100644
 +      console.error('Failed to ungroup tabs', error);
 +    });
 +  }
-+
+ 
+-    this.setActiveTab_(tabId);
+-    this.tabStripService_.activateTab(tabId);
+-    this.fire<TabActivated>('tab-activated', item.tabData);
 +  syncTabOrder() {
 +    const order = [
 +      ...this.favoriteRows_.map(row => row.item.id),
@@ -6825,8 +6886,11 @@ index b7a5099..732110c 100644
 +      ...this.looseTabIds_(),
 +    ];
 +    this.queueNativeOrder_(order);
-+  }
-+
+   }
+ 
+-  // TODO(webium): implement this.
+-  // private setTabGroupForTab(/*tabId*/ _: NodeId, /*groupId*/ _2?: NodeId) {
+-  //}
 +  private queueNativeOrder_(order?: string[]) {
 +    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
 +      if (order) {
@@ -6857,26 +6921,24 @@ index b7a5099..732110c 100644
 +    });
 +  }
  
--  onNodeMoved(_onNodeMoved: OnNodeMovedEvent) {}
+-  private updateTabGroup(group: TabGroup) {
+-    const groupItem = this.findItem_<TabGroupItem>(group.id, 'group');
+-    if (groupItem) {
+-      this.updateItem_(
+-          group.id, 'group', {...groupItem, groupData: group.data});
+-    }
 +  private async readTabStrip_(): Promise<Container> {
 +    const snapshot = await this.tabStripService_.getTabs();
 +    const receiver = new TabsObserverReceiver({onTabEvents: () => {}});
 +    receiver.$.bindHandle(snapshot.stream.handle);
 +    receiver.$.close();
 +    return snapshot.tabStrip;
-+  }
+   }
  
-   // End TabStripObserver impl:
- 
--  private addTab(tab: Tab) {
--    this.setItems_([
--      ...this.items_,
--      {
--        type: 'tab',
--        id: tab.id,
--        tabData: tab,
--      },
--    ]);
+-  private updateTab(tab: Tab) {
+-    const updated = this.updateItem_(tab.id, 'tab', {
++  // End TabStripObserver impl:
++
 +  private addTab(tab: Tab, index: number) {
 +    const requested = this.spaces_.requested(tab.id);
 +    const taken = this.taking_.has(tab.id);
@@ -6886,60 +6948,73 @@ index b7a5099..732110c 100644
 +    const at = Math.min(index, neighbors.length);
 +    const items = [...neighbors];
 +    items.splice(at, 0, {
-+      type: 'tab',
-+      id: tab.id,
-+      tabData: tab,
-+    });
+       type: 'tab',
+       id: tab.id,
+       tabData: tab,
+     });
+-
+-    if (updated) {
+-      if (tab.isActive) {
+-        this.setActiveTab_(tab.id);
 +    this.setItems_(items);
 +    const anchored =
 +        taken || this.placeInModelOrder_(tab.id, at, neighbors);
 +    if (this.pendingBelow_ && this.pendingBelow_ !== tab.id) {
 +      if (this.canAnchor_(this.pendingBelow_)) {
 +        this.spaces_.placeAfter(tab.id, this.pendingBelow_);
-+      }
+       }
+-      this.fire<TabUpdated>('tab-updated', tab);
 +      this.pendingBelow_ = '';
 +      this.refreshSections_();
-+    }
+     }
+-  }
  
-     if (tab.isActive) {
+-  private removeItem(id: NodeId) {
+-    const itemToRemove = this.findItem_<TabStripItem>(id);
+-    this.setItems_(this.items_.filter(item => item.id !== id));
++    if (tab.isActive) {
 +      if (requested) {
 +        this.spaces_.noteActive(tab.id);
 +      }
-       this.setActiveTab_(tab.id);
-     }
++      this.setActiveTab_(tab.id);
++    }
  
-@@ -330,189 +658,1750 @@ export class TabStripElement extends CrLitElement implements
-       id: tab.id,
-       isActive: tab.isActive,
-     });
+-    if (itemToRemove && itemToRemove.type === 'tab') {
+-      this.fire<TabClosed>('tab-closed', id);
++    this.fire<TabAdded>('tab-added', {
++      id: tab.id,
++      isActive: tab.isActive,
++    });
 +    if (this.taking_.delete(tab.id)) {
 +      this.activateTab(tab.id);
-+    }
-+
+     }
+-  }
+ 
+-  protected onNewTabButtonClick_() {
+-    this.tabStripService_.createTabAt(null, null);
 +    this.resolveOpener_(tab.id, tab.isActive, anchored || requested)
 +        .then(() => this.revealTab_(tab.id));
 +    this.ensureProfile_(tab.id, !requested && !taken);
    }
  
--  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
--    this.tabStripService_.closeNodes([e.detail.id]);
+-  // Utility helpers:
+-  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
+-    return this.items_.findIndex(
+-        item => item.id === id && (!type || item.type === type));
 +  private async revealTab_(tabId: NodeId) {
 +    await this.updateComplete;
 +    this.getTabElement_(tabId)?.scrollIntoView({block: 'nearest'});
    }
  
--  protected activateTab(tabId: NodeId) {
--    const item = this.findItem_<TabItem>(tabId, 'tab');
--    if (!item) {
+-  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
+-      |undefined {
+-    return this.items_.find(
+-               item => item.id === id && (!type || item.type === type)) as T |
 +  private async ensureProfile_(tabId: NodeId, rehome = false) {
 +    if (MINI) {
 +      miniMatchProfile(tabId);
-       return;
-     }
--
--    this.setActiveTab_(tabId);
--    this.tabStripService_.activateTab(tabId);
--    this.fire<TabActivated>('tab-activated', item.tabData);
++      return;
++    }
 +    const spaceId = this.spaces_.spaceOf(tabId);
 +    const {profileId} =
 +        await browserProxyFactory.getInstance().handler.getTabProfile(tabId);
@@ -6950,7 +7025,7 @@ index b7a5099..732110c 100644
 +    }
 +    const home = rehome && profileId ?
 +        this.spaces_.all.find(space => space.profile === profileId) :
-+        undefined;
+         undefined;
 +    if (home) {
 +      this.adoptTab(tabId, home.id);
 +      return;
@@ -6958,15 +7033,9 @@ index b7a5099..732110c 100644
 +    this.reprofile_(tabId, spaceId, this.entryFor_(tabId)?.key ?? '');
    }
  
--  // TODO(webium): implement this.
--  // private setTabGroupForTab(/*tabId*/ _: NodeId, /*groupId*/ _2?: NodeId) {
--  //}
--
--  private updateTabGroup(group: TabGroup) {
--    const groupItem = this.findItem_<TabGroupItem>(group.id, 'group');
--    if (groupItem) {
--      this.updateItem_(
--          group.id, 'group', {...groupItem, groupData: group.data});
+-  protected getTabElement_(id: string): TabElement|null {
+-    return this.shadowRoot.querySelector<TabElement>(
+-        `webui-browser-tab#${this.tabIdToDomId(id)}`);
 +  private placeInModelOrder_(
 +      tabId: NodeId, index: number, neighbors: TabStripItem[]): boolean {
 +    if (index >= neighbors.length) {
@@ -6976,49 +7045,41 @@ index b7a5099..732110c 100644
 +    if (before) {
 +      return before.type === 'tab' && this.canAnchor_(before.id) &&
 +          this.spaces_.placeAfter(tabId, before.id);
-     }
++    }
 +    const after = neighbors[0];
 +    return after !== undefined && after.type === 'tab' &&
 +        this.canAnchor_(after.id) &&
 +        this.spaces_.placeBefore(tabId, after.id);
    }
  
--  private updateTab(tab: Tab) {
--    const updated = this.updateItem_(tab.id, 'tab', {
--      type: 'tab',
--      id: tab.id,
--      tabData: tab,
--    });
+-  private setActiveTab_(id: string) {
+-    this.activeTab_ = id;
 +  private canAnchor_(id: string): boolean {
 +    return !!id && !this.entryFor_(id);
-+  }
+   }
  
--    if (updated) {
--      if (tab.isActive) {
--        this.setActiveTab_(tab.id);
+-  protected setItems_(items: TabStripItem[]) {
+-    this.items_ = items;
 +  private sleepCandidates_(): SleepCandidate[] {
 +    const candidates: SleepCandidate[] = [];
 +    for (const item of this.items_) {
 +      if (item.type !== 'tab' || item.id === this.activeTab_ ||
 +          this.spaces_.isAsleep(item.id)) {
 +        continue;
-       }
--      this.fire<TabUpdated>('tab-updated', tab);
++      }
 +      if (item.tabData.alertStates.length) {
 +        this.tabSleep_.touch(item.id);
 +        continue;
 +      }
 +      candidates.push({id: item.id, url: item.tabData.url});
-     }
++    }
 +    return candidates;
    }
  
--  private removeItem(id: NodeId) {
--    const itemToRemove = this.findItem_<TabStripItem>(id);
--    this.setItems_(this.items_.filter(item => item.id !== id));
--
--    if (itemToRemove && itemToRemove.type === 'tab') {
--      this.fire<TabClosed>('tab-closed', id);
+-  private updateItemAt_(index: number, item: TabStripItem) {
+-    const newItems = [...this.items_];
+-    newItems[index] = item;
+-    this.setItems_(newItems);
 +  private async sleepTab_(tabId: NodeId) {
 +    if (!tabId || tabId === this.activeTab_ || this.spaces_.isAsleep(tabId)) {
 +      return;
@@ -7028,11 +7089,32 @@ index b7a5099..732110c 100644
 +        await browserProxyFactory.getInstance().handler.sleepTab(tabId);
 +    if (asleep && this.spaces_.sleep(tabId)) {
 +      this.refreshSections_();
-     }
++    }
    }
  
--  protected onNewTabButtonClick_() {
--    this.tabStripService_.createTabAt(null, null);
+-  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
+-      boolean {
+-    const index = this.findItemIndex_(id, type);
+-    if (index === -1) {
+-      return false;
++  private onTabDiscarded_(tabId: NodeId) {
++    if (this.spaces_.isAsleep(tabId)) {
++      return;
++    }
++    this.fire('tab-closing', {ids: [tabId]});
++    if (this.spaces_.sleep(tabId)) {
++      this.refreshSections_();
+     }
+-
+-    this.updateItemAt_(index, newItem);
+-    return true;
+   }
+ 
+-  // Tab IDs contain ":" characters which are not valid when used as DOM node
+-  // IDs, and also an ID must contain at least one non-special and non-numeric
+-  // character.
+-  protected tabIdToDomId(id: NodeId): string {
+-    return 'id_' + id.replaceAll(':', '_');
 +  private async syncSleepingTabs_() {
 +    const {ids} =
 +        await browserProxyFactory.getInstance().handler.getSleepingTabs();
@@ -7041,10 +7123,10 @@ index b7a5099..732110c 100644
 +    }
    }
  
--  // Utility helpers:
--  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
--    return this.items_.findIndex(
--        item => item.id === id && (!type || item.type === type));
+-  // TabDragHost impl:
+-
+-  get tabDragService() {
+-    return this.tabDragService_;
 +  private async syncOpeners_() {
 +    if (!this.spaces_.hasOpeners()) {
 +      return;
@@ -7056,11 +7138,8 @@ index b7a5099..732110c 100644
 +    }
    }
  
--  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
--      |undefined {
--    return this.items_.find(
--               item => item.id === id && (!type || item.type === type)) as T |
--        undefined;
+-  get itemsForDrag() {
+-    return this.items_;
 +  private async toggleMute_(tabId: NodeId) {
 +    if (!tabId) {
 +      return;
@@ -7068,15 +7147,18 @@ index b7a5099..732110c 100644
 +    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
    }
  
--  protected getTabElement_(id: string): TabElement|null {
--    return this.shadowRoot.querySelector<TabElement>(
--        `webui-browser-tab#${this.tabIdToDomId(id)}`);
+-  commitDrag(nodeId: NodeId, finalIndex: number) {
+-    const position: Position = {
+-      path: {components: []},
+-      index: finalIndex,
+-    };
+-    this.tabStripService_.moveNode(nodeId, position);
 +  protected onTabAudioClick_(e: CustomEvent<{id: string}>) {
 +    this.toggleMute_(e.detail.id);
    }
  
--  private setActiveTab_(id: string) {
--    this.activeTab_ = id;
+-  getTabElementForDrag(id: string) {
+-    return this.getTabElement_(id);
 +  private async resolveOpener_(
 +      tabId: NodeId, foreground: boolean, placed: boolean) {
 +    const {opener, fromLink, groupLinks, restored} =
@@ -7116,42 +7198,33 @@ index b7a5099..732110c 100644
 +    this.refreshSections_();
    }
  
--  protected setItems_(items: TabStripItem[]) {
--    this.items_ = items;
+-  setItemsForDrag(items: TabStripItem[]) {
+-    this.setItems_(items);
 +  protected trailLevel_(id: string): number {
 +    return this.spaces_.trailLevel(id, this.trailDepth_);
    }
  
--  private updateItemAt_(index: number, item: TabStripItem) {
--    const newItems = [...this.items_];
--    newItems[index] = item;
--    this.setItems_(newItems);
+-  activateTabForDrag(id: string) {
+-    this.activateTab(id);
 +  canReturnToOpener(): boolean {
 +    return !!this.activeTab_ && !!this.spaces_.trailParent(this.activeTab_);
    }
  
--  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
--      boolean {
--    const index = this.findItemIndex_(id, type);
--    if (index === -1) {
+-  setDragInProgressForDrag(value: boolean) {
+-    this.dragInProgress_ = value;
 +  returnToOpener(): boolean {
 +    const closing = this.activeTab_;
 +    const parent = closing ? this.spaces_.trailParent(closing) : undefined;
 +    if (!closing || !parent) {
-       return false;
-     }
--
--    this.updateItemAt_(index, newItem);
++      return false;
++    }
 +    this.selectRow_(parent.tabId);
 +    this.tabStripService_.closeNodes([closing]);
-     return true;
++    return true;
    }
  
--  // Tab IDs contain ":" characters which are not valid when used as DOM node
--  // IDs, and also an ID must contain at least one non-special and non-numeric
--  // character.
--  protected tabIdToDomId(id: NodeId): string {
--    return 'id_' + id.replaceAll(':', '_');
+-  setTabStripNoDrag(noDrag: boolean) {
+-    this.$.tabstrip.classList.toggle('nodrag', noDrag);
 +  private rejoinClosed_(tabId: string) {
 +    const row = this.spaces_.byTab(tabId);
 +    if (!row) {
@@ -7176,15 +7249,20 @@ index b7a5099..732110c 100644
 +    this.syncNativeGroups_();
    }
  
--  // TabDragHost impl:
+-  getDragContainerBounds(): DOMRect {
+-    const hostRect = this.getBoundingClientRect();
+-    const tabstripRect = this.$.tabstrip.getBoundingClientRect();
+-    return new DOMRect(
+-        tabstripRect.left, tabstripRect.top,
+-        Math.max(0, hostRect.right - tabstripRect.left), tabstripRect.height);
 +  private forgetOpeners_(spaceId: string) {
 +    const ids = this.spaces_.tabsIn(spaceId);
 +    this.spaces_.forgetOpeners(spaceId);
 +    browserProxyFactory.getInstance().handler.forgetOpeners(ids);
-+  }
+   }
  
--  get tabDragService() {
--    return this.tabDragService_;
+-  dragMouseDown(e: MouseEvent) {
+-    this.dragDelegate_.onMouseDown(e);
 +  private leaveTypedTab_(tabId: NodeId) {
 +    if (!this.typedTabs_.delete(tabId)) {
 +      return;
@@ -7193,18 +7271,19 @@ index b7a5099..732110c 100644
 +    browserProxyFactory.getInstance().handler.forgetOpeners([tabId]);
    }
  
--  get itemsForDrag() {
--    return this.items_;
+-  // DropTargetInterface implementation
+-  onDragEntered(
+-      sourceTabIds: NodeId[], localPoint: Point, mouseToTabXRatio: number) {
+-    this.dragInProgress_ = true;
+-    const nodeId = sourceTabIds[0]!;
+-    this.dragDelegate_.onMojoDragEntered(nodeId, localPoint, mouseToTabXRatio);
 +  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
 +    this.closeTarget_(e.detail.id);
    }
  
--  commitDrag(nodeId: NodeId, finalIndex: number) {
--    const position: Position = {
--      path: {components: []},
--      index: finalIndex,
--    };
--    this.tabStripService_.moveNode(nodeId, position);
+-  onDrag(localPoint: Point) {
+-    this.dragDelegate_.onMojoDrag(localPoint);
+-  }
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -7227,35 +7306,27 @@ index b7a5099..732110c 100644
 +      this.forgetOpeners_(this.spaces_.activeId);
 +    }
 +    this.activateTab(id);
-   }
- 
--  getTabElementForDrag(id: string) {
--    return this.getTabElement_(id);
++  }
++
 +  private rowOrder_(): string[] {
 +    return [
 +      ...this.favoriteRows_.map(row => row.item.id),
 +      ...this.pinnedRows_.map(row => row.item.id),
 +      ...this.looseTabIds_(),
 +    ];
-   }
- 
--  setItemsForDrag(items: TabStripItem[]) {
--    this.setItems_(items);
++  }
++
 +  private syncSelection_() {
 +    const order = this.rowOrder_();
 +    this.selection_.retain(order);
 +    this.selectedIds_ =
 +        this.selection_.size > 1 ? this.selection_.ids(order) : [];
-   }
- 
--  activateTabForDrag(id: string) {
--    this.activateTab(id);
++  }
++
 +  protected isSelected_(id: string): boolean {
 +    return this.selectedIds_.includes(id);
-   }
- 
--  setDragInProgressForDrag(value: boolean) {
--    this.dragInProgress_ = value;
++  }
++
 +  private collapseSelection_(id: string) {
 +    this.selection_.reset(id);
 +    this.syncSelection_();
@@ -8647,18 +8718,12 @@ index b7a5099..732110c 100644
 +
 +  setDragInProgressForDrag(value: boolean) {
 +    this.dragInProgress_ = value;
-   }
- 
-   setTabStripNoDrag(noDrag: boolean) {
-     this.$.tabstrip.classList.toggle('nodrag', noDrag);
-   }
- 
--  getDragContainerBounds(): DOMRect {
--    const hostRect = this.getBoundingClientRect();
--    const tabstripRect = this.$.tabstrip.getBoundingClientRect();
--    return new DOMRect(
--        tabstripRect.left, tabstripRect.top,
--        Math.max(0, hostRect.right - tabstripRect.left), tabstripRect.height);
++  }
++
++  setTabStripNoDrag(noDrag: boolean) {
++    this.$.tabstrip.classList.toggle('nodrag', noDrag);
++  }
++
 +  handOffDrag(drag: DragHandOff) {
 +    const ids = drag.detachable ? this.dragTabIds_(drag.tabId) : [];
 +    browserProxyFactory.getInstance().handler.startTabDragGhost(
@@ -8669,10 +8734,8 @@ index b7a5099..732110c 100644
 +          height: Math.round(drag.row.height),
 +        },
 +        {x: Math.round(drag.grabX), y: Math.round(drag.grabY)}, ids);
-   }
- 
--  dragMouseDown(e: MouseEvent) {
--    this.dragDelegate_.onMouseDown(e);
++  }
++
 +  private dragRowIds_(id: string): string[] {
 +    return this.selectedIds_.length > 1 && this.selection_.has(id) ?
 +        [...this.selectedIds_] :
@@ -8695,14 +8758,8 @@ index b7a5099..732110c 100644
 +
 +  onTabDropTarget(visible: boolean) {
 +    this.dropTarget_ = visible;
-   }
- 
--  // DropTargetInterface implementation
--  onDragEntered(
--      sourceTabIds: NodeId[], localPoint: Point, mouseToTabXRatio: number) {
--    this.dragInProgress_ = true;
--    const nodeId = sourceTabIds[0]!;
--    this.dragDelegate_.onMojoDragEntered(nodeId, localPoint, mouseToTabXRatio);
++  }
++
 +  setTabFolder(tabId: string, folderId: string) {
 +    const entry = this.entryFor_(tabId);
 +    if (!entry || entry.folder === folderId) {
@@ -8710,10 +8767,8 @@ index b7a5099..732110c 100644
 +    }
 +    this.pinnedTabs_.setFolder(entry.key, folderId);
 +    this.refreshSections_();
-   }
- 
--  onDrag(localPoint: Point) {
--    this.dragDelegate_.onMojoDrag(localPoint);
++  }
++
 +  setTabPinned(tabId: string, pinned: boolean): PinnedDragRows {
 +    const moved: PinnedDragRows = {tabId, rowIds: []};
 +    for (const id of this.dragRowIds_(tabId)) {
@@ -8733,7 +8788,7 @@ index b7a5099..732110c 100644
 +      }
 +    }
 +    return moved;
-   }
++  }
  
 -  onDragLeave() {
 -    this.dragInProgress_ = false;
@@ -9965,7 +10020,7 @@ index d4957bd..752166d 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index ffbd17c..a64aa8b 100644
+index ffbd17c..a85962d 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,23 @@ source_set("headers") {
@@ -10081,15 +10136,16 @@ index ffbd17c..a64aa8b 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -91,6 +162,7 @@ source_set("impl") {
+@@ -91,6 +162,8 @@ source_set("impl") {
      "//chrome/browser/devtools",
      "//chrome/browser/extensions",
      "//chrome/browser/profiles",
 +    "//chrome/browser/resource_coordinator",
++    "//chrome/browser/resource_coordinator:utils",
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/resources/webui_toolbar_shared:resources",
      "//chrome/browser/themes",
-@@ -106,6 +178,7 @@ source_set("impl") {
+@@ -106,6 +179,7 @@ source_set("impl") {
      "//chrome/browser/ui/find_bar",
      "//chrome/browser/ui/fullscreen",
      "//chrome/browser/ui/location_bar",
@@ -10097,7 +10153,7 @@ index ffbd17c..a64aa8b 100644
      "//chrome/browser/ui/side_panel",
      "//chrome/browser/ui/side_panel:side_panel_views_dependent",
      "//chrome/browser/ui/tabs:tabs_public",
-@@ -123,8 +196,11 @@ source_set("impl") {
+@@ -123,8 +197,11 @@ source_set("impl") {
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
      "//chrome/browser/ui/webui:favicon_source",
@@ -10109,7 +10165,7 @@ index ffbd17c..a64aa8b 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +208,23 @@ source_set("impl") {
+@@ -132,13 +209,23 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
@@ -10133,7 +10189,7 @@ index ffbd17c..a64aa8b 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +245,31 @@ source_set("impl") {
+@@ -159,17 +246,31 @@ source_set("impl") {
        "//ui/base/accelerators/global_accelerator_listener",
      ]
    }
@@ -10166,7 +10222,7 @@ index ffbd17c..a64aa8b 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..f7a9792 100644
+index 7e0800a..7e6bee8 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -10245,7 +10301,7 @@ index 7e0800a..f7a9792 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,44 @@ interface Page {
+@@ -44,6 +91,46 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -10278,6 +10334,8 @@ index 7e0800a..f7a9792 100644
 +
 +  OnTrailDepthChanged(int32 depth);
 +
++  OnTabDiscarded(tabs_api.mojom.NodeId id);
++
 +  OnPageColorChanged(tabs_api.mojom.NodeId tab, bool has_color, uint32 color,
 +                     bool? animated);
 +
@@ -10290,7 +10348,7 @@ index 7e0800a..f7a9792 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -58,7 +143,7 @@ interface PageHandler {
+@@ -58,7 +145,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -10299,7 +10357,7 @@ index 7e0800a..f7a9792 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +178,89 @@ interface PageHandler {
+@@ -93,6 +180,89 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -10583,7 +10641,7 @@ index 5e6d29d..76021ae 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index cb0e145..421551f 100644
+index cb0e145..97fac25 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,8 @@
@@ -10753,7 +10811,7 @@ index cb0e145..421551f 100644
  }
  
  // static
-@@ -337,6 +438,316 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +438,322 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -10817,6 +10875,12 @@ index cb0e145..421551f 100644
 +    PrefService* prefs = browser->GetProfile()->GetPrefs();
 +    controller_->page()->OnTabSleepChanged(rail::GetTabSleepMinutes(prefs),
 +                                           rail::GetTabSleepExceptions(prefs));
++  }
++}
++
++void WebUIBrowserPageHandler::OnTabDiscarded(const tabs_api::NodeId& id) {
++  if (controller_) {
++    controller_->page()->OnTabDiscarded(id);
 +  }
 +}
 +
@@ -11070,7 +11134,7 @@ index cb0e145..421551f 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +755,35 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +761,39 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -11102,28 +11166,33 @@ index cb0e145..421551f 100644
 +        rail::kTrailDepthPref,
 +        base::BindRepeating(&WebUIBrowserPageHandler::OnTrailDepthChanged,
 +                            weak_factory_.GetWeakPtr()));
++    discard_watcher_ = std::make_unique<rail::TabDiscardWatcher>(
++        browser,
++        base::BindRepeating(&WebUIBrowserPageHandler::OnTabDiscarded,
++                            weak_factory_.GetWeakPtr()));
 +  }
 +}
  
  BrowserWindowInterface* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 41a8923..2f947a1 100644
+index 41a8923..28f13b8 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-@@ -9,8 +9,11 @@
+@@ -9,8 +9,12 @@
  #include "base/values.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/webui_browser/browser.mojom.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_page_color.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_tab_sleep.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
  #include "components/browser_apis/tab_strip/types/node_id.h"
 +#include "components/prefs/pref_change_registrar.h"
  #include "content/public/browser/document_service.h"
  #include "content/public/browser/web_contents.h"
  #include "mojo/public/cpp/bindings/pending_receiver.h"
-@@ -25,6 +28,11 @@ class MenuModelAdapter;
+@@ -25,6 +29,11 @@ class MenuModelAdapter;
  class MenuRunner;
  }  // namespace views
  
@@ -11135,7 +11204,7 @@ index 41a8923..2f947a1 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,10 +64,89 @@ class WebUIBrowserPageHandler
+@@ -56,10 +65,90 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -11214,6 +11283,7 @@ index 41a8923..2f947a1 100644
 +  void OnThemedTitlebarChanged();
 +  void OnTabSleepChanged();
 +  void OnTrailDepthChanged();
++  void OnTabDiscarded(const tabs_api::NodeId& id);
 +  void TrackPageColor(bool themed);
 +  void OnPageColorChanged(const tabs_api::NodeId& tab,
 +                          std::optional<SkColor> color,
@@ -11225,7 +11295,7 @@ index 41a8923..2f947a1 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -71,19 +158,28 @@ class WebUIBrowserPageHandler
+@@ -71,19 +160,29 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -11242,6 +11312,7 @@ index 41a8923..2f947a1 100644
    std::unique_ptr<content::WebContents> glic_contents_;
 +  rail::TabOrganizer tab_organizer_;
 +  std::unique_ptr<rail::PageColorTracker> page_color_;
++  std::unique_ptr<rail::TabDiscardWatcher> discard_watcher_;
  
    // During WebContents destroy, the WebUI object is destroyed before document
    // services, causing a raw_ptr of BrowserUI dangling here, so use a weak ptr
