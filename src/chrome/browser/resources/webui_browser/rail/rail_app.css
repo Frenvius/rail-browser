@@ -286,8 +286,55 @@ webui-browser-tab-strip {
   color: var(--rail-text);
 }
 
-#copyLinkButton[hidden] {
-  display: none;
+#addressBox[placeholder]:hover {
+  background: transparent;
+}
+
+#addressBox[placeholder] #addressText {
+  background: var(--rail-hover);
+  border-radius: 6px;
+  color: var(--rail-text-dim);
+  line-height: 20px;
+  padding: 0 10px;
+  transition: background-color 100ms ease;
+}
+
+#addressBox[placeholder]:hover #addressText {
+  background: var(--rail-hover-strong);
+  color: var(--rail-text);
+}
+
+#copyLinkButton[disabled],
+#locationIconButton[disabled] {
+  --cr-button-disabled-background-color: transparent;
+  --cr-button-disabled-border-color: transparent;
+  opacity: 0.4;
+}
+
+#locationIconButton:not([warning])::before {
+  background-color: var(--rail-text-dim);
+  content: '';
+  height: 15px;
+  inset: 0;
+  margin: auto;
+  mask-image: url('/rail/rail_tune.svg');
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  position: absolute;
+  width: 15px;
+}
+
+#locationIconButton:not([warning]) #locationIcon {
+  visibility: hidden;
+}
+
+#locationIconButton:not([disabled]):hover {
+  background-color: var(--rail-hover-strong);
+}
+
+#locationIconButton:not([disabled]):hover::before {
+  background-color: var(--rail-text);
 }
 
 #copyLinkButton {
@@ -332,6 +379,7 @@ webui-browser-tab-strip {
   --iron-icon-width: 16px;
   --iron-icon-height: 16px;
   background-color: transparent;
+  position: relative;
 }
 
 #locationIcon {
@@ -690,6 +738,12 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
 :host([titlebar-themed][page-color-dark]) #addressBox:active {
   background-color: var(--rail-page-capsule-background-pressed);
   transition: none;
+}
+
+:host([titlebar-themed][page-color-light]) #addressBox[placeholder],
+:host([titlebar-themed][page-color-dark]) #addressBox[placeholder] {
+  background-color: transparent;
+  box-shadow: none;
 }
 
 :host([titlebar-themed][page-color-light]) #addressText,

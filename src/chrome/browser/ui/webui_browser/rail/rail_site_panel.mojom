@@ -1,0 +1,55 @@
+module rail_site_panel.mojom;
+
+import "url/mojom/url.mojom";
+
+struct Extension {
+  string id;
+  string name;
+  url.mojom.Url icon;
+  bool pinned;
+  bool enabled;
+};
+
+struct Permission {
+  int32 index;
+  string key;
+  string label;
+  string state;
+  bool on;
+  bool toggleable;
+};
+
+struct SiteState {
+  string host;
+  string space_color;
+  string security;
+  string security_summary;
+  bool can_share;
+  array<Extension> extensions;
+  array<Permission> permissions;
+};
+
+interface PageHandlerFactory {
+  CreatePageHandler(pending_remote<Page> page,
+                    pending_receiver<PageHandler> handler);
+};
+
+interface PageHandler {
+  Ready(int32 height);
+
+  RunAction(string action);
+
+  ActivateExtension(string id);
+
+  ShowExtensionMenu(string id);
+
+  SetExtensionPinned(string id, bool pinned);
+
+  TogglePermission(int32 index);
+
+  Close();
+};
+
+interface Page {
+  Show(SiteState state);
+};
