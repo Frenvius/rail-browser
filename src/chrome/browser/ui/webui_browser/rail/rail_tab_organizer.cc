@@ -24,7 +24,7 @@ namespace {
 
 constexpr char kKeyPref[] = "rail.openrouter_key";
 constexpr char kModelPref[] = "rail.organize_model";
-constexpr char kDefaultModel[] = "anthropic/claude-haiku-4.5";
+constexpr char kDefaultModel[] = "anthropic/claude-haiku-5.5";
 constexpr char kEndpoint[] = "https://openrouter.ai/api/v1/chat/completions";
 constexpr size_t kMaxResponseBytes = 256 * 1024;
 

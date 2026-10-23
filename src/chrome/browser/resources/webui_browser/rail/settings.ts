@@ -69,8 +69,19 @@ export class RailSettingsElement extends CrLitElement {
       groupOpenedLinks_: {type: Boolean, state: true},
       sleepMinutes_: {type: Number, state: true},
       sleepSites_: {type: Array, state: true},
+      section_: {type: String, state: true},
+      customModel_: {type: Boolean, state: true},
+      editingKey_: {type: Boolean, state: true},
     };
   }
+
+  protected accessor section_ = 'general';
+  protected readonly sections_ = [
+    {id: 'general', label: 'General'},
+    {id: 'profiles', label: 'Profiles'},
+    {id: 'organizer', label: 'Tab Organizer'},
+    {id: 'about', label: 'About'},
+  ];
 
   protected accessor profiles_: ProfileRow[] = [];
   protected accessor creating_ = false;
@@ -85,6 +96,33 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor groupOpenedLinks_ = true;
   protected accessor sleepMinutes_ = 30;
   protected accessor sleepSites_: string[] = [];
+  protected accessor customModel_ = false;
+  protected accessor editingKey_ = false;
+  protected readonly models_ = [
+    {id: 'z-ai/glm-5.3-flash', name: 'GLM 5.3 Flash', price: '$0.01 / $0.20'},
+    {
+      id: 'anthropic/claude-haiku-5.5',
+      name: 'Claude Haiku 5.5',
+      price: '$0.10 / $0.50',
+    },
+    {id: 'openai/gpt-6-luna', name: 'GPT-6 Luna', price: '$0.10 / $0.50'},
+    {id: 'qwen/qwen3.8-flash', name: 'Qwen3.8 Flash', price: '$0.15 / $0.47'},
+    {
+      id: 'minimax/minimax-m3.1-flash',
+      name: 'MiniMax M3.1 Flash',
+      price: '$0.15 / $0.60',
+    },
+    {
+      id: 'deepseek/deepseek-v4.1-flash',
+      name: 'DeepSeek V4.1 Flash',
+      price: '$0.17 / $0.66',
+    },
+    {
+      id: 'google/gemini-3.5-flash-lite',
+      name: 'Gemini 3.5 Flash Lite',
+      price: '$0.30 / $2.50',
+    },
+  ];
   protected readonly sleepChoices_ = [
     {minutes: 0, label: 'Never'},
     {minutes: 15, label: '15 minutes'},
@@ -124,16 +162,65 @@ export class RailSettingsElement extends CrLitElement {
     ];
   }
 
-  protected onApiKeyChange_(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const key = input.value.trim();
+  protected onApiKeyKeydown_(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      this.onSaveKeyClick_();
+    }
+  }
+
+  protected onSaveKeyClick_() {
+    const input = this.shadowRoot.querySelector<HTMLInputElement>('#apikey');
+    const key = input?.value.trim();
+    if (!input || !key) {
+      return;
+    }
     browserProxyFactory.getInstance().handler.setOpenRouterKey(key);
-    this.hasKey_ = !!key;
     input.value = '';
+    this.hasKey_ = true;
+    this.editingKey_ = false;
+  }
+
+  protected onReplaceKeyClick_() {
+    this.editingKey_ = true;
+    this.updateComplete.then(
+        () => this.shadowRoot.querySelector<HTMLInputElement>('#apikey')
+                  ?.focus());
+  }
+
+  protected onCancelKeyClick_() {
+    this.editingKey_ = false;
+  }
+
+  protected isListedModel_(): boolean {
+    return !this.customModel_ &&
+        this.models_.some(model => model.id === this.model_);
+  }
+
+  protected customModelValue_(): string {
+    return this.models_.some(model => model.id === this.model_) ? '' :
+                                                                  this.model_;
+  }
+
+  protected onModelChoiceChange_(e: Event) {
+    const choice = (e.target as HTMLSelectElement).value;
+    this.customModel_ = choice === 'custom';
+    if (this.customModel_) {
+      this.updateComplete.then(
+          () => this.shadowRoot.querySelector<HTMLInputElement>('#model')
+                    ?.focus());
+      return;
+    }
+    this.setModel_(choice);
   }
 
   protected onModelChange_(e: Event) {
-    const model = (e.target as HTMLInputElement).value.trim();
+    this.setModel_((e.target as HTMLInputElement).value.trim());
+  }
+
+  private setModel_(model: string) {
+    if (!model) {
+      return;
+    }
     browserProxyFactory.getInstance().handler.setOrganizeModel(model);
     this.model_ = model;
   }
@@ -189,6 +276,11 @@ export class RailSettingsElement extends CrLitElement {
     this.sleepSites_ = sites;
   }
 
+  protected onSectionClick_(e: Event) {
+    this.section_ = (e.currentTarget as HTMLElement).dataset['section']!;
+    this.onBackClick_();
+  }
+
   protected onCreditsClick_() {
     browserProxyFactory.getInstance().handler.openCredits();
   }
@@ -196,6 +288,7 @@ export class RailSettingsElement extends CrLitElement {
   protected onClearKeyClick_() {
     browserProxyFactory.getInstance().handler.setOpenRouterKey('');
     this.hasKey_ = false;
+    this.editingKey_ = false;
   }
 
   private onKeydown_(e: KeyboardEvent) {
@@ -203,6 +296,10 @@ export class RailSettingsElement extends CrLitElement {
       return;
     }
     e.preventDefault();
+    if (this.editingKey_) {
+      this.editingKey_ = false;
+      return;
+    }
     if (this.renaming_) {
       this.renaming_ = false;
       return;
