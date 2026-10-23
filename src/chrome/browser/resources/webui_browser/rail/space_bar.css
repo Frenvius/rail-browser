@@ -122,6 +122,21 @@ cr-dialog {
   width: 4px;
 }
 
+.dot {
+  touch-action: none;
+}
+
+.dot[dragging] {
+  background: var(--rail-hover, rgb(255 255 255 / 10%));
+  cursor: grabbing;
+  transition: background-color 120ms ease, color 120ms ease;
+  z-index: 1;
+}
+
+:host([settling]) .dot {
+  transition: none;
+}
+
 .dot.droptarget {
   background: var(--rail-accent, #7c5cfc);
   color: var(--rail-text, #f0f0ff);

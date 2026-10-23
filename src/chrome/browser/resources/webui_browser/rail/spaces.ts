@@ -506,13 +506,18 @@ export class Spaces {
       return [];
     }
     const orphans = this.tabsIn(id);
+    if (this.activeId_ === id) {
+      this.activeId_ = this.fallbackFor(id);
+    }
     this.rows_ = this.rows_.filter(row => row.space !== id);
     this.spaces_ = this.spaces_.filter(space => space.id !== id);
-    if (this.activeId_ === id) {
-      this.activeId_ = this.spaces_[0]!.id;
-    }
     this.onChange_();
     return orphans;
+  }
+
+  fallbackFor(id: string): string {
+    const index = this.spaces_.findIndex(space => space.id === id);
+    return this.spaces_[index === 0 ? 1 : index - 1]?.id ?? '';
   }
 
   select(id: string) {

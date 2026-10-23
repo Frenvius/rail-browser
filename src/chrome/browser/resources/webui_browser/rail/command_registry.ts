@@ -12,6 +12,7 @@ export interface CommandBarHost {
   reload(): void;
   reopenClosedTab(): void;
   runTabCommand(command: TabCommand, target: TabMenuTarget): void;
+  selectSpaceAt(index: number): void;
   selectTabAt(index: number): void;
   stepSpace(delta: number): void;
   stepTab(delta: number): void;
@@ -253,11 +254,20 @@ export function matchCommands(
 }
 
 const SELECT_TAB = 'select-tab:';
+const SELECT_SPACE = 'select-space:';
+
+function ordinal(id: string, prefix: string): number {
+  const which = id.slice(prefix.length);
+  return which === 'last' ? -1 : Number(which);
+}
 
 export function runCommand(id: string, host: CommandBarHost) {
   if (id.startsWith(SELECT_TAB)) {
-    const which = id.slice(SELECT_TAB.length);
-    host.selectTabAt(which === 'last' ? -1 : Number(which));
+    host.selectTabAt(ordinal(id, SELECT_TAB));
+    return;
+  }
+  if (id.startsWith(SELECT_SPACE)) {
+    host.selectSpaceAt(ordinal(id, SELECT_SPACE));
     return;
   }
   COMMANDS.find(command => command.id === id)?.run(host);

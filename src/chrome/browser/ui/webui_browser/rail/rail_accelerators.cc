@@ -29,6 +29,15 @@ constexpr Binding kBindings[] = {
     {ui::VKEY_S, ui::EF_CONTROL_DOWN, "toggle-sidebar"},
     {ui::VKEY_OEM_COMMA, ui::EF_CONTROL_DOWN, "settings"},
     {ui::VKEY_M, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "mini-window"},
+    {ui::VKEY_1, ui::EF_ALT_DOWN, "select-space:0"},
+    {ui::VKEY_2, ui::EF_ALT_DOWN, "select-space:1"},
+    {ui::VKEY_3, ui::EF_ALT_DOWN, "select-space:2"},
+    {ui::VKEY_4, ui::EF_ALT_DOWN, "select-space:3"},
+    {ui::VKEY_5, ui::EF_ALT_DOWN, "select-space:4"},
+    {ui::VKEY_6, ui::EF_ALT_DOWN, "select-space:5"},
+    {ui::VKEY_7, ui::EF_ALT_DOWN, "select-space:6"},
+    {ui::VKEY_8, ui::EF_ALT_DOWN, "select-space:7"},
+    {ui::VKEY_9, ui::EF_ALT_DOWN, "select-space:last"},
 };
 
 constexpr Binding kMiniBindings[] = {

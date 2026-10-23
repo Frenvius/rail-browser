@@ -40,6 +40,22 @@ export interface SpaceBarElement {
   };
 }
 
+interface DotDrag {
+  id: string;
+  pointerId: number;
+  startX: number;
+  dot: HTMLElement;
+  dots: HTMLElement[];
+  centers: number[];
+  pitch: number;
+  from: number;
+  to: number;
+  moved: boolean;
+}
+
+const DRAG_THRESHOLD = 4;
+const SPACE_KEYS = 8;
+
 export class SpaceBarElement extends CrLitElement {
   static get is() {
     return 'rail-space-bar';
@@ -84,6 +100,8 @@ export class SpaceBarElement extends CrLitElement {
   protected accessor menuTarget_ = '';
   private menuX_ = 0;
   private menuY_ = 0;
+  private drag_: DotDrag|null = null;
+  private swallowClick_ = false;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -294,9 +312,127 @@ export class SpaceBarElement extends CrLitElement {
     return index !== -1 && next >= 0 && next < this.spaces.length;
   }
 
+  protected dotTitle_(space: Space): string {
+    const index = this.spaces.indexOf(space);
+    const key = index < SPACE_KEYS       ? index + 1 :
+        index === this.spaces.length - 1 ? SPACE_KEYS + 1 :
+                                           0;
+    return key ? `${space.name} (Alt+${key})` : space.name;
+  }
+
   protected onDotClick_(e: Event) {
+    if (this.swallowClick_) {
+      this.swallowClick_ = false;
+      return;
+    }
     this.fire_('select', this.idOf_(e));
   }
+
+  protected onDotPointerdown_(e: PointerEvent) {
+    this.swallowClick_ = false;
+    if (e.button !== 0 || INCOGNITO || this.drag_ || this.hasOverflow_() ||
+        this.spaces.length < 2) {
+      return;
+    }
+    const dot = e.currentTarget as HTMLElement;
+    const dots = [...this.shadowRoot.querySelectorAll<HTMLElement>('.dot')];
+    const centers = dots.map(each => {
+      const rect = each.getBoundingClientRect();
+      return rect.left + rect.width / 2;
+    });
+    const from = dots.indexOf(dot);
+    this.drag_ = {
+      id: this.idOf_(e),
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      dot,
+      dots,
+      centers,
+      pitch: centers[1]! - centers[0]!,
+      from,
+      to: from,
+      moved: false,
+    };
+    dot.setPointerCapture(e.pointerId);
+    dot.addEventListener('pointermove', this.onDragMove_);
+    dot.addEventListener('pointerup', this.onDragEnd_);
+    dot.addEventListener('pointercancel', this.onDragEnd_);
+  }
+
+  private onDragMove_ = (e: PointerEvent) => {
+    const drag = this.drag_;
+    if (!drag || e.pointerId !== drag.pointerId) {
+      return;
+    }
+    if (!drag.moved) {
+      if (Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD) {
+        return;
+      }
+      drag.moved = true;
+      drag.dot.toggleAttribute('dragging', true);
+    }
+    const origin = drag.centers[drag.from]!;
+    const center = Math.min(
+        drag.centers[drag.centers.length - 1]!,
+        Math.max(drag.centers[0]!, origin + e.clientX - drag.startX));
+    drag.dot.style.transform = `translateX(${center - origin}px)`;
+    drag.to =
+        drag.centers
+            .filter((other, index) => index !== drag.from && other < center)
+            .length;
+    drag.dots.forEach((dot, index) => {
+      if (index === drag.from) {
+        return;
+      }
+      const shift = index > drag.from && index <= drag.to ? -drag.pitch :
+          index < drag.from && index >= drag.to           ? drag.pitch :
+                                                            0;
+      dot.style.transform = shift ? `translateX(${shift}px)` : '';
+    });
+  };
+
+  private onDragEnd_ = async (e: PointerEvent) => {
+    const drag = this.drag_;
+    if (!drag || e.pointerId !== drag.pointerId) {
+      return;
+    }
+    this.drag_ = null;
+    drag.dot.removeEventListener('pointermove', this.onDragMove_);
+    drag.dot.removeEventListener('pointerup', this.onDragEnd_);
+    drag.dot.removeEventListener('pointercancel', this.onDragEnd_);
+    if (drag.dot.hasPointerCapture(e.pointerId)) {
+      drag.dot.releasePointerCapture(e.pointerId);
+    }
+    if (!drag.moved) {
+      return;
+    }
+    this.swallowClick_ = e.type === 'pointerup';
+    const dropX = drag.dot.getBoundingClientRect().left;
+    this.toggleAttribute('settling', true);
+    drag.dot.removeAttribute('dragging');
+    for (const dot of drag.dots) {
+      dot.style.transform = '';
+    }
+    if (e.type === 'pointerup' && drag.to !== drag.from) {
+      const order = [...this.spaces];
+      const [moved] = order.splice(drag.from, 1);
+      order.splice(drag.to, 0, moved!);
+      this.spaces = order;
+      this.fire_('move', drag.id, {delta: drag.to - drag.from});
+      await this.updateComplete;
+    }
+    const landed = this.shadowRoot.querySelector<HTMLElement>(
+        `.dot[data-id="${drag.id}"]`);
+    if (landed) {
+      landed.style.transform =
+          `translateX(${dropX - landed.getBoundingClientRect().left}px)`;
+      void getComputedStyle(landed).transform;
+    }
+    this.removeAttribute('settling');
+    if (landed) {
+      landed.style.transform = '';
+    }
+  };
 
   protected onDotContextmenu_(e: MouseEvent) {
     e.preventDefault();

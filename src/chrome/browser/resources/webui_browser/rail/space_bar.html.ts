@@ -28,13 +28,15 @@ ${this.variant === 'title' ? html`
   <div id="bar">
     <div id="dots">
       ${this.visibleSpaces_().map(space => html`
-        <button class="dot" data-id="${space.id}" title="${space.name}"
+        <button class="dot" data-id="${space.id}"
+          title="${this.dotTitle_(space)}"
           aria-label="Switch to ${space.name}"
           aria-pressed="${space.id === this.activeId}"
           ?compact="${this.compact_}"
           ?selected="${space.id === this.activeId}"
           @click="${this.onDotClick_}"
-          @contextmenu="${this.onDotContextmenu_}">
+          @contextmenu="${this.onDotContextmenu_}"
+          @pointerdown="${this.onDotPointerdown_}">
           ${!this.compact_ || space.id === this.activeId ?
     !space.icon ? html`<span class="space-dot"></span>` :
     space.icon.startsWith('cr:') ?

@@ -425,3 +425,26 @@ test('merging native order keeps current items and drops stale ones', () => {
   expect(merged.map((i: any) => i.id)).toEqual(['b', 'a', 'new']);
   expect(merged[1]).toBe(current[0]);
 });
+
+test('deleting the active space lands on its neighbor', () => {
+  const space = (id: string) =>
+      ({id, name: id, color: '#192e50', activeUrl: '', pinned: [], tabs: []});
+  const spaces = new Spaces(() => {});
+  spaces.restore(
+      {activeSpace: 'b', spaces: ['a', 'b', 'c'].map(space)}, [], new Set());
+  spaces.remove('b');
+  expect(spaces.activeId).toBe('a');
+  spaces.remove('a');
+  expect(spaces.activeId).toBe('c');
+  expect(spaces.fallbackFor('c')).toBe('');
+});
+
+test('space shortcuts address spaces by position', () => {
+  const runCommand = load('command_registry', 'runCommand');
+  const picked: number[] = [];
+  const host = {selectSpaceAt: (index: number) => picked.push(index)};
+  runCommand('select-space:0', host);
+  runCommand('select-space:7', host);
+  runCommand('select-space:last', host);
+  expect(picked).toEqual([0, 7, -1]);
+});

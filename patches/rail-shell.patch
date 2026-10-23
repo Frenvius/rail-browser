@@ -5038,7 +5038,7 @@ index 5e48dff..e9d08d3 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..7a7ca69 100644
+index 922ef29..5827ea6 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -5359,7 +5359,7 @@ index 922ef29..7a7ca69 100644
        this.forwardButtonDisabled_ = !canGoForward;
      } else {
        this.backButtonDisabled_ = true;
-@@ -327,32 +439,90 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -327,32 +439,91 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -5424,6 +5424,7 @@ index 922ef29..7a7ca69 100644
 +      reopenClosedTab: () => strip.reopenClosedTab(),
 +      runTabCommand: (command: TabCommand, target: TabMenuTarget) =>
 +          strip.runTabCommand(command, target),
++      selectSpaceAt: (index: number) => strip.selectSpaceAt(index),
 +      selectTabAt: (index: number) => strip.selectTabAt(index),
 +      stepSpace: (delta: number) => strip.stepSpace(delta),
 +      stepTab: (delta: number) => strip.stepTab(delta),
@@ -5468,7 +5469,7 @@ index 922ef29..7a7ca69 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -371,6 +541,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -371,6 +542,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5485,7 +5486,7 @@ index 922ef29..7a7ca69 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -400,9 +580,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -400,9 +581,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -6345,7 +6346,7 @@ index a15445b..dba3c50 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..6c92b5a 100644
+index b7a5099..0043c47 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,8 @@
@@ -6388,7 +6389,7 @@ index b7a5099..6c92b5a 100644
 +import type {SidebarState} from '../rail/sidebar_state.js';
 +import {MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
-+import {slideDirection, slideIn, slideOut} from '../rail/space_slide.js';
++import {paintSpaceColors, SpaceSlide} from '../rail/space_slide.js';
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
 +import {backdropSettings, DEFAULT_MATERIAL, isNewTabUrl, serializeSidebar,
 +        spaceHex, Spaces, tintStrength} from '../rail/spaces.js';
@@ -6554,7 +6555,7 @@ index b7a5099..6c92b5a 100644
 +      Array<{url: string, space: string, group: string, trail: string}> = [];
 +  private readonly reopenHistory_ = new ReopenHistory();
 +
-+  private slidingSpace_ = false;
++  private readonly spaceSlide_ = new SpaceSlide(this, this.spaces_);
 +  private backdropKey_ = '';
 +  private readonly wakingPins_ = new Set<string>();
 +  private readonly taking_ = new Set<string>();
@@ -6778,7 +6779,20 @@ index b7a5099..6c92b5a 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -217,48 +473,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -209,6 +465,12 @@ export class TabStripElement extends CrLitElement implements
+     this.dragDelegate_.onUpdate();
+   }
+
++  protected override scheduleUpdate() {
++    const gate = this.spaceSlide_.gate;
++    return gate ? gate.then(() => super.scheduleUpdate()) :
++                  super.scheduleUpdate();
++  }
++
+   override willUpdate(changedProperties: PropertyValues<this>) {
+     super.willUpdate(changedProperties);
+
+@@ -217,48 +479,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -6832,7 +6846,7 @@ index b7a5099..6c92b5a 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +528,1944 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +534,1945 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7978,7 +7992,7 @@ index b7a5099..6c92b5a 100644
 +    }
 +    this.ensureProfile_(tabId);
 +    if (this.activeTab_ === tabId && this.spaces_.activeId !== spaceId) {
-+      this.transitionSpace_(spaceId, () => {
++      this.spaceSlide_.toSpace(spaceId, () => {
 +        this.spaces_.noteActive(tabId);
 +        this.refreshSections_();
 +      });
@@ -8069,7 +8083,7 @@ index b7a5099..6c92b5a 100644
 +  }
 +
 +  private selectSpace_(id: string) {
-+    this.transitionSpace_(id, () => {
++    this.spaceSlide_.toSpace(id, () => {
 +      this.spaces_.select(id);
 +      this.wakeSpace_();
 +      this.focusSpace_();
@@ -8150,23 +8164,16 @@ index b7a5099..6c92b5a 100644
 +    return this.spaces_.dormantByKey(id) !== undefined;
 +  }
 +
-+  private async transitionSpace_(to: string, apply: () => void) {
-+    const root = this.shadowRoot;
-+    const direction =
-+        slideDirection(this.spaces_.all, this.spaces_.activeId, to);
-+    if (!root || !direction || this.slidingSpace_) {
-+      apply();
++  private removeSpace_(id: string) {
++    const fallback = this.spaces_.fallbackFor(id);
++    if (id === this.spaces_.activeId && fallback) {
++      this.spaceSlide_.toSpace(fallback, () => this.dropSpace_(id));
 +      return;
 +    }
-+    this.slidingSpace_ = true;
-+    await slideOut(root, direction);
-+    apply();
-+    await this.updateComplete;
-+    slideIn(root, direction);
-+    this.slidingSpace_ = false;
++    this.dropSpace_(id);
 +  }
 +
-+  private removeSpace_(id: string) {
++  private dropSpace_(id: string) {
 +    const orphans = this.spaces_.remove(id);
 +    if (this.spaces_.byId(id)) {
 +      return;
@@ -8339,10 +8346,8 @@ index b7a5099..6c92b5a 100644
 +    this.profileRows_ = [...this.spaces_.profiles];
 +    this.backdropMaterial_ = this.spaces_.material;
 +    this.syncSelection_();
-+    document.documentElement.style.setProperty(
-+        '--rail-space-color', spaceHex(this.spaces_.active.color));
-+    document.documentElement.style.setProperty(
-+        '--rail-space-tint', this.spaces_.active.color);
++    paintSpaceColors(
++        spaceHex(this.spaces_.active.color), this.spaces_.active.color);
 +    this.pushBackdrop_();
 +    this.fire('space-content-changed', {hasContent: this.hasActiveContent});
 +    this.fire(
@@ -8476,15 +8481,25 @@ index b7a5099..6c92b5a 100644
 +  }
 +
 +  async newSpace() {
-+    this.spaces_.create();
-+    this.refreshSections_();
++    this.spaceSlide_.toNewSpace(() => {
++      this.spaces_.create();
++      this.refreshSections_();
++    });
 +    await this.updateComplete;
 +    this.shadowRoot.querySelector<SpaceBarElement>('#spaceTitle')
 +        ?.beginRename();
 +  }
 +
++  selectSpaceAt(index: number) {
++    const spaces = this.spaces_.all;
++    const space = spaces[index < 0 ? spaces.length - 1 : index];
++    if (space) {
++      this.selectSpace_(space.id);
++    }
++  }
++
 +  stepSpace(delta: number) {
-+    this.transitionSpace_(this.spaces_.peek(delta), () => {
++    this.spaceSlide_.toSpace(this.spaces_.peek(delta), () => {
 +      this.spaces_.step(delta);
 +      this.wakeSpace_();
 +      this.focusSpace_();

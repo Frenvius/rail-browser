@@ -23,6 +23,9 @@
 #include <wrl/wrappers/corewrappers.h>
 
 #include <algorithm>
+#include <cmath>
+#include <iterator>
+#include <string_view>
 #include <unordered_map>
 
 #include "base/logging.h"
@@ -66,8 +69,83 @@ constexpr GUID kFloodEffectId = {
     {0x94, 0xcf, 0x50, 0x07, 0x8d, 0xf6, 0x38, 0xf2}};
 
 constexpr wchar_t kBackdropSourceName[] = L"backdrop";
+constexpr wchar_t kTintName[] = L"Tint";
+constexpr wchar_t kLuminosityName[] = L"Luminosity";
+constexpr const wchar_t* kAnimatedColors[] = {L"Tint.Color",
+                                              L"Luminosity.Color"};
 constexpr float kThinLuminosityScale = 0.5f;
 constexpr float kAltTintScale = 1.5f;
+constexpr base::TimeDelta kRecolorDuration = base::Milliseconds(300);
+
+class AnimatedColorCursor
+    : public RuntimeClass<
+          RuntimeClassFlags<WinRtClassicComMix>,
+          ABI::Windows::Foundation::Collections::IIterator<HSTRING>> {
+ public:
+  HRESULT STDMETHODCALLTYPE get_Current(HSTRING* current) override {
+    if (!current) {
+      return E_POINTER;
+    }
+    if (index_ >= std::size(kAnimatedColors)) {
+      return E_BOUNDS;
+    }
+    return HStringReference(kAnimatedColors[index_]).CopyTo(current);
+  }
+  HRESULT STDMETHODCALLTYPE get_HasCurrent(boolean* has_current) override {
+    if (!has_current) {
+      return E_POINTER;
+    }
+    *has_current = index_ < std::size(kAnimatedColors);
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE MoveNext(boolean* has_current) override {
+    if (index_ < std::size(kAnimatedColors)) {
+      ++index_;
+    }
+    return get_HasCurrent(has_current);
+  }
+  HRESULT STDMETHODCALLTYPE GetMany(unsigned capacity,
+                                    HSTRING* items,
+                                    unsigned* count) override {
+    if (!items || !count) {
+      return E_POINTER;
+    }
+    *count = 0;
+    while (*count < capacity && index_ < std::size(kAnimatedColors)) {
+      HRESULT hr =
+          HStringReference(kAnimatedColors[index_]).CopyTo(&items[*count]);
+      if (FAILED(hr)) {
+        return hr;
+      }
+      ++index_;
+      ++*count;
+    }
+    return S_OK;
+  }
+
+ private:
+  size_t index_ = 0;
+};
+
+class AnimatedColors
+    : public RuntimeClass<
+          RuntimeClassFlags<WinRtClassicComMix>,
+          ABI::Windows::Foundation::Collections::IIterable<HSTRING>> {
+ public:
+  HRESULT STDMETHODCALLTYPE
+  First(ABI::Windows::Foundation::Collections::IIterator<HSTRING>** first)
+      override {
+    if (!first) {
+      return E_POINTER;
+    }
+    auto cursor = Make<AnimatedColorCursor>();
+    if (!cursor) {
+      return E_OUTOFMEMORY;
+    }
+    *first = cursor.Detach();
+    return S_OK;
+  }
+};
 
 class Effect : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>,
                                    wgfx::IGraphicsEffect,
@@ -93,11 +171,20 @@ class Effect : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>,
     *id = id_;
     return S_OK;
   }
-  HRESULT STDMETHODCALLTYPE
-  GetNamedPropertyMapping(LPCWSTR,
-                          UINT*,
-                          wgfx::GRAPHICS_EFFECT_PROPERTY_MAPPING*) override {
-    return E_NOTIMPL;
+  HRESULT STDMETHODCALLTYPE GetNamedPropertyMapping(
+      LPCWSTR name,
+      UINT* index,
+      wgfx::GRAPHICS_EFFECT_PROPERTY_MAPPING* mapping) override {
+    if (!name || !index || !mapping) {
+      return E_POINTER;
+    }
+    if (!IsEqualGUID(id_, kFloodEffectId) ||
+        std::wstring_view(name) != L"Color") {
+      return E_INVALIDARG;
+    }
+    *index = D2D1_FLOOD_PROP_COLOR;
+    *mapping = wgfx::GRAPHICS_EFFECT_PROPERTY_MAPPING_COLOR_TO_VECTOR4;
+    return S_OK;
   }
   HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) override {
     if (!count) {
@@ -199,6 +286,14 @@ void FillChannels(SkColor color, float alpha, float (&out)[4]) {
   out[3] = std::clamp(alpha, 0.0f, 1.0f);
 }
 
+ABI::Windows::UI::Color ChannelsToColor(const float (&channels)[4]) {
+  const auto byte = [](float value) {
+    return static_cast<BYTE>(std::lround(value * 255.0f));
+  };
+  return {byte(channels[3]), byte(channels[0]), byte(channels[1]),
+          byte(channels[2])};
+}
+
 }  // namespace
 
 class SystemBackdropController::Impl {
@@ -243,10 +338,16 @@ class SystemBackdropController::Impl {
   }
 
   void SetConfig(const SystemBackdropConfig& config) {
+    const bool recolor = composition_ && effect_brush_ && fallback_brush_ &&
+                         config.material == config_.material &&
+                         config.popup == config_.popup;
     const bool brush_changed =
         UsesWallpaperBackdrop(config.material) !=
         UsesWallpaperBackdrop(config_.material);
     config_ = config;
+    if (recolor && AnimateColors()) {
+      return;
+    }
     effect_brush_.Reset();
     fallback_brush_.Reset();
     if (!composition_) {
@@ -656,18 +757,9 @@ class SystemBackdropController::Impl {
       return nullptr;
     }
 
-    float luminosity_opacity = config_.luminosity_opacity;
-    float tint_opacity = config_.tint_opacity;
-    if (config_.material == SystemBackdropMaterial::kAcrylicThin) {
-      luminosity_opacity *= kThinLuminosityScale;
-    } else if (config_.material == SystemBackdropMaterial::kMicaAlt) {
-      tint_opacity *= kAltTintScale;
-    }
-
     float luminosity_channels[4];
-    FillChannels(config_.tint_color, luminosity_opacity, luminosity_channels);
     float tint_channels[4];
-    FillChannels(config_.tint_color, tint_opacity, tint_channels);
+    FillTintChannels(luminosity_channels, tint_channels);
 
     auto luminosity_color = Make<Effect>(kFloodEffectId);
     auto luminosity_blend = Make<Effect>(kBlendEffectId);
@@ -676,7 +768,10 @@ class SystemBackdropController::Impl {
     if (!luminosity_color || !luminosity_blend || !tint_color || !tint_blend) {
       return nullptr;
     }
-    if (!luminosity_color->SetColor(D2D1_FLOOD_PROP_COLOR,
+    if (FAILED(luminosity_color->put_Name(
+            HStringReference(kLuminosityName).Get())) ||
+        FAILED(tint_color->put_Name(HStringReference(kTintName).Get())) ||
+        !luminosity_color->SetColor(D2D1_FLOOD_PROP_COLOR,
                                     luminosity_channels) ||
         !tint_color->SetColor(D2D1_FLOOD_PROP_COLOR, tint_channels) ||
         !luminosity_blend->SetUInt32(D2D1_BLEND_PROP_MODE,
@@ -695,7 +790,10 @@ class SystemBackdropController::Impl {
       return nullptr;
     }
     ComPtr<wuc::ICompositionEffectFactory> factory;
-    if (FAILED(compositor_->CreateEffectFactory(graph.Get(), &factory))) {
+    auto animated = Make<AnimatedColors>();
+    if ((!animated || FAILED(compositor_->CreateEffectFactoryWithProperties(
+                          graph.Get(), animated.Get(), &factory))) &&
+        FAILED(compositor_->CreateEffectFactory(graph.Get(), &factory))) {
       return nullptr;
     }
     ComPtr<wuc::ICompositionEffectBrush> effect;
@@ -712,6 +810,58 @@ class SystemBackdropController::Impl {
       return nullptr;
     }
     return brush;
+  }
+
+  void FillTintChannels(float (&luminosity)[4], float (&tint)[4]) const {
+    float luminosity_opacity = config_.luminosity_opacity;
+    float tint_opacity = config_.tint_opacity;
+    if (config_.material == SystemBackdropMaterial::kAcrylicThin) {
+      luminosity_opacity *= kThinLuminosityScale;
+    } else if (config_.material == SystemBackdropMaterial::kMicaAlt) {
+      tint_opacity *= kAltTintScale;
+    }
+    FillChannels(config_.tint_color, luminosity_opacity, luminosity);
+    FillChannels(config_.tint_color, tint_opacity, tint);
+  }
+
+  bool AnimateColors() {
+    ComPtr<wuc::ICompositionObject> effect;
+    ComPtr<wuc::ICompositionObject> fallback;
+    if (FAILED(effect_brush_.As(&effect)) ||
+        FAILED(fallback_brush_.As(&fallback))) {
+      return false;
+    }
+    float luminosity[4];
+    float tint[4];
+    FillTintChannels(luminosity, tint);
+    return StartColorAnimation(effect.Get(), kAnimatedColors[0],
+                               ChannelsToColor(tint)) &&
+           StartColorAnimation(effect.Get(), kAnimatedColors[1],
+                               ChannelsToColor(luminosity)) &&
+           StartColorAnimation(fallback.Get(), L"Color",
+                               ToCompositionColor(config_.fallback_color));
+  }
+
+  bool StartColorAnimation(wuc::ICompositionObject* target,
+                           const wchar_t* property,
+                           ABI::Windows::UI::Color to) {
+    ComPtr<wuc::IColorKeyFrameAnimation> color;
+    ComPtr<wuc::IKeyFrameAnimation> frames;
+    ComPtr<wuc::ICompositionAnimation> animation;
+    ComPtr<wuc::ICubicBezierEasingFunction> bezier;
+    ComPtr<wuc::ICompositionEasingFunction> easing;
+    if (FAILED(compositor_->CreateColorKeyFrameAnimation(&color)) ||
+        FAILED(color.As(&frames)) || FAILED(color.As(&animation)) ||
+        FAILED(compositor_->CreateCubicBezierEasingFunction(
+            {0.2f, 0.0f}, {0.0f, 1.0f}, &bezier)) ||
+        FAILED(bezier.As(&easing))) {
+      return false;
+    }
+    frames->put_Duration({kRecolorDuration.InMicroseconds() * 10});
+    color->put_InterpolationColorSpace(wuc::CompositionColorSpace_Rgb);
+    color->InsertKeyFrameWithEasingFunction(1.0f, to, easing.Get());
+    return SUCCEEDED(target->StartAnimation(HStringReference(property).Get(),
+                                            animation.Get()));
   }
 
   ComPtr<wuc::ICompositionBrush> CreateFallbackBrush() {
