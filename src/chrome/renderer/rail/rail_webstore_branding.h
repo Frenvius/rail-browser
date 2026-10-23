@@ -7,7 +7,7 @@ class RenderFrame;
 
 namespace rail {
 
-void CreateWebstoreBranding(content::RenderFrame* render_frame);
+void BrandWebstore(content::RenderFrame* render_frame);
 
 }  // namespace rail
 

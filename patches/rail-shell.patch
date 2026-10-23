@@ -12368,7 +12368,7 @@ index aaedc5f..dfbc3df 100644
      "plugins/pdf_plugin_placeholder.h",
      "supervised_user/supervised_user_error_page_controller.cc",
 diff --git a/chrome/renderer/chrome_content_renderer_client.cc b/chrome/renderer/chrome_content_renderer_client.cc
-index 522cb72..3211823 100644
+index 522cb72..f6390ea 100644
 --- a/chrome/renderer/chrome_content_renderer_client.cc
 +++ b/chrome/renderer/chrome_content_renderer_client.cc
 @@ -57,6 +57,7 @@
@@ -12379,15 +12379,14 @@ index 522cb72..3211823 100644
  #include "chrome/renderer/chrome_render_thread_observer.h"
  #include "chrome/renderer/controlled_frame/controlled_frame_extensions_renderer_api_provider.h"
  #include "chrome/renderer/google_accounts_private_api_extension.h"
-@@ -655,6 +656,8 @@ void ChromeContentRendererClient::RenderFrameCreated(
+@@ -1459,6 +1460,7 @@ ChromeContentRendererClient::CreateSpeechRecognitionClient(
  
-   new prerender::NoStatePrefetchRenderFrameObserver(render_frame);
- 
-+  rail::CreateWebstoreBranding(render_frame);
-+
-   auto content_settings_delegate =
-       std::make_unique<ChromeContentSettingsAgentDelegate>(render_frame);
+ void ChromeContentRendererClient::RunScriptsAtDocumentStart(
+     content::RenderFrame* render_frame) {
++  rail::BrandWebstore(render_frame);
  #if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
+   extensions::ExtensionsRendererClient::Get()->RunScriptsAtDocumentStart(
+       render_frame);
 diff --git a/chrome/tools/build/win/FILES.cfg b/chrome/tools/build/win/FILES.cfg
 index 5abdf31..4224e1f 100644
 --- a/chrome/tools/build/win/FILES.cfg

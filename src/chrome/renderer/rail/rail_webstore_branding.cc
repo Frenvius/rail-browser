@@ -1,10 +1,11 @@
 #include "chrome/renderer/rail/rail_webstore_branding.h"
 
+#include "chrome/common/chrome_isolated_world_ids.h"
 #include "content/public/renderer/render_frame.h"
-#include "content/public/renderer/render_frame_observer.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/public/web/web_script_source.h"
 #include "url/gurl.h"
 
 namespace rail {
@@ -12,53 +13,51 @@ namespace {
 
 constexpr char kWebstoreHost[] = "chromewebstore.google.com";
 
-constexpr char kBrandingCss[] =
-    "button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"],"
-    "button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]{"
-    "visibility:hidden !important;position:relative !important}"
-    "button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]::after,"
-    "button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]::after{"
-    "visibility:visible !important;position:absolute !important;"
-    "left:50% !important;top:0 !important;"
-    "transform:translateX(-50%) !important;white-space:nowrap !important}"
-    "html:lang(pt) button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]::after{"
-    "content:\"Usar no Rail\" !important}"
-    "html:lang(en) button[jsname=\"wQO0od\"] span[jsname=\"V67aGc\"]::after{"
-    "content:\"Add to Rail\" !important}"
-    "html:lang(pt) button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]::after{"
-    "content:\"Remover do Rail\" !important}"
-    "html:lang(en) button[jsname=\"ajZLRd\"] span[jsname=\"V67aGc\"]::after{"
-    "content:\"Remove from Rail\" !important}";
+constexpr char kSwitchPromptCss[] =
+    "[role=dialog]:has(a[href*=\"google.com/chrome\"]),"
+    "div:has(> div > div > button[jslog^=\"276336\"]),"
+    "div:has(> div > div > div > button[jslog^=\"276336\"]){"
+    "display:none !important}";
 
-class WebstoreBranding : public content::RenderFrameObserver {
- public:
-  explicit WebstoreBranding(content::RenderFrame* render_frame)
-      : content::RenderFrameObserver(render_frame) {}
-
-  WebstoreBranding(const WebstoreBranding&) = delete;
-  WebstoreBranding& operator=(const WebstoreBranding&) = delete;
-
-  ~WebstoreBranding() override = default;
-
-  void DidCreateDocumentElement() override {
-    blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
-    if (!frame) {
-      return;
+constexpr char kRenameScript[] = R"js(
+(() => {
+  const word = /\bChrome\b/g;
+  const rename = () => {
+    for (const button of document.querySelectorAll('button, [role=button]')) {
+      const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+      for (let node; (node = walker.nextNode());) {
+        if (node.data.includes('Chrome')) {
+          node.data = node.data.replace(word, 'Rail');
+        }
+      }
+      const label = button.getAttribute('aria-label');
+      if (label && label.includes('Chrome')) {
+        button.setAttribute('aria-label', label.replace(word, 'Rail'));
+      }
     }
-    blink::WebDocument document = frame->GetDocument();
-    if (GURL(document.Url()).host() != kWebstoreHost) {
-      return;
-    }
-    document.InsertStyleSheet(blink::WebString::FromUtf8(kBrandingCss));
-  }
-
-  void OnDestruct() override { delete this; }
-};
+  };
+  new MutationObserver(rename).observe(
+      document, {subtree: true, childList: true, characterData: true});
+  rename();
+})();
+)js";
 
 }  // namespace
 
-void CreateWebstoreBranding(content::RenderFrame* render_frame) {
-  new WebstoreBranding(render_frame);
+void BrandWebstore(content::RenderFrame* render_frame) {
+  blink::WebLocalFrame* frame = render_frame->GetWebFrame();
+  if (!frame) {
+    return;
+  }
+  blink::WebDocument document = frame->GetDocument();
+  if (GURL(document.Url()).host() != kWebstoreHost) {
+    return;
+  }
+  document.InsertStyleSheet(blink::WebString::FromUtf8(kSwitchPromptCss));
+  frame->ExecuteScriptInIsolatedWorld(
+      ISOLATED_WORLD_ID_CHROME_INTERNAL,
+      blink::WebScriptSource(blink::WebString::FromUtf8(kRenameScript)),
+      blink::BackForwardCacheAware::kAllow);
 }
 
 }  // namespace rail
