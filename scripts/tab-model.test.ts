@@ -491,12 +491,15 @@ test('untouched rows archive after the configured hours', () => {
   const TabArchive = load('tab_archive', 'TabArchive');
   const hour = 60 * 60 * 1000;
   let now = 0;
-  let rows = [{key: 'a', url: ''}, {key: 'b', url: ''}];
+  let rows = [
+    {key: 'a', url: '', profile: ''},
+    {key: 'b', url: '', profile: ''},
+  ];
   const archived: string[][] = [];
   const clock = new TabArchive(
       memoryStore(), () => rows, (keys: string[]) => archived.push(keys),
       () => now);
-  clock.setHours(12);
+  clock.setHours({'': 12});
   clock.tick();
   expect(archived).toEqual([]);
   now = 11 * hour;
@@ -506,14 +509,48 @@ test('untouched rows archive after the configured hours', () => {
   now = 12 * hour;
   clock.tick();
   expect(archived).toEqual([['a']]);
-  rows = [{key: 'b', url: ''}];
+  rows = [{key: 'b', url: '', profile: ''}];
   now = 22 * hour;
-  clock.setHours(0);
+  clock.setHours({'': 0});
   clock.tick();
   now = 40 * hour;
-  clock.setHours(12);
+  clock.setHours({'': 12});
   clock.tick();
   expect(archived).toEqual([['a']]);
+});
+
+test('each profile archives on its own hours and the rest follow the default', () => {
+  const TabArchive = load('tab_archive', 'TabArchive');
+  const hour = 60 * 60 * 1000;
+  let now = 0;
+  const rows = [
+    {key: 'home', url: '', profile: ''},
+    {key: 'work', url: '', profile: 'work'},
+    {key: 'side', url: '', profile: 'side'},
+    {key: 'kept', url: '', profile: 'kept'},
+  ];
+  const archived: string[] = [];
+  const clock = new TabArchive(
+      memoryStore(), () => rows.filter(row => !archived.includes(row.key)),
+      (keys: string[]) => archived.push(...keys), () => now);
+  clock.setHours({'': 12, work: 1, kept: 0});
+  clock.tick();
+  now = hour;
+  clock.tick();
+  expect(archived).toEqual(['work']);
+  now = 12 * hour;
+  clock.tick();
+  expect(archived).toEqual(['work', 'home', 'side']);
+  now = 100 * hour;
+  clock.tick();
+  expect(archived).toEqual(['work', 'home', 'side']);
+});
+
+test('the archive hours fall back to the default profile', () => {
+  const archiveHoursFor = load('tab_archive', 'archiveHoursFor');
+  expect(archiveHoursFor({}, 'work')).toBe(12);
+  expect(archiveHoursFor({'': 168}, 'work')).toBe(168);
+  expect(archiveHoursFor({'': 168, work: 0}, 'work')).toBe(0);
 });
 
 test('rows the candidate pass keeps busy are not archived', () => {
@@ -526,7 +563,7 @@ test('rows the candidate pass keeps busy are not archived', () => {
   const clock: any = new TabArchive(
       store, () => {
         clock.touch('playing');
-        return [{key: 'idle', url: ''}];
+        return [{key: 'idle', url: '', profile: ''}];
       },
       (keys: string[]) => archived.push(keys), () => now);
   clock.tick();

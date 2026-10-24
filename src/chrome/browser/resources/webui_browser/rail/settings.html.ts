@@ -101,22 +101,6 @@ ${this.section_ === 'general' ? html`
             @click="${this.onRemoveSleepSiteClick_}">Remove</button>
       </div>
     `)}
-    <div class="item">
-      <div class="rowtext">
-        <span class="cardtitle">Archive untouched tabs after</span>
-        <span class="cardhint">
-          Archived tabs leave the sidebar and wait in the Library
-        </span>
-      </div>
-      <select id="archiveafter" @change="${this.onArchiveHoursChange_}">
-        ${this.archiveChoices_.map(choice => html`
-          <option value="${choice.hours}"
-            ?selected="${choice.hours === this.archiveHours_}">
-            ${choice.label}
-          </option>
-        `)}
-      </select>
-    </div>
   </div>
   <h2 class="section">Top Bar</h2>
   <div class="group">
@@ -174,6 +158,23 @@ ${this.section_ === 'profiles' && this.openRow_ ? html`
       <div class="item row" @click="${this.onAdvancedSearchClick_}">
         <span class="cardtitle">Advanced Search Settings</span>
         <cr-icon class="chevron" icon="cr:open-in-new"></cr-icon>
+      </div>
+    </div>
+    <h2 class="section">Tabs</h2>
+    <div class="group">
+      <div class="item">
+        <div class="rowtext">
+          <span class="cardtitle">Archive untouched tabs after</span>
+          <span class="cardhint">${this.archiveHint_()}</span>
+        </div>
+        <select id="archiveafter" @change="${this.onArchiveHoursChange_}">
+          ${this.archiveChoices_.map(choice => html`
+            <option value="${choice.hours}"
+              ?selected="${choice.hours === this.profileArchiveHours_()}">
+              ${choice.label}
+            </option>
+          `)}
+        </select>
       </div>
     </div>
   ` : nothing}

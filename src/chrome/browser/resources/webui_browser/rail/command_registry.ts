@@ -2,6 +2,7 @@ import {browserProxyFactory} from '../browser.mojom-webui.js';
 
 import type {LibrarySection} from './library.js';
 import {adoptMiniWindow} from './mini_window.js';
+import {archivedTabs} from './tab_archive.js';
 import type {TabCommand, TabMenuTarget} from './tab_menu.js';
 
 export interface CommandBarHost {
@@ -242,6 +243,13 @@ export const COMMANDS: Command[] = [
     hint: '',
     keywords: 'archive closed restore library',
     run: host => host.openLibrary('archive'),
+  },
+  {
+    id: 'clear-archive',
+    label: 'Clear Archive',
+    hint: '',
+    keywords: 'archived tabs remove delete empty library',
+    run: () => archivedTabs().clear(),
   },
   {
     id: 'show-spaces',

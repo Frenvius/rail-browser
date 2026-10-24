@@ -10,8 +10,8 @@ import type {LibraryIcon} from './library_icons.js';
 import {INCOGNITO} from './sidebar_state.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_PROFILE_NAME, spaceHex} from './spaces.js';
-import type {ArchiveDay, ArchivedTab} from './tab_archive.js';
-import {archivedTabs, groupByDay, matchArchived} from './tab_archive.js';
+import type {ArchiveDay, ArchivedTab, ArchiveHours} from './tab_archive.js';
+import {archivedTabs, archiveHoursFor, groupByDay, matchArchived} from './tab_archive.js';
 
 export type LibrarySection = 'downloads'|'spaces'|'archive';
 
@@ -76,7 +76,7 @@ export class RailLibraryElement extends CrLitElement {
       activeId: {type: String},
       tabCounts: {type: Object},
       profiles: {type: Array},
-      archiveHours: {type: Number},
+      archiveHours: {type: Object},
       query_: {type: String, state: true},
       downloads_: {type: Array, state: true},
       archived_: {type: Array, state: true},
@@ -93,7 +93,7 @@ export class RailLibraryElement extends CrLitElement {
   accessor activeId = '';
   accessor tabCounts: Record<string, number> = {};
   accessor profiles: SpaceProfile[] = [];
-  accessor archiveHours = 12;
+  accessor archiveHours: ArchiveHours = {};
   protected accessor query_ = '';
   protected accessor downloads_: Download[] = [];
   protected accessor archived_: ArchivedTab[] = [];
@@ -639,7 +639,7 @@ export class RailLibraryElement extends CrLitElement {
     if (INCOGNITO) {
       return 'Incognito windows do not keep closed tabs.';
     }
-    const hours = this.archiveHours;
+    const hours = archiveHoursFor(this.archiveHours, this.spaceProfile_());
     if (!hours) {
       return 'Tabs you close land here.';
     }

@@ -84,7 +84,7 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetTabSleepMinutes(int32_t minutes) override;
   void SetTabSleepExceptions(
       const std::vector<std::string>& exceptions) override;
-  void SetTabArchiveHours(int32_t hours) override;
+  void SetTabArchiveHours(const std::string& id, int32_t hours) override;
   void OpenCredits() override;
   void Close() override;
 

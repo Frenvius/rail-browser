@@ -6387,7 +6387,7 @@ index a15445b..44ae288 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..8a883b2 100644
+index b7a5099..4f6cf1d 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6441,8 +6441,8 @@ index b7a5099..8a883b2 100644
 +import type {FolderCommand, GroupCommand, TabCommand, TabCommandDetail, TabMenuTarget} from '../rail/tab_menu.js';
 +import {openFolderMenu, openGroupMenu, openTabMenu} from '../rail/tab_menu.js';
 +import {actsOnSelection, TabSelection} from '../rail/tab_selection.js';
-+import type {ArchiveCandidate} from '../rail/tab_archive.js';
-+import {archivedTabs, DEFAULT_ARCHIVE_HOURS, TabArchive} from '../rail/tab_archive.js';
++import type {ArchiveCandidate, ArchiveHours} from '../rail/tab_archive.js';
++import {archivedTabs, TabArchive} from '../rail/tab_archive.js';
 +import {TabSleep} from '../rail/tab_sleep.js';
 +import type {SleepCandidate} from '../rail/tab_sleep.js';
 +import type {TidyGroupPlan, TidyTab} from '../rail/tidy_tabs.js';
@@ -6570,7 +6570,7 @@ index b7a5099..8a883b2 100644
 +        state: true,
 +      },
 +      archiveHours_: {
-+        type: Number,
++        type: Object,
 +        state: true,
 +      },
      };
@@ -6600,7 +6600,7 @@ index b7a5099..8a883b2 100644
 +  protected accessor trailDepth_ = 1;
 +  protected accessor libraryOpen_ = false;
 +  protected accessor librarySection_: LibrarySection = 'downloads';
-+  protected accessor archiveHours_ = DEFAULT_ARCHIVE_HOURS;
++  protected accessor archiveHours_: ArchiveHours = {};
 +  private readonly selection_ = new TabSelection();
 +  private pendingBelow_ = '';
 +  private readonly store_ = new SidebarStore(
@@ -6669,7 +6669,7 @@ index b7a5099..8a883b2 100644
    }
 +
 +  private applyTabPolicy_(
-+      minutes: number, exceptions: string[], archiveHours: number) {
++      minutes: number, exceptions: string[], archiveHours: ArchiveHours) {
 +    this.tabSleep_.setPolicy(minutes, exceptions);
 +    this.tabArchive_.setHours(archiveHours);
 +    this.archiveHours_ = archiveHours;
@@ -6921,7 +6921,7 @@ index b7a5099..8a883b2 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +568,2080 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +568,2084 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8364,7 +8364,11 @@ index b7a5099..8a883b2 100644
 +        busy.push(row.key);
 +        continue;
 +      }
-+      candidates.push({key: row.key, url: row.url});
++      candidates.push({
++        key: row.key,
++        url: row.url,
++        profile: this.spaces_.byId(row.space)?.profile ?? '',
++      });
 +    }
 +    this.tabArchive_.touch(...busy);
 +    return candidates;
@@ -10548,7 +10552,7 @@ index ffbd17c..ac7b9e8 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..b8bf1e7 100644
+index 7e0800a..379e123 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -10657,7 +10661,7 @@ index 7e0800a..b8bf1e7 100644
 +  OnThemedTitlebarChanged(bool themed);
 +
 +  OnTabSleepChanged(int32 minutes, array<string> exceptions,
-+                    int32 archive_hours);
++                    map<string, int32> archive_hours);
 +
 +  OnTrailDepthChanged(int32 depth);
 +
@@ -10751,7 +10755,7 @@ index 7e0800a..b8bf1e7 100644
 +  GetSleepingTabs() => (array<tabs_api.mojom.NodeId> ids);
 +
 +  GetTabSleep() => (int32 minutes, array<string> exceptions,
-+                    int32 archive_hours);
++                    map<string, int32> archive_hours);
 +
 +  GetTrailDepth() => (int32 depth);
 +
@@ -10973,7 +10977,7 @@ index 5e6d29d..76021ae 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index cb0e145..2e2f2b3 100644
+index cb0e145..e3810b4 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,8 @@
@@ -11492,7 +11496,7 @@ index cb0e145..2e2f2b3 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +787,43 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +787,47 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -11522,6 +11526,10 @@ index cb0e145..2e2f2b3 100644
 +                            weak_factory_.GetWeakPtr()));
 +    sidebar_state_registrar_.Add(
 +        rail::kTabArchiveHoursPref,
++        base::BindRepeating(&WebUIBrowserPageHandler::OnTabSleepChanged,
++                            weak_factory_.GetWeakPtr()));
++    sidebar_state_registrar_.Add(
++        rail::kProfileTabArchiveHoursPref,
 +        base::BindRepeating(&WebUIBrowserPageHandler::OnTabSleepChanged,
 +                            weak_factory_.GetWeakPtr()));
 +    sidebar_state_registrar_.Add(

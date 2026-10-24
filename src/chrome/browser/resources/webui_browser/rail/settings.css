@@ -250,10 +250,7 @@ h2.section:first-child {
   margin-top: 4px;
 }
 
-#engine,
-#modelchoice,
-#sidebarcollapse,
-#sleepafter {
+select {
   align-items: center;
   appearance: base-select;
   display: inline-flex;
@@ -268,10 +265,7 @@ h2.section:first-child {
   transition: background-color 80ms ease;
 }
 
-#engine:hover,
-#modelchoice:hover,
-#sidebarcollapse:hover,
-#sleepafter:hover {
+select:hover {
   background-color: rgb(255 255 255 / 14%);
 }
 
@@ -489,10 +483,7 @@ option::checkmark {
   opacity: .5;
 }
 
-#engine,
-#modelchoice,
-#sidebarcollapse,
-#sleepafter,
+select,
 #apikey,
 #model,
 #sleepsite,

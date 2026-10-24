@@ -1,8 +1,11 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SIDEBAR_STATE_H_
 #define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SIDEBAR_STATE_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
+
+#include "base/containers/flat_map.h"
 
 class PrefService;
 
@@ -19,6 +22,7 @@ extern const char kTrailDepthPref[];
 extern const char kTabSleepMinutesPref[];
 extern const char kTabSleepExceptionsPref[];
 extern const char kTabArchiveHoursPref[];
+extern const char kProfileTabArchiveHoursPref[];
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
@@ -52,9 +56,11 @@ std::vector<std::string> GetTabSleepExceptions(PrefService* prefs);
 void SetTabSleepExceptions(PrefService* prefs,
                            const std::vector<std::string>& sites);
 
-int GetTabArchiveHours(PrefService* prefs);
+base::flat_map<std::string, int32_t> GetTabArchiveHours(PrefService* prefs);
 
-void SetTabArchiveHours(PrefService* prefs, int hours);
+void SetTabArchiveHours(PrefService* prefs,
+                        const std::string& profile_id,
+                        int hours);
 
 }
 

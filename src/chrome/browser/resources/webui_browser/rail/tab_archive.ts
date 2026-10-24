@@ -10,6 +10,16 @@ const FAVICON_LIMIT = 8192;
 
 export const DEFAULT_ARCHIVE_HOURS = 12;
 
+export type ArchiveHours = Record<string, number>;
+
+export function archiveSource(hours: ArchiveHours, profile: string): string {
+  return hours[profile] === undefined ? '' : profile;
+}
+
+export function archiveHoursFor(hours: ArchiveHours, profile: string): number {
+  return hours[archiveSource(hours, profile)] ?? DEFAULT_ARCHIVE_HOURS;
+}
+
 export interface ArchivedTab {
   id: string;
   url: string;
@@ -27,6 +37,7 @@ export interface ArchiveDay {
 export interface ArchiveCandidate {
   key: string;
   url: string;
+  profile: string;
 }
 
 type Store = Pick<Storage, 'getItem'|'setItem'>;
@@ -158,8 +169,8 @@ export function groupByDay(tabs: ArchivedTab[], now: number): ArchiveDay[] {
 
 export class TabArchive {
   private timer_ = 0;
-  private idleMs_ = DEFAULT_ARCHIVE_HOURS * HOUR_MS;
-  private armedAt_ = 0;
+  private hours_: ArchiveHours = {};
+  private readonly armedAt_ = new Map<string, number>();
 
   constructor(
       private readonly store_: Store,
@@ -179,12 +190,15 @@ export class TabArchive {
     }
   }
 
-  setHours(hours: number) {
-    const idleMs = Math.max(hours, 0) * HOUR_MS;
-    if (idleMs && !this.idleMs_) {
-      this.armedAt_ = this.now_();
+  setHours(hours: ArchiveHours) {
+    const now = this.now_();
+    for (const profile of new Set(['', ...Object.keys(hours)])) {
+      if (archiveHoursFor(hours, profile) > 0 &&
+          archiveHoursFor(this.hours_, profile) <= 0) {
+        this.armedAt_.set(profile, now);
+      }
     }
-    this.idleMs_ = idleMs;
+    this.hours_ = hours;
   }
 
   touch(...keys: string[]) {
@@ -205,11 +219,14 @@ export class TabArchive {
     const seen = this.seen_();
     const now = this.now_();
     const due: string[] = [];
-    for (const {key} of candidates) {
+    for (const {key, profile} of candidates) {
       const last = seen[key];
-      if (last === undefined || !this.idleMs_) {
+      const source = archiveSource(this.hours_, profile);
+      const idleMs = archiveHoursFor(this.hours_, profile) * HOUR_MS;
+      if (last === undefined || idleMs <= 0) {
         seen[key] = now;
-      } else if (now - Math.max(last, this.armedAt_) >= this.idleMs_) {
+      } else if (
+          now - Math.max(last, this.armedAt_.get(source) ?? 0) >= idleMs) {
         due.push(key);
         delete seen[key];
       }

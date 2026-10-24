@@ -10,6 +10,8 @@ import {browserProxyFactory} from '../rail_settings.mojom-webui.js';
 import {getCss} from './settings.css.js';
 import {getHtml} from './settings.html.js';
 import {DEFAULT_PROFILE_NAME} from './spaces.js';
+import type {ArchiveHours} from './tab_archive.js';
+import {archiveHoursFor, archiveSource} from './tab_archive.js';
 import {normalizeSleepSite} from './tab_sleep.js';
 
 export interface ProfileRow {
@@ -70,7 +72,7 @@ export class RailSettingsElement extends CrLitElement {
       trailDepth_: {type: Number, state: true},
       sleepMinutes_: {type: Number, state: true},
       sleepSites_: {type: Array, state: true},
-      archiveHours_: {type: Number, state: true},
+      archiveHours_: {type: Object, state: true},
       section_: {type: String, state: true},
       customModel_: {type: Boolean, state: true},
       editingKey_: {type: Boolean, state: true},
@@ -99,7 +101,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor trailDepth_ = 1;
   protected accessor sleepMinutes_ = 30;
   protected accessor sleepSites_: string[] = [];
-  protected accessor archiveHours_ = 12;
+  protected accessor archiveHours_: ArchiveHours = {};
   protected accessor customModel_ = false;
   protected accessor editingKey_ = false;
   protected readonly models_ = [
@@ -274,10 +276,25 @@ export class RailSettingsElement extends CrLitElement {
     this.sleepMinutes_ = minutes;
   }
 
+  protected profileArchiveHours_(): number {
+    return archiveHoursFor(this.archiveHours_, this.openRow_?.id ?? '');
+  }
+
+  protected archiveHint_(): string {
+    const id = this.openRow_?.id ?? '';
+    return id && archiveSource(this.archiveHours_, id) === '' ?
+        `Follows the ${DEFAULT_PROFILE_NAME} Profile until you pick a time` :
+        'Archived tabs leave the sidebar and wait in the Library';
+  }
+
   protected onArchiveHoursChange_(e: Event) {
+    const row = this.openRow_;
+    if (!row) {
+      return;
+    }
     const hours = Number((e.target as HTMLSelectElement).value);
-    browserProxyFactory.getInstance().handler.setTabArchiveHours(hours);
-    this.archiveHours_ = hours;
+    browserProxyFactory.getInstance().handler.setTabArchiveHours(row.id, hours);
+    this.archiveHours_ = {...this.archiveHours_, [row.id]: hours};
   }
 
   protected onSleepSiteKeydown_(e: KeyboardEvent) {

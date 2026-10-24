@@ -321,8 +321,9 @@ void RailSettingsUI::SetTabSleepExceptions(
   rail::SetTabSleepExceptions(PrefsFor(web_ui()), exceptions);
 }
 
-void RailSettingsUI::SetTabArchiveHours(int32_t hours) {
-  rail::SetTabArchiveHours(PrefsFor(web_ui()), hours);
+void RailSettingsUI::SetTabArchiveHours(const std::string& id,
+                                        int32_t hours) {
+  rail::SetTabArchiveHours(PrefsFor(web_ui()), id, hours);
 }
 
 void RailSettingsUI::OpenCredits() {
