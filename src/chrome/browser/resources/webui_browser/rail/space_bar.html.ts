@@ -33,6 +33,7 @@ ${this.variant === 'title' ? html`
       ${this.recent_.map((item, index) => html`
         <div class="card-row" data-id="${item.id}" title="${item.fileName}"
             style="--order: ${this.recent_.length - index}"
+            ?removed="${item.fileExternallyRemoved}"
             draggable="${this.canDrag_(item) ? 'true' : 'false'}"
             @click="${this.onCardRowClick_}"
             @dragstart="${this.onCardRowDragstart_}">
@@ -50,6 +51,21 @@ ${this.variant === 'title' ? html`
             <span class="card-name">${item.fileName}</span>
             <span class="card-status">${this.cardStatus_(item)}</span>
           </div>
+          ${this.isMoving_(item) ? '' : html`
+            <div class="card-actions">
+              ${this.canDrag_(item) ? html`
+                <button class="card-action" data-id="${item.id}"
+                    title="${item.showInFolderText || 'Show in folder'}"
+                    @click="${this.onCardShowClick_}">
+                  ${libraryIcon('folder')}
+                </button>
+              ` : ''}
+              <button class="card-action" data-id="${item.id}"
+                  title="Remove from list" @click="${this.onCardRemoveClick_}">
+                ${libraryIcon('close')}
+              </button>
+            </div>
+          `}
         </div>
       `)}
     </div>

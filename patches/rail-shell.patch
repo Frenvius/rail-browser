@@ -6413,7 +6413,7 @@ index a15445b..63a9389 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..17df5dd 100644
+index b7a5099..78ac095 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6949,7 +6949,7 @@ index b7a5099..17df5dd 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +570,2167 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +570,2261 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7710,7 +7710,10 @@ index b7a5099..17df5dd 100644
 +    if (this.dragDelegate_.consumeSuppressedClick()) {
 +      return;
 +    }
-+    const id = this.groupIdFrom_(e);
++    this.toggleTidyGroup_(this.groupIdFrom_(e));
++  }
++
++  private toggleTidyGroup_(id: string) {
 +    this.tidyGroups_.toggle(id);
 +    this.refreshSections_();
 +    this.updateNativeGroup_(
@@ -7735,13 +7738,17 @@ index b7a5099..17df5dd 100644
 +  protected onTidyGroupContextmenu_(e: MouseEvent) {
 +    e.preventDefault();
 +    const id = this.groupIdFrom_(e);
++    this.openTidyGroupMenu_(id, () => this.startGroupRename_(id));
++  }
++
++  private openTidyGroupMenu_(id: string, rename: () => void) {
 +    const group = this.tidyGroups_.byId(id);
 +    if (!group) {
 +      return;
 +    }
 +    openGroupMenu(group.name, (command: GroupCommand) => {
 +      if (command === 'rename-group') {
-+        this.startGroupRename_(id);
++        rename();
 +      } else if (command === 'save-group') {
 +        this.saveGroupAsFolder_(id);
 +      } else if (command === 'ungroup-group') {
@@ -7767,8 +7774,12 @@ index b7a5099..17df5dd 100644
 +  protected onTidyGroupNameBlur_(e: Event) {
 +    const input = e.target as HTMLInputElement;
 +    const id = this.editingGroup_;
-+    this.tidyGroups_.rename(id, input.value.trim());
 +    this.editingGroup_ = '';
++    this.renameTidyGroup_(id, input.value.trim());
++  }
++
++  private renameTidyGroup_(id: string, value: string) {
++    this.tidyGroups_.rename(id, value);
 +    this.refreshSections_();
 +    const name = this.tidyGroups_.byId(id)?.name;
 +    if (name) {
@@ -8010,6 +8021,51 @@ index b7a5099..17df5dd 100644
 +      }
 +    }
 +    this.pinnedTabs_.setFolder(entry.key, folderId);
++    this.refreshSections_();
++  }
++
++  private groupOnBoard_(id: string, spaceId: string, groupId: string): string {
++    const rowId = this.entryFor_(id) ? this.unpinTab_(id) : id;
++    const row = rowId ? this.spaces_.rowFor(rowId) : undefined;
++    if (!row) {
++      return '';
++    }
++    if (row.space !== spaceId) {
++      const target = this.targetFor(row.tabId || row.key);
++      if (target) {
++        this.moveToSpace_(target, spaceId);
++      }
++    }
++    this.regroup_(row.key, groupId);
++    return row.key;
++  }
++
++  private regroup_(key: string, groupId: string) {
++    const previous = this.spaces_.rowFor(key)?.group ?? '';
++    this.spaces_.setGroup(key, groupId);
++    const group = this.tidyGroups_.byId(groupId);
++    if (group && !group.expanded) {
++      this.toggleTidyGroup_(group.id);
++    }
++    if (previous && previous !== groupId &&
++        !this.spaces_.keysInGroup(previous).length) {
++      this.tidyGroups_.remove(previous);
++    }
++    this.refreshSections_();
++  }
++
++  private moveGroupToSpace_(groupId: string, spaceId: string) {
++    const group = this.tidyGroups_.byId(groupId);
++    if (!group || group.space === spaceId) {
++      return;
++    }
++    for (const id of this.spaces_.keysInGroup(groupId)) {
++      const target = this.targetFor(id);
++      if (target) {
++        this.moveToSpace_(target, spaceId);
++      }
++    }
++    this.tidyGroups_.moveTo(groupId, spaceId);
 +    this.refreshSections_();
 +  }
 +
@@ -8476,7 +8532,8 @@ index b7a5099..17df5dd 100644
 +  protected spaceBoard_(): Record<string, BoardColumn> {
 +    return this.libraryOpen_ && this.librarySection_ === 'spaces' ?
 +        spaceBoard(
-+            this.items_, this.pinnedTabs_, this.spaces_, this.folders_) :
++            this.items_, this.pinnedTabs_, this.spaces_, this.folders_,
++            this.tidyGroups_) :
 +        {};
 +  }
 +
@@ -8485,7 +8542,7 @@ index b7a5099..17df5dd 100644
 +  }
 +
 +  protected async onRailLibrarySpace_(e: CustomEvent<LibrarySpaceDetail>) {
-+    const {command, id, tab, to, folder, name, delta, x, y} = e.detail;
++    const {command, id, tab, to, folder, name, delta, x, y, ids} = e.detail;
 +    const spaceBar =
 +        this.shadowRoot.querySelector<SpaceBarElement>('#spaceBar');
 +    switch (command) {
@@ -8514,8 +8571,12 @@ index b7a5099..17df5dd 100644
 +        return;
 +      case 'move': {
 +        const target = this.targetFor(tab);
++        const key = this.spaces_.rowFor(tab)?.key ?? '';
 +        if (target) {
 +          this.moveToSpace_(target, to);
++        }
++        if (key) {
++          this.regroup_(key, '');
 +        }
 +        return;
 +      }
@@ -8543,6 +8604,39 @@ index b7a5099..17df5dd 100644
 +        return;
 +      case 'folder-menu':
 +        this.openFolderMenu_(
++            folder, () => this.library_()?.editFolder(folder));
++        return;
++      case 'new-group': {
++        const group = this.tidyGroups_.create(
++            id, `Group ${this.tidyGroups_.in(id).length + 1}`);
++        this.refreshSections_();
++        await this.updateComplete;
++        this.library_()?.editFolder(group.id);
++        return;
++      }
++      case 'group-tab':
++        this.groupOnBoard_(tab, to, folder);
++        return;
++      case 'move-group':
++        this.moveGroupToSpace_(folder, to);
++        return;
++      case 'arrange': {
++        const placed = tab ? this.groupOnBoard_(tab, id, folder) : '';
++        if (!tab) {
++          this.moveGroupToSpace_(folder, id);
++        }
++        this.spaces_.reorder(id, ids.map(one => one === tab ? placed : one));
++        this.refreshSections_();
++        return;
++      }
++      case 'toggle-group':
++        this.toggleTidyGroup_(folder);
++        return;
++      case 'rename-group':
++        this.renameTidyGroup_(folder, name.trim());
++        return;
++      case 'group-menu':
++        this.openTidyGroupMenu_(
 +            folder, () => this.library_()?.editFolder(folder));
 +        return;
 +      case 'file':
@@ -9636,6 +9730,15 @@ index c9e2a59..05268c5 100644
    chrome::ScopedTabbedBrowserDisplayer displayer(profile);
    BrowserWindowInterface* browser = displayer.browser_window_interface();
    if (browser->GetTabStripModel()->count() == 0) {
+@@ -160,7 +164,7 @@ void ExtensionInstallUIDesktop::OnInstallSuccess(
+               }
+               BrowserView* browser_view =
+                   BrowserView::GetBrowserViewForBrowser(browser_interface);
+-              if (!browser_view->toolbar()) {
++              if (!browser_view || !browser_view->toolbar()) {
+                 return;
+               }
+               ExtensionsToolbarDesktop* extensions_toolbar =
 diff --git a/chrome/browser/ui/extensions/extensions_menu_view_model.cc b/chrome/browser/ui/extensions/extensions_menu_view_model.cc
 index 29268b7..e4ff2c4 100644
 --- a/chrome/browser/ui/extensions/extensions_menu_view_model.cc

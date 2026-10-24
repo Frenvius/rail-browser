@@ -227,11 +227,16 @@ export function getHtml(this: RailLibraryElement) {
             `}
           </div>
           <div class="column-tabs" @click="${this.onColumnTabsClick_}">
-            ${this.columnRows_(space).map(row => row.kind === 'tab' ? html`
+            ${repeat(this.columnRows_(space), row => this.rowKey_(row),
+                     row => row.kind === 'tab' ? html`
               <div class="board-tab" data-id="${row.tab.id}"
-                  data-folder="${row.folder}" tabindex="0"
-                  title="${row.tab.title}" draggable="true"
-                  ?nested="${!!row.folder}"
+                  data-key="${space.id}/${this.rowKey_(row)}"
+                  data-folder="${row.folder}" data-group="${row.group}"
+                  tabindex="0" title="${row.tab.title}" draggable="true"
+                  ?nested="${!!(row.folder || row.group)}"
+                  ?loose="${row.loose}"
+                  @dragover="${this.onRowDragover_}"
+                  @drop="${this.onRowDrop_}"
                   ?dragging="${row.tab.id === this.draggedTab_}"
                   @click="${this.onBoardTabClick_}"
                   @keydown="${this.onBoardTabKeydown_}"
@@ -243,6 +248,7 @@ export function getHtml(this: RailLibraryElement) {
               </div>
             ` : row.kind === 'folder' ? html`
               <div class="board-folder" data-folder="${row.folder.id}"
+                  data-key="${space.id}/${this.rowKey_(row)}"
                   tabindex="0" title="${row.folder.name}"
                   aria-expanded="${row.folder.expanded}"
                   ?drop-target="${row.folder.id === this.dropFolder_}"
@@ -263,8 +269,39 @@ export function getHtml(this: RailLibraryElement) {
                   <span class="folder-count">${row.count}</span>
                 `}
               </div>
+            ` : row.kind === 'group' ? html`
+              <div class="board-folder board-group" data-folder="${row.group.id}"
+                  tabindex="0" title="${row.group.name}" draggable="true"
+                  aria-expanded="${row.group.expanded}"
+                  ?drop-target="${row.group.id === this.dropFolder_}"
+                  ?dragging="${row.group.id === this.draggedGroup_}"
+                  data-key="${space.id}/${this.rowKey_(row)}"
+                  @click="${this.onBoardGroupClick_}"
+                  @keydown="${this.onBoardTabKeydown_}"
+                  @contextmenu="${this.onBoardGroupContextmenu_}"
+                  @dragstart="${this.onBoardGroupDragstart_}"
+                  @dragend="${this.onBoardTabDragend_}"
+                  @dragover="${this.onGroupDragover_}"
+                  @drop="${this.onGroupDrop_}">
+                ${row.icon ? html`
+                  <img class="favicon" alt="" draggable="false"
+                      src="${this.tabFavicon_(row.icon)}">
+                ` : libraryIcon('group')}
+                ${row.group.id === this.editingFolder_ ? html`
+                  <input id="folderInput" class="folder-name"
+                      spellcheck="false" aria-label="Group name"
+                      .value="${row.group.name}"
+                      @keydown="${this.onFolderNameKeydown_}"
+                      @blur="${this.onFolderNameBlur_}">
+                ` : html`
+                  <span class="folder-name">${row.group.name}</span>
+                  <span class="folder-count">${row.count}</span>
+                `}
+                <cr-icon class="group-chevron" icon="cr:keyboard-arrow-down">
+                </cr-icon>
+              </div>
             ` : html`
-              <div class="divider">
+              <div class="divider" data-key="${space.id}/${this.rowKey_(row)}">
                 <span class="rule"></span>
                 <button class="clear" title="Archive today's tabs"
                     @click="${this.onColumnClearClick_}">
@@ -288,6 +325,11 @@ export function getHtml(this: RailLibraryElement) {
                     aria-label="New folder in ${space.name}"
                     @click="${this.onNewFolderClick_}">
                   ${libraryIcon('folder')}
+                </button>
+                <button class="action" title="New group"
+                    aria-label="New group in ${space.name}"
+                    @click="${this.onNewGroupClick_}">
+                  ${libraryIcon('group')}
                 </button>
               `}
               <button class="action" title="Space options"

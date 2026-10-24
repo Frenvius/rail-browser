@@ -102,6 +102,16 @@ export class Folders {
     this.onChange_();
   }
 
+  moveTo(id: string, spaceId: string) {
+    const folder = this.byId(id);
+    if (!folder || folder.space === spaceId) {
+      return;
+    }
+    folder.space = spaceId;
+    folder.after = '';
+    this.onChange_();
+  }
+
   remove(id: string) {
     this.folders_ = this.folders_.filter(folder => folder.id !== id);
     this.onChange_();

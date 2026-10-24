@@ -454,6 +454,7 @@ test('the space board lists every space with its pinned and today tabs', () => {
   spaces.adopt('live', 'https://example.test/');
   spaces.adopt('kept', 'https://example.test/');
   spaces.adopt('filed', 'https://example.test/');
+  spaces.adopt('grouped', 'https://example.test/');
   const pinned = new PinnedTabs(() => {});
   const pin = pinned.pin(tab('kept'), 'a');
   const filed = pinned.pin(tab('filed'), 'a');
@@ -461,20 +462,32 @@ test('the space board lists every space with its pinned and today tabs', () => {
   const folder = folders.create('a', 'Work');
   const empty = folders.create('b', 'Empty');
   pinned.setFolder(filed.key, folder.id);
-  const items = ['live', 'kept', 'filed'].map(id => ({type: 'tab', id,
-    tabData: {...tab(id), title: `${id} now`}}));
-  const board = spaceBoard(items, pinned, spaces, folders);
-  expect(board.a.pinned.map((one: any) => one.kind === 'row' ?
+  const tidyGroups = new Folders(() => {});
+  const group = tidyGroups.create('a', 'Research');
+  spaces.setGroup(spaces.byTab('grouped').key, group.id);
+  const items = ['live', 'kept', 'filed', 'grouped'].map(id => ({type: 'tab',
+    id, tabData: {...tab(id), title: `${id} now`}}));
+  const board = spaceBoard(items, pinned, spaces, folders, tidyGroups);
+  const layout = (entries: any[]) => entries.map(one => one.kind === 'row' ?
       [one.row.id, one.row.title] :
-      [one.section.folder.name, one.section.rows.map((row: any) => row.id)]))
+      [one.section.folder.name, one.section.rows.map((row: any) => row.id)]);
+  expect(layout(board.a.pinned))
       .toEqual([[pin.key, 'kept now'], ['Work', [filed.key]]]);
-  expect(board.a.today.map((one: any) => [one.id, one.title]))
-      .toEqual([['live', 'live now']]);
+  expect(layout(board.a.today))
+      .toEqual([['live', 'live now'], ['Research', ['grouped']]]);
   expect(board.b.pinned)
       .toEqual([{kind: 'folder', section: {folder: empty, rows: []}}]);
-  expect(board.b.today.map((one: any) => one.url))
+  expect(board.b.today.map((one: any) => one.row.url))
       .toEqual(['https://asleep.test/']);
-  expect(board.b.today[0].id).toBe(spaces.rowsIn('b')[0].key);
+  expect(board.b.today[0].row.id).toBe(spaces.rowsIn('b')[0].key);
+  const spare = tidyGroups.create('a', 'Spare');
+  tidyGroups.moveTo(spare.id, 'b');
+  const moved = spaceBoard(items, pinned, spaces, folders, tidyGroups);
+  expect(layout(moved.a.today))
+      .toEqual([['live', 'live now'], ['Research', ['grouped']]]);
+  expect(layout(moved.b.today))
+      .toEqual([[spaces.rowsIn('b')[0].key, 'https://asleep.test/'],
+                ['Spare', []]]);
 });
 
 test('space shortcuts address spaces by position', () => {

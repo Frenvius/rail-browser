@@ -336,6 +336,18 @@ export class SpaceBarElement extends CrLitElement {
     }
   }
 
+  protected onCardShowClick_(e: Event) {
+    e.stopPropagation();
+    downloadStatus().handler.show(
+        (e.currentTarget as HTMLElement).dataset['id'] ?? '');
+  }
+
+  protected onCardRemoveClick_(e: Event) {
+    e.stopPropagation();
+    downloadStatus().handler.remove(
+        (e.currentTarget as HTMLElement).dataset['id'] ?? '');
+  }
+
   protected onCardRowDragstart_(e: DragEvent) {
     e.preventDefault();
     const id = (e.currentTarget as HTMLElement).dataset['id'] ?? '';

@@ -12,6 +12,7 @@ import {getCss} from './library.css.js';
 import {getHtml} from './library.html.js';
 import type {LibraryIcon} from './library_icons.js';
 import {INCOGNITO} from './sidebar_state.js';
+import type {FolderSectionOf, PinnedLayout} from './sections.js';
 import type {BoardColumn, BoardTab} from './space_board.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_PROFILE_NAME, spaceHex} from './spaces.js';
@@ -20,9 +21,10 @@ import {archivedTabs, archiveHoursFor, groupByDay, matchArchived} from './tab_ar
 
 export type LibrarySection = 'downloads'|'spaces'|'archive';
 
-export type LibrarySpaceCommand = 'clear'|'create'|'file'|'folder-menu'|
-    'icon'|'menu'|'move'|'new-folder'|'open'|'profile'|'rename'|
-    'rename-folder'|'reorder'|'select'|'theme'|'toggle-folder';
+export type LibrarySpaceCommand = 'arrange'|'clear'|'create'|'file'|
+    'folder-menu'|'group-menu'|'group-tab'|'icon'|'menu'|'move'|'move-group'|
+    'new-folder'|'new-group'|'open'|'profile'|'rename'|'rename-folder'|
+    'rename-group'|'reorder'|'select'|'theme'|'toggle-folder'|'toggle-group';
 
 export interface LibrarySpaceDetail {
   command: LibrarySpaceCommand;
@@ -34,15 +36,23 @@ export interface LibrarySpaceDetail {
   delta: number;
   x: number;
   y: number;
+  ids: string[];
 }
 
 export type BoardRow = {
   kind: 'tab',
   tab: BoardTab,
   folder: string,
+  group: string,
+  loose: boolean,
 }|{
   kind: 'folder',
   folder: Folder,
+  count: number,
+}|{
+  kind: 'group',
+  group: Folder,
+  icon: BoardTab|undefined,
   count: number,
 }|{
   kind: 'divider',
@@ -79,6 +89,8 @@ const BOARD_COLUMN_PITCH = 232;
 const BOARD_TRAIL = 76;
 const DRAG_THRESHOLD = 4;
 const TAB_DRAG_TYPE = 'application/x-rail-board-tab';
+const GROUP_DRAG_TYPE = 'application/x-rail-board-group';
+const ROW_SLIDE_MS = 180;
 const EMPTY_COLUMN: BoardColumn = {pinned: [], today: []};
 const CONFIRM_MS = 3000;
 const KB = 1024;
@@ -146,6 +158,9 @@ export class RailLibraryElement extends CrLitElement {
       dropTarget_: {type: String, state: true},
       editingFolder_: {type: String, state: true},
       dropFolder_: {type: String, state: true},
+      draggedGroup_: {type: String, state: true},
+      dropRow_: {type: String, state: true},
+      dropAfter_: {type: Boolean, state: true},
     };
   }
 
@@ -168,8 +183,15 @@ export class RailLibraryElement extends CrLitElement {
   protected accessor dropTarget_ = '';
   protected accessor editingFolder_ = '';
   protected accessor dropFolder_ = '';
+  protected accessor draggedGroup_ = '';
+  protected accessor dropRow_ = '';
+  protected accessor dropAfter_ = false;
+  private dropSpace_ = '';
+  private dropHeader_ = false;
+  private rowTops_: Map<string, number>|null = null;
   private dragSource_ = '';
   private dragFolder_ = '';
+  private dragGroup_ = '';
   private columnDrag_: ColumnDrag|null = null;
   private list_: DownloadList|null = null;
   private stopList_: (() => void)|null = null;
@@ -236,6 +258,41 @@ export class RailLibraryElement extends CrLitElement {
       this.days_ =
           groupByDay(matchArchived(this.archived_, this.query_), Date.now());
     }
+    if (this.open && this.section === 'spaces' &&
+        (changedProperties.has('board') ||
+         changedPrivateProperties.has('dropRow_') ||
+         changedPrivateProperties.has('dropAfter_'))) {
+      this.rowTops_ = this.measureRows_();
+    }
+  }
+
+  private measureRows_(): Map<string, number> {
+    const tops = new Map<string, number>();
+    for (const row of this.shadowRoot.querySelectorAll<HTMLElement>(
+             '.column-tabs > [data-key]')) {
+      tops.set(row.dataset['key']!, row.getBoundingClientRect().top);
+    }
+    return tops;
+  }
+
+  private slideRows_() {
+    const before = this.rowTops_;
+    this.rowTops_ = null;
+    if (!before?.size ||
+        matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    for (const row of this.shadowRoot.querySelectorAll<HTMLElement>(
+             '.column-tabs > [data-key]')) {
+      row.getAnimations().forEach(animation => animation.cancel());
+      const top = before.get(row.dataset['key']!);
+      const shift = top === undefined ? 0 : top - row.getBoundingClientRect().top;
+      if (Math.abs(shift) >= 1) {
+        row.animate(
+            [{transform: `translateY(${shift}px)`}, {transform: 'none'}],
+            {duration: ROW_SLIDE_MS, easing: 'cubic-bezier(.2, 0, 0, 1)'});
+      }
+    }
   }
 
   override firstUpdated() {
@@ -246,6 +303,7 @@ export class RailLibraryElement extends CrLitElement {
 
   override updated(changedProperties: PropertyValues<this>) {
     super.updated(changedProperties);
+    this.slideRows_();
     if (changedProperties.has('section') || changedProperties.has('open') ||
         changedProperties.has('spaces')) {
       this.fire<LibraryChangedDetail>(
@@ -668,26 +726,39 @@ export class RailLibraryElement extends CrLitElement {
   }
 
   protected columnRows_(space: Space): BoardRow[] {
-    const {pinned, today} = this.board[space.id] ?? EMPTY_COLUMN;
+    const {pinned} = this.board[space.id] ?? EMPTY_COLUMN;
+    const today = this.previewToday_(space.id);
+    const tabRow = (tab: BoardTab, folder = '', group = '', loose = false) =>
+        ({kind: 'tab' as const, tab, folder, group, loose});
     const rows = pinned.flatMap((entry): BoardRow[] => {
       if (entry.kind === 'row') {
-        return [{kind: 'tab', tab: entry.row, folder: ''}];
+        return [tabRow(entry.row)];
       }
       const {folder, rows: tabs} = entry.section;
       return [
         {kind: 'folder', folder, count: tabs.length},
-        ...folder.expanded ?
-            tabs.map(tab => ({kind: 'tab' as const, tab, folder: folder.id})) :
+        ...folder.expanded ? tabs.map(tab => tabRow(tab, folder.id)) : [],
+      ];
+    });
+    const loose = today.flatMap((entry): BoardRow[] => {
+      if (entry.kind === 'row') {
+        return [tabRow(entry.row, '', '', true)];
+      }
+      const {folder: group, rows: tabs} = entry.section;
+      return [
+        {kind: 'group', group, icon: tabs[0], count: tabs.length},
+        ...group.expanded ?
+            tabs.map(tab => tabRow(tab, '', group.id, true)) :
             [],
       ];
     });
-    return today.length ?
-        [
-          ...rows,
-          {kind: 'divider'},
-          ...today.map(tab => ({kind: 'tab' as const, tab, folder: ''})),
-        ] :
-        rows;
+    return loose.length ? [...rows, {kind: 'divider'}, ...loose] : rows;
+  }
+
+  private isGroup_(id: string): boolean {
+    return Object.values(this.board).some(
+        column => column.today.some(
+            entry => entry.kind === 'folder' && entry.section.folder.id === id));
   }
 
   protected profileName_(space: Space): string {
@@ -758,6 +829,10 @@ export class RailLibraryElement extends CrLitElement {
     this.fireSpace_('new-folder', this.spaceOf_(e));
   }
 
+  protected onNewGroupClick_(e: Event) {
+    this.fireSpace_('new-group', this.spaceOf_(e));
+  }
+
   private folderOf_(e: Event): string {
     return (e.currentTarget as HTMLElement).dataset['folder'] ?? '';
   }
@@ -777,6 +852,21 @@ export class RailLibraryElement extends CrLitElement {
     this.fireSpace_(
         'folder-menu', this.spaceOf_(e),
         {folder: this.folderOf_(e), x: e.clientX, y: e.clientY});
+  }
+
+  protected onBoardGroupClick_(e: Event) {
+    const folder = this.folderOf_(e);
+    if (folder !== this.editingFolder_) {
+      this.fireSpace_('toggle-group', this.spaceOf_(e), {folder});
+    }
+  }
+
+  protected onBoardGroupContextmenu_(e: MouseEvent) {
+    e.preventDefault();
+    if (INCOGNITO) {
+      return;
+    }
+    this.fireSpace_('group-menu', this.spaceOf_(e), {folder: this.folderOf_(e)});
   }
 
   protected onFolderNameKeydown_(e: KeyboardEvent) {
@@ -816,7 +906,9 @@ export class RailLibraryElement extends CrLitElement {
         '';
     this.editingFolder_ = '';
     if (commit && name.trim()) {
-      this.fireSpace_('rename-folder', '', {folder, name});
+      this.fireSpace_(
+          this.isGroup_(folder) ? 'rename-group' : 'rename-folder', '',
+          {folder, name});
     }
   }
 
@@ -884,30 +976,55 @@ export class RailLibraryElement extends CrLitElement {
     e.dataTransfer.setData(TAB_DRAG_TYPE, id);
     this.dragSource_ = this.spaceOf_(e);
     this.dragFolder_ = this.folderOf_(e);
+    this.dragGroup_ = (e.currentTarget as HTMLElement).dataset['group'] ?? '';
     this.draggedTab_ = id;
+  }
+
+  protected onBoardGroupDragstart_(e: DragEvent) {
+    e.stopPropagation();
+    const group = this.folderOf_(e);
+    if (INCOGNITO || !e.dataTransfer || group === this.editingFolder_) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(GROUP_DRAG_TYPE, group);
+    this.dragSource_ = this.spaceOf_(e);
+    this.draggedGroup_ = group;
   }
 
   protected onBoardTabDragend_() {
     this.dragSource_ = '';
     this.dragFolder_ = '';
+    this.dragGroup_ = '';
     this.draggedTab_ = '';
+    this.draggedGroup_ = '';
+    this.dropRow_ = '';
     this.dropTarget_ = '';
     this.dropFolder_ = '';
   }
 
   protected onColumnDragover_(e: DragEvent) {
-    if (!this.draggedTab_) {
+    if (!this.draggedTab_ && !this.draggedGroup_) {
       return;
     }
     e.preventDefault();
     e.stopPropagation();
     const space = this.spaceOf_(e);
-    const accepts = space !== this.dragSource_ || !!this.dragFolder_;
+    if (this.dropRow_ && this.dropSpace_ === space) {
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+      }
+      return;
+    }
+    const accepts = space !== this.dragSource_ ||
+        (!!this.draggedTab_ && (!!this.dragFolder_ || !!this.dragGroup_));
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = accepts ? 'move' : 'none';
     }
     this.dropTarget_ = accepts ? space : '';
     this.dropFolder_ = '';
+    this.dropRow_ = '';
   }
 
   protected onFolderDragover_(e: DragEvent) {
@@ -922,10 +1039,14 @@ export class RailLibraryElement extends CrLitElement {
       e.dataTransfer.dropEffect = accepts ? 'move' : 'none';
     }
     this.dropTarget_ = '';
+    this.dropRow_ = '';
     this.dropFolder_ = accepts ? folder : '';
   }
 
   protected onFolderDrop_(e: DragEvent) {
+    if (!this.draggedTab_) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     const folder = this.folderOf_(e);
@@ -938,12 +1059,222 @@ export class RailLibraryElement extends CrLitElement {
     }
   }
 
+  protected onGroupDragover_(e: DragEvent) {
+    if (this.draggedGroup_) {
+      this.onRowDragover_(e);
+      return;
+    }
+    if (!this.draggedTab_) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const group = this.folderOf_(e);
+    const accepts = group !== this.dragGroup_;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = accepts ? 'move' : 'none';
+    }
+    this.dropTarget_ = '';
+    this.dropRow_ = '';
+    this.dropFolder_ = accepts ? group : '';
+  }
+
+  protected onGroupDrop_(e: DragEvent) {
+    if (this.draggedGroup_) {
+      this.onRowDrop_(e);
+      return;
+    }
+    if (!this.draggedTab_) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const folder = this.folderOf_(e);
+    const tab = this.draggedTab_;
+    const from = this.dragGroup_;
+    const to = this.spaceOf_(e);
+    this.onBoardTabDragend_();
+    if (folder !== from) {
+      this.fireSpace_('group-tab', to, {tab, to, folder});
+    }
+  }
+
+  private rowSlot_(e: Event): string {
+    const row = e.currentTarget as HTMLElement;
+    if (row.classList.contains('board-group')) {
+      return row.dataset['folder'] ?? '';
+    }
+    return row.hasAttribute('loose') ? row.dataset['id'] ?? '' : '';
+  }
+
+  protected onRowDragover_(e: DragEvent) {
+    const target = this.rowSlot_(e);
+    if ((!this.draggedTab_ && !this.draggedGroup_) || !target ||
+        target === this.draggedTab_ || target === this.draggedGroup_ ||
+        (!!this.draggedGroup_ &&
+         (e.currentTarget as HTMLElement).dataset['group'] ===
+             this.draggedGroup_)) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move';
+    }
+    const row = e.currentTarget as HTMLElement;
+    const header = row.classList.contains('board-group');
+    const space = this.spaceOf_(e);
+    const slots = this.looseSlots_(space);
+    const from = this.draggedGroup_ ?
+        slots.findIndex(slot => slot.group === this.draggedGroup_) :
+        slots.findIndex(slot => slot.id === this.draggedTab_);
+    const to = slots.findIndex(
+        slot => header ? slot.group === target : slot.id === target);
+    const rect = row.getBoundingClientRect();
+    this.dropTarget_ = '';
+    this.dropFolder_ = '';
+    this.dropSpace_ = space;
+    this.dropHeader_ = header;
+    this.dropRow_ = target;
+    this.dropAfter_ = from >= 0 && to >= 0 ?
+        to > from :
+        e.clientY > rect.top + rect.height / 2;
+  }
+
+  protected onRowDrop_(e: DragEvent) {
+    if (!this.dropRow_ || (!this.draggedTab_ && !this.draggedGroup_)) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    this.commitArrange_();
+  }
+
+  private commitArrange_() {
+    const space = this.dropSpace_;
+    const tab = this.draggedTab_;
+    const group = this.draggedGroup_;
+    const {ids, joins} =
+        this.dropOrder_(space, this.dropRow_, this.dropHeader_);
+    this.fireSpace_(
+        'arrange', space, {tab, to: space, folder: group || joins, ids});
+    this.onBoardTabDragend_();
+  }
+
+  private previewToday_(space: string): Array<PinnedLayout<BoardTab>> {
+    const today = this.board[space]?.today ?? [];
+    if (!this.dropRow_ || this.dropSpace_ !== space) {
+      return today;
+    }
+    const tabs = new Map<string, BoardTab>();
+    const groups = new Map<string, Folder>();
+    const groupOf = new Map<string, string>();
+    for (const column of [this.board[space], this.board[this.dragSource_]]) {
+      for (const entry of column?.pinned ?? []) {
+        for (const tab of entry.kind === 'row' ? [entry.row] :
+                                                 entry.section.rows) {
+          tabs.set(tab.id, tab);
+        }
+      }
+      for (const entry of column?.today ?? []) {
+        if (entry.kind === 'row') {
+          tabs.set(entry.row.id, entry.row);
+          continue;
+        }
+        groups.set(entry.section.folder.id, entry.section.folder);
+        for (const tab of entry.section.rows) {
+          tabs.set(tab.id, tab);
+          groupOf.set(tab.id, entry.section.folder.id);
+        }
+      }
+    }
+    const {ids, joins} =
+        this.dropOrder_(space, this.dropRow_, this.dropHeader_);
+    if (this.draggedTab_) {
+      groupOf.set(this.draggedTab_, joins);
+    }
+    const layout: Array<PinnedLayout<BoardTab>> = [];
+    const sections = new Map<string, FolderSectionOf<BoardTab>>();
+    for (const id of ids) {
+      const tab = tabs.get(id);
+      const group = groups.get(groupOf.get(id) ?? '');
+      if (!tab) {
+        continue;
+      }
+      if (!group) {
+        layout.push({kind: 'row', row: tab});
+        continue;
+      }
+      let section = sections.get(group.id);
+      if (!section) {
+        section = {folder: group, rows: []};
+        sections.set(group.id, section);
+        layout.push({kind: 'folder', section});
+      }
+      section.rows.push(tab);
+    }
+    for (const entry of today) {
+      if (entry.kind === 'folder' && !sections.has(entry.section.folder.id)) {
+        layout.push(entry);
+      }
+    }
+    return layout;
+  }
+
+  protected rowKey_(row: BoardRow): string {
+    switch (row.kind) {
+      case 'tab':
+        return `${row.loose ? 'loose' : 'pinned'}:${row.tab.id}`;
+      case 'folder':
+        return `folder:${row.folder.id}`;
+      case 'group':
+        return `group:${row.group.id}`;
+      default:
+        return 'divider';
+    }
+  }
+
+  private looseSlots_(space: string): Array<{id: string, group: string}> {
+    return (this.board[space]?.today ?? [])
+        .flatMap(entry => entry.kind === 'row' ?
+                     [{id: entry.row.id, group: ''}] :
+                     entry.section.rows.map(
+                         tab => ({id: tab.id, group: entry.section.folder.id})));
+  }
+
+  private dropOrder_(space: string, target: string, header: boolean):
+      {ids: string[], joins: string} {
+    const group = this.draggedGroup_;
+    const moving = group ?
+        this.looseSlots_(this.dragSource_).filter(slot => slot.group === group) :
+        [{id: this.draggedTab_, group: ''}];
+    const movingIds = new Set(moving.map(slot => slot.id));
+    const rest =
+        this.looseSlots_(space).filter(slot => !movingIds.has(slot.id));
+    const targetGroup = header ?
+        target :
+        rest.find(slot => slot.id === target)?.group ?? '';
+    const spans = (slot: {id: string, group: string}) =>
+        header || (group && targetGroup) ? slot.group === targetGroup :
+                                           slot.id === target;
+    const hits = rest.flatMap((slot, index) => spans(slot) ? [index] : []);
+    const index = !hits.length ? rest.length :
+        this.dropAfter_        ? hits[hits.length - 1]! + 1 :
+                                 hits[0]!;
+    return {
+      ids: [...rest.slice(0, index), ...moving, ...rest.slice(index)].map(
+          slot => slot.id),
+      joins: header ? '' : targetGroup,
+    };
+  }
+
   protected onColumnDragleave_(e: DragEvent) {
     const column = e.currentTarget as HTMLElement;
     if (column.contains(e.relatedTarget as Node | null)) {
       return;
     }
     this.dropFolder_ = '';
+    this.dropRow_ = '';
     if (this.dropTarget_ === column.dataset['id']) {
       this.dropTarget_ = '';
     }
@@ -953,10 +1284,19 @@ export class RailLibraryElement extends CrLitElement {
     e.preventDefault();
     e.stopPropagation();
     const to = this.spaceOf_(e);
+    if (this.dropRow_ && this.dropSpace_ === to) {
+      this.commitArrange_();
+      return;
+    }
     const tab = this.draggedTab_;
+    const group = this.draggedGroup_;
     const from = this.dragSource_;
     const filed = !!this.dragFolder_;
+    const grouped = !!this.dragGroup_;
     this.onBoardTabDragend_();
+    if (group && to && to !== from) {
+      this.fireSpace_('move-group', from, {folder: group, to});
+    }
     if (!tab || !to) {
       return;
     }
@@ -964,6 +1304,8 @@ export class RailLibraryElement extends CrLitElement {
       this.fireSpace_('move', from, {tab, to});
     } else if (filed) {
       this.fireSpace_('file', to, {tab, to, folder: ''});
+    } else if (grouped) {
+      this.fireSpace_('group-tab', to, {tab, to, folder: ''});
     }
   }
 
@@ -1076,6 +1418,7 @@ export class RailLibraryElement extends CrLitElement {
       delta: 0,
       x: 0,
       y: 0,
+      ids: [],
       ...extra,
     });
   }

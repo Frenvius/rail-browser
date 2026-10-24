@@ -2,8 +2,8 @@ import {html} from '//resources/lit/v3_0/lit.rollup.js';
 import type {TemplateResult} from '//resources/lit/v3_0/lit.rollup.js';
 
 export type LibraryIcon = 'archive'|'back'|'clear'|'close'|'download'|
-    'filter'|'folder'|'grip'|'more'|'pause'|'pencil'|'play'|'plus'|'profile'|
-    'retry'|'search'|'spaces';
+    'filter'|'folder'|'grip'|'group'|'more'|'pause'|'pencil'|'play'|'plus'|
+    'profile'|'retry'|'search'|'spaces';
 
 const ICONS: Record<LibraryIcon, TemplateResult> = {
   archive: html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -45,6 +45,10 @@ const ICONS: Record<LibraryIcon, TemplateResult> = {
     <path d="m9 18 3 3 3-3"></path>
     <path d="m6 9-3 3 3 3"></path>
     <path d="m18 9 3 3-3 3"></path>
+  </svg>`,
+  group: html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="3" y="8" width="13" height="13" rx="2"></rect>
+    <path d="M8 4h10a3 3 0 0 1 3 3v10"></path>
   </svg>`,
   more: html`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
     <circle cx="5" cy="12" r="1"></circle>

@@ -176,6 +176,61 @@ cr-dialog {
   font-size: 11px;
 }
 
+.card-row[removed] .card-name {
+  color: var(--rail-text-label, #808098);
+  text-decoration: line-through;
+}
+
+.card-row[removed] .card-icon {
+  opacity: .5;
+}
+
+.card-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.card-action {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--rail-text-label, #808098);
+  cursor: pointer;
+  display: flex;
+  height: 26px;
+  justify-content: center;
+  padding: 0;
+  transition: background-color 120ms ease, color 120ms ease,
+      opacity 140ms ease;
+  width: 26px;
+}
+
+.card-action .icon {
+  fill: none;
+  height: 14px;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 14px;
+}
+
+.card-action:hover {
+  background: var(--rail-hover, rgb(255 255 255 / 10%));
+  color: var(--rail-text, #f0f0ff);
+}
+
+.card-action:focus-visible {
+  outline: 2px solid var(--rail-accent, #7c5cfc);
+  outline-offset: -2px;
+}
+
+.card-row:not(:hover, :focus-within) .card-action {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #card,
   .card-row {
