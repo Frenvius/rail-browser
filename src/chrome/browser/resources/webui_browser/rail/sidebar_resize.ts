@@ -11,6 +11,8 @@ const ICONS_ONLY_ATTRIBUTE = 'sidebar-icons-only';
 const WIDTH_PROPERTY = '--rail-sidebar-width';
 const SLIDE_MS = 180;
 const SLIDE_EASING = 'cubic-bezier(.2, 0, 0, 1)';
+const LIBRARY_ATTRIBUTE = 'library-open';
+const LIBRARY_WIDTH = 400;
 
 function slidingElements(host: HTMLElement): HTMLElement[] {
   const titlebar = host.shadowRoot?.querySelector('.titlebarDiv');
@@ -49,15 +51,48 @@ function slideRegionEdge(region: HTMLElement, beforeLeft: number) {
 }
 
 export function toggleSidebarCollapsed(host: HTMLElement) {
+  slideSidebar(host, () => {
+    const collapsed = !host.hasAttribute(COLLAPSED_ATTRIBUTE);
+    host.toggleAttribute(COLLAPSED_ATTRIBUTE, collapsed);
+    localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+  });
+}
+
+let libraryRestore: {width: string, collapsed: boolean}|null = null;
+
+export function setLibraryOpen(host: HTMLElement, open: boolean) {
+  if (host.hasAttribute(LIBRARY_ATTRIBUTE) === open) {
+    return;
+  }
+  slideSidebar(host, () => {
+    host.toggleAttribute(LIBRARY_ATTRIBUTE, open);
+    if (open) {
+      libraryRestore = {
+        width: host.style.getPropertyValue(WIDTH_PROPERTY),
+        collapsed: host.hasAttribute(COLLAPSED_ATTRIBUTE),
+      };
+      host.removeAttribute(COLLAPSED_ATTRIBUTE);
+      applyWidth(host, LIBRARY_WIDTH);
+      return;
+    }
+    if (libraryRestore?.width) {
+      host.style.setProperty(WIDTH_PROPERTY, libraryRestore.width);
+    } else {
+      host.style.removeProperty(WIDTH_PROPERTY);
+    }
+    host.toggleAttribute(COLLAPSED_ATTRIBUTE, !!libraryRestore?.collapsed);
+    libraryRestore = null;
+  });
+}
+
+function slideSidebar(host: HTMLElement, change: () => void) {
   settleRegionSlide?.();
   const region = host.shadowRoot?.getElementById('contentRegion');
   const regionLeft = region?.getBoundingClientRect().left ?? 0;
   const sliding = slidingElements(host);
   const before = sliding.map(element => element.getBoundingClientRect().left);
 
-  const collapsed = !host.hasAttribute(COLLAPSED_ATTRIBUTE);
-  host.toggleAttribute(COLLAPSED_ATTRIBUTE, collapsed);
-  localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+  change();
 
   if (region) {
     slideRegionEdge(region, regionLeft);

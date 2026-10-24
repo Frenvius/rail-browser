@@ -448,3 +448,109 @@ test('space shortcuts address spaces by position', () => {
   runCommand('select-space:last', host);
   expect(picked).toEqual([0, 7, -1]);
 });
+
+const memoryStore = () => {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => void values.set(key, value),
+  };
+};
+
+test('closed tabs land in the archive newest first, once per url and space', () => {
+  const ArchiveStore = load('tab_archive', 'ArchiveStore');
+  let now = 1_000;
+  const archive = new ArchiveStore(memoryStore(), () => now);
+  const closed = (id: string, url: string, space = 's') =>
+      ({id, url, title: id, favicon: '', space});
+  archive.add([closed('a', 'https://a.test/')]);
+  now = 2_000;
+  archive.add([closed('b', 'https://b.test/'), closed('c', 'https://a.test/')]);
+  expect(archive.list().map((tab: any) => tab.id)).toEqual(['b', 'c']);
+  archive.add([closed('d', 'https://a.test/', 'other')]);
+  expect(archive.list().map((tab: any) => tab.id)).toEqual(['d', 'b', 'c']);
+  expect(archive.take('b').url).toBe('https://b.test/');
+  expect(archive.take('b')).toBeUndefined();
+  expect(archive.list().map((tab: any) => tab.id)).toEqual(['d', 'c']);
+});
+
+test('the archive drops month-old entries and survives a corrupt store', () => {
+  const ArchiveStore = load('tab_archive', 'ArchiveStore');
+  const store = memoryStore();
+  let now = 0;
+  const archive = new ArchiveStore(store, () => now);
+  archive.add([{id: 'old', url: 'https://old.test/', title: '', favicon: '',
+    space: 's'}]);
+  now = 31 * 24 * 60 * 60 * 1000;
+  expect(archive.list()).toEqual([]);
+  store.setItem('rail.archivedTabs', '{broken');
+  expect(archive.list()).toEqual([]);
+});
+
+test('untouched rows archive after the configured hours', () => {
+  const TabArchive = load('tab_archive', 'TabArchive');
+  const hour = 60 * 60 * 1000;
+  let now = 0;
+  let rows = [{key: 'a', url: ''}, {key: 'b', url: ''}];
+  const archived: string[][] = [];
+  const clock = new TabArchive(
+      memoryStore(), () => rows, (keys: string[]) => archived.push(keys),
+      () => now);
+  clock.setHours(12);
+  clock.tick();
+  expect(archived).toEqual([]);
+  now = 11 * hour;
+  clock.touch('b');
+  clock.tick();
+  expect(archived).toEqual([]);
+  now = 12 * hour;
+  clock.tick();
+  expect(archived).toEqual([['a']]);
+  rows = [{key: 'b', url: ''}];
+  now = 22 * hour;
+  clock.setHours(0);
+  clock.tick();
+  now = 40 * hour;
+  clock.setHours(12);
+  clock.tick();
+  expect(archived).toEqual([['a']]);
+});
+
+test('rows the candidate pass keeps busy are not archived', () => {
+  const TabArchive = load('tab_archive', 'TabArchive');
+  const hour = 60 * 60 * 1000;
+  let now = 0;
+  const archived: string[][] = [];
+  const store = memoryStore();
+  const seen = () => JSON.parse(store.getItem('rail.tabSeen') ?? '{}');
+  const clock: any = new TabArchive(
+      store, () => {
+        clock.touch('playing');
+        return [{key: 'idle', url: ''}];
+      },
+      (keys: string[]) => archived.push(keys), () => now);
+  clock.tick();
+  expect(seen()).toEqual({playing: 0, idle: 0});
+  now = 13 * hour;
+  clock.tick();
+  expect(archived).toEqual([['idle']]);
+  expect(seen()).toEqual({playing: 13 * hour});
+});
+
+test('archived tabs group by day', () => {
+  const groupByDay = load('tab_archive', 'groupByDay');
+  const noon = new Date(2026, 9, 23, 12).getTime();
+  const at = (id: string, time: number) => ({id, archivedAt: time});
+  const day = 24 * 60 * 60 * 1000;
+  const days = groupByDay(
+      [at('now', noon), at('last-night', noon - 13 * 60 * 60 * 1000),
+       at('tuesday', noon - 3 * day), at('ancient', noon - 40 * day)],
+      noon);
+  expect(days.map((group: any) => [group.label,
+    group.tabs.map((tab: any) => tab.id)])).toEqual([
+    ['Today', ['now']],
+    ['Yesterday', ['last-night']],
+    ['This Week', ['tuesday']],
+    ['Older', ['ancient']],
+  ]);
+});

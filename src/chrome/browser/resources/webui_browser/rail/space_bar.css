@@ -9,8 +9,182 @@
 .dot,
 #more,
 #add,
+#library,
+#card,
 cr-dialog {
   -webkit-app-region: no-drag;
+}
+
+:host {
+  position: relative;
+}
+
+#library {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--rail-text-label, #808098);
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 25px;
+  height: 25px;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  transition: background-color 120ms ease, color 120ms ease;
+  width: 25px;
+}
+
+#library:hover {
+  background: var(--rail-elevated, #282840);
+  color: var(--rail-text-muted, #c0c0d8);
+}
+
+#library:focus-visible {
+  outline: 2px solid var(--rail-accent, #7c5cfc);
+  outline-offset: 2px;
+}
+
+#library .icon {
+  fill: none;
+  height: 14px;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 14px;
+}
+
+.ring,
+.card-ring {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 2;
+  transform: rotate(-90deg);
+}
+
+.ring {
+  height: 25px;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 25px;
+}
+
+.ring .track,
+.card-ring .track {
+  stroke: rgb(255 255 255 / 12%);
+}
+
+.ring .fill,
+.card-ring .fill {
+  stroke: var(--rail-text, #f0f0ff);
+  transition: stroke-dashoffset 240ms linear;
+}
+
+.ring[indeterminate] {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+
+#card {
+  background: color-mix(in srgb, var(--rail-space-color, #7c5cfc) 30%,
+      rgb(24 24 28));
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+  bottom: calc(100% + 6px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  left: 8px;
+  opacity: 0;
+  padding: 4px;
+  position: absolute;
+  right: 8px;
+  transform: translateY(8px);
+  transition: opacity 200ms ease, transform 260ms cubic-bezier(.2, 0, 0, 1);
+  z-index: 10;
+}
+
+#card[visible] {
+  opacity: 1;
+  transform: none;
+}
+
+.card-row {
+  align-items: center;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  opacity: 0;
+  padding: 6px 8px;
+  transform: translateY(24px);
+  transition: background-color 120ms ease, opacity 200ms ease,
+      transform 260ms cubic-bezier(.2, 0, 0, 1);
+  transition-delay: 0s, calc(var(--order) * 10ms), calc(var(--order) * 10ms);
+}
+
+#card[visible] .card-row {
+  opacity: 1;
+  transform: none;
+}
+
+.card-row:hover {
+  background: var(--rail-hover, rgb(255 255 255 / 10%));
+}
+
+.card-icon,
+.card-ring {
+  flex: none;
+  height: 28px;
+  object-fit: contain;
+  width: 28px;
+}
+
+.card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.card-name,
+.card-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-name {
+  color: var(--rail-text, #f0f0ff);
+  font-size: 12.5px;
+}
+
+.card-status {
+  color: var(--rail-text-label, #808098);
+  font-size: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #card,
+  .card-row {
+    transform: none;
+  }
+
+  .ring[indeterminate] {
+    animation: none;
+  }
 }
 
 #bar {

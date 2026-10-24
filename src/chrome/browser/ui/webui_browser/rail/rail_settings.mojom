@@ -63,11 +63,14 @@ interface PageHandler {
 
   SetTrailDepth(int32 depth);
 
-  GetTabSleep() => (int32 minutes, array<string> exceptions);
+  GetTabSleep() => (int32 minutes, array<string> exceptions,
+                    int32 archive_hours);
 
   SetTabSleepMinutes(int32 minutes);
 
   SetTabSleepExceptions(array<string> exceptions);
+
+  SetTabArchiveHours(int32 hours);
 
   OpenCredits();
 

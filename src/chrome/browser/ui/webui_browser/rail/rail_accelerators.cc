@@ -27,6 +27,7 @@ constexpr Binding kBindings[] = {
     {ui::VKEY_LEFT, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "previous-space"},
     {ui::VKEY_N, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "new-space"},
     {ui::VKEY_S, ui::EF_CONTROL_DOWN, "toggle-sidebar"},
+    {ui::VKEY_J, ui::EF_CONTROL_DOWN, "show-downloads"},
     {ui::VKEY_OEM_COMMA, ui::EF_CONTROL_DOWN, "settings"},
     {ui::VKEY_M, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "mini-window"},
     {ui::VKEY_1, ui::EF_ALT_DOWN, "select-space:0"},

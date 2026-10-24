@@ -63,7 +63,8 @@ export async function openLogoMenu(host: CommandBarHost) {
       ]),
     },
     browserCommand('history', 'History', 'Ctrl+H'),
-    browserCommand('downloads', 'Downloads', 'Ctrl+J'),
+    shellCommand('show-downloads', tab),
+    shellCommand('show-archive', tab),
     browserCommand('extensions', 'Extensions'),
     browserCommand('passwords', 'Passwords and Autofill'),
     browserCommand(

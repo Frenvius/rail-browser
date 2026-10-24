@@ -15,6 +15,9 @@ const char kGroupOpenedLinksPref[] = "rail.group_opened_links";
 const char kTrailDepthPref[] = "rail.trail_depth";
 const char kTabSleepMinutesPref[] = "rail.tab_sleep_minutes";
 const char kTabSleepExceptionsPref[] = "rail.tab_sleep_exceptions";
+const char kTabArchiveHoursPref[] = "rail.tab_archive_hours";
+
+constexpr int kDefaultTabArchiveHours = 12;
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
@@ -25,6 +28,7 @@ void RegisterSidebarStateProfilePrefs(
   registry->RegisterIntegerPref(kTrailDepthPref, 1);
   registry->RegisterIntegerPref(kTabSleepMinutesPref, 30);
   registry->RegisterListPref(kTabSleepExceptionsPref);
+  registry->RegisterIntegerPref(kTabArchiveHoursPref, kDefaultTabArchiveHours);
 }
 
 std::string GetSidebarState(PrefService* prefs) {
@@ -112,6 +116,17 @@ void SetTabSleepExceptions(PrefService* prefs,
     }
   }
   prefs->SetList(kTabSleepExceptionsPref, std::move(list));
+}
+
+int GetTabArchiveHours(PrefService* prefs) {
+  return prefs ? std::max(prefs->GetInteger(kTabArchiveHoursPref), 0)
+               : kDefaultTabArchiveHours;
+}
+
+void SetTabArchiveHours(PrefService* prefs, int hours) {
+  if (prefs) {
+    prefs->SetInteger(kTabArchiveHoursPref, std::max(hours, 0));
+  }
 }
 
 }

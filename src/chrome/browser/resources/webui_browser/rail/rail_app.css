@@ -493,8 +493,35 @@ webui-browser-tab-strip {
   width: var(--rail-sidebar-icons-width);
 }
 
-:host([sidebar-collapsed][sidebar-icons-only]) #sidebarResizer {
+:host([sidebar-collapsed][sidebar-icons-only]) #sidebarResizer,
+:host([library-open]) #sidebarResizer {
   display: none;
+}
+
+:host([library-open]:not([fullscreen-mode='tab'],
+    [fullscreen-mode='browser']))::after {
+  background: var(--rail-divider);
+  bottom: 0;
+  content: '';
+  left: calc(var(--rail-library-nav-width) - 1px);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  transition: opacity 180ms ease 40ms;
+  width: 1px;
+}
+
+:host([library-open]) #railLogoHit {
+  box-sizing: border-box;
+  justify-content: space-between;
+  padding-inline: 10px;
+  width: var(--rail-library-nav-width);
+}
+
+@starting-style {
+  :host([library-open])::after {
+    opacity: 0;
+  }
 }
 
 #miniProfile,

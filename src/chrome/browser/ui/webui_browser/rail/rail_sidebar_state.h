@@ -18,6 +18,7 @@ extern const char kThemedTitlebarPref[];
 extern const char kTrailDepthPref[];
 extern const char kTabSleepMinutesPref[];
 extern const char kTabSleepExceptionsPref[];
+extern const char kTabArchiveHoursPref[];
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
@@ -50,6 +51,10 @@ std::vector<std::string> GetTabSleepExceptions(PrefService* prefs);
 
 void SetTabSleepExceptions(PrefService* prefs,
                            const std::vector<std::string>& sites);
+
+int GetTabArchiveHours(PrefService* prefs);
+
+void SetTabArchiveHours(PrefService* prefs, int hours);
 
 }
 

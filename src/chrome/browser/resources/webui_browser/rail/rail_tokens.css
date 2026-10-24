@@ -21,6 +21,7 @@
   --rail-elevated: rgb(255 255 255 / 6%);
   --rail-hover: rgb(255 255 255 / 10%);
   --rail-hover-strong: rgb(255 255 255 / 16%);
+  --rail-library-nav-width: 84px;
   --rail-placeholder: #777;
   --rail-sidebar-icons-width: 48px;
   --rail-sidebar-width: 208px;

@@ -70,6 +70,7 @@ export class RailSettingsElement extends CrLitElement {
       trailDepth_: {type: Number, state: true},
       sleepMinutes_: {type: Number, state: true},
       sleepSites_: {type: Array, state: true},
+      archiveHours_: {type: Number, state: true},
       section_: {type: String, state: true},
       customModel_: {type: Boolean, state: true},
       editingKey_: {type: Boolean, state: true},
@@ -98,6 +99,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor trailDepth_ = 1;
   protected accessor sleepMinutes_ = 30;
   protected accessor sleepSites_: string[] = [];
+  protected accessor archiveHours_ = 12;
   protected accessor customModel_ = false;
   protected accessor editingKey_ = false;
   protected readonly models_ = [
@@ -141,6 +143,13 @@ export class RailSettingsElement extends CrLitElement {
     {minutes: 120, label: '2 hours'},
     {minutes: 360, label: '6 hours'},
   ];
+  protected readonly archiveChoices_ = [
+    {hours: 0, label: 'Never'},
+    {hours: 12, label: '12 hours'},
+    {hours: 24, label: '1 day'},
+    {hours: 168, label: '7 days'},
+    {hours: 720, label: '30 days'},
+  ];
 
   override connectedCallback() {
     super.connectedCallback();
@@ -162,6 +171,7 @@ export class RailSettingsElement extends CrLitElement {
     const sleep = await handler.getTabSleep();
     this.sleepMinutes_ = sleep.minutes;
     this.sleepSites_ = sleep.exceptions;
+    this.archiveHours_ = sleep.archiveHours;
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -262,6 +272,12 @@ export class RailSettingsElement extends CrLitElement {
     const minutes = Number((e.target as HTMLSelectElement).value);
     browserProxyFactory.getInstance().handler.setTabSleepMinutes(minutes);
     this.sleepMinutes_ = minutes;
+  }
+
+  protected onArchiveHoursChange_(e: Event) {
+    const hours = Number((e.target as HTMLSelectElement).value);
+    browserProxyFactory.getInstance().handler.setTabArchiveHours(hours);
+    this.archiveHours_ = hours;
   }
 
   protected onSleepSiteKeydown_(e: KeyboardEvent) {

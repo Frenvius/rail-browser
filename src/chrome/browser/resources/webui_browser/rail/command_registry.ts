@@ -1,5 +1,6 @@
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
+import type {LibrarySection} from './library.js';
 import {adoptMiniWindow} from './mini_window.js';
 import type {TabCommand, TabMenuTarget} from './tab_menu.js';
 
@@ -8,6 +9,7 @@ export interface CommandBarHost {
   goBack(): void;
   goForward(): void;
   newSpace(): void;
+  openLibrary(section: LibrarySection): void;
   openUrl(url: string): void;
   reload(): void;
   reopenClosedTab(): void;
@@ -227,8 +229,29 @@ export const COMMANDS: Command[] = [
     keywords: 'preferences options config profiles',
     run: () => browserProxyFactory.getInstance().handler.openRailSettings(),
   },
+  {
+    id: 'show-downloads',
+    label: 'Downloads',
+    hint: 'Ctrl+J',
+    keywords: 'files saved library',
+    run: host => host.openLibrary('downloads'),
+  },
+  {
+    id: 'show-archive',
+    label: 'Archived Tabs',
+    hint: '',
+    keywords: 'archive closed restore library',
+    run: host => host.openLibrary('archive'),
+  },
+  {
+    id: 'show-spaces',
+    label: 'All Spaces',
+    hint: '',
+    keywords: 'workspace library manage',
+    run: host => host.openLibrary('spaces'),
+  },
   page('History', 'visited recent', 'chrome://history'),
-  page('Downloads', 'files saved', 'chrome://downloads'),
+  page('Downloads Page', 'files saved', 'chrome://downloads'),
   page('Extensions', 'addons plugins', 'chrome://extensions'),
 ];
 

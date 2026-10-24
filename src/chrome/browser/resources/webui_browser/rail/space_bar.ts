@@ -10,6 +10,8 @@ import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
+import type {Download} from './downloads.js';
+import {downloadStatus, DownloadState, fileIconUrl, isMoving, onDownloadsRebound, overallProgress, rankRecent, startedAgo} from './downloads.js';
 import type {NativeMenuItem} from './native_menu.js';
 import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import {INCOGNITO} from './sidebar_state.js';
@@ -20,8 +22,9 @@ import {openSpaceMenu} from './space_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_MATERIAL, spaceHex} from './spaces.js';
 
-export type SpaceCommand = 'create'|'export'|'move'|'newfolder'|'newgroup'|
-    'newprofile'|'newtab'|'remove'|'rename'|'restyle'|'select'|'setprofile';
+export type SpaceCommand = 'create'|'export'|'library'|'move'|'newfolder'|
+    'newgroup'|'newprofile'|'newtab'|'remove'|'rename'|'restyle'|'select'|
+    'setprofile';
 
 export interface SpaceCommandDetail {
   command: SpaceCommand;
@@ -55,6 +58,9 @@ interface DotDrag {
 
 const DRAG_THRESHOLD = 4;
 const SPACE_KEYS = 8;
+const CARD_LINGER_MS = 1000;
+const CARD_EXIT_MS = 500;
+const RING_LENGTH = 2 * Math.PI * 10;
 
 export class SpaceBarElement extends CrLitElement {
   static get is() {
@@ -82,6 +88,10 @@ export class SpaceBarElement extends CrLitElement {
       editing_: {type: Boolean, state: true},
       profileName_: {type: String, state: true},
       menuTarget_: {type: String, state: true},
+      recent_: {type: Array, state: true},
+      progress_: {type: Number, state: true},
+      cardShown_: {type: Boolean, state: true},
+      cardVisible_: {type: Boolean, state: true},
     };
   }
 
@@ -102,16 +112,161 @@ export class SpaceBarElement extends CrLitElement {
   private menuY_ = 0;
   private drag_: DotDrag|null = null;
   private swallowClick_ = false;
+  protected accessor recent_: Download[] = [];
+  protected accessor progress_: number|null = null;
+  protected accessor cardShown_ = false;
+  protected accessor cardVisible_ = false;
+  private hovered_ = new Set<string>();
+  private cardTimer_ = 0;
+  private unsubscribe_: Array<() => void> = [];
+  private unrebind_: (() => void)|null = null;
 
   override connectedCallback() {
     super.connectedCallback();
     this.resizeObserver_.observe(this);
     this.updateSpaceLayout_();
+    if (this.variant === 'dots' && !INCOGNITO) {
+      this.unrebind_ = onDownloadsRebound(() => this.watchDownloads_());
+      this.watchDownloads_();
+    }
   }
 
   override disconnectedCallback() {
     this.resizeObserver_.disconnect();
+    this.unsubscribe_.forEach(unsubscribe => unsubscribe());
+    this.unsubscribe_ = [];
+    this.unrebind_?.();
+    this.unrebind_ = null;
+    clearTimeout(this.cardTimer_);
     super.disconnectedCallback();
+  }
+
+  private watchDownloads_() {
+    this.unsubscribe_.forEach(unsubscribe => unsubscribe());
+    const list = downloadStatus();
+    const sync = () => {
+      this.recent_ = rankRecent(list.items);
+      this.progress_ = overallProgress(list.items);
+      if (!this.recent_.length) {
+        this.dismissCard_();
+      }
+    };
+    this.unsubscribe_ = [
+      list.subscribe(sync),
+      list.onFinish(() => this.bounce_()),
+    ];
+    sync();
+  }
+
+  private bounce_() {
+    this.shadowRoot.querySelector('#library')?.animate(
+        [
+          {transform: 'none'},
+          {transform: 'translateY(-4px) scale(1.12)'},
+          {transform: 'translateY(1px) scale(0.96)'},
+          {transform: 'none'},
+        ],
+        {duration: 460, easing: 'cubic-bezier(.3, 0, .2, 1)'});
+  }
+
+  protected ringOffset_(): number {
+    const progress = this.progress_ ?? 0;
+    return RING_LENGTH * (1 - (progress < 0 ? 0.25 : progress));
+  }
+
+  protected ringLength_(): number {
+    return RING_LENGTH;
+  }
+
+  protected isMoving_(item: Download): boolean {
+    return isMoving(item);
+  }
+
+  protected canDrag_(item: Download): boolean {
+    return item.state === DownloadState.kComplete &&
+        !item.fileExternallyRemoved;
+  }
+
+  protected cardIcon_(item: Download): string {
+    return fileIconUrl(item);
+  }
+
+  protected cardProgress_(item: Download): number {
+    return RING_LENGTH * (1 - Math.max(0, item.percent) / 100);
+  }
+
+  protected cardStatus_(item: Download): string {
+    if (isMoving(item)) {
+      return item.progressStatusText || 'Starting';
+    }
+    switch (item.state) {
+      case DownloadState.kComplete:
+        return item.fileExternallyRemoved ? 'Deleted' :
+                                            startedAgo(item.started, Date.now());
+      case DownloadState.kPaused:
+        return 'Paused';
+      case DownloadState.kCancelled:
+        return 'Canceled';
+      case DownloadState.kInterrupted:
+        return 'Failed';
+      default:
+        return 'Needs review';
+    }
+  }
+
+  protected onLibraryClick_() {
+    this.dismissCard_(true);
+    this.fire_('library', '');
+  }
+
+  protected onLibraryPointerenter_(e: PointerEvent) {
+    this.hovered_.add((e.currentTarget as HTMLElement).id);
+    if (!this.recent_.length || this.drag_) {
+      return;
+    }
+    clearTimeout(this.cardTimer_);
+    this.cardShown_ = true;
+    requestAnimationFrame(() => this.cardVisible_ = this.cardShown_);
+  }
+
+  protected onLibraryPointerleave_(e: PointerEvent) {
+    this.hovered_.delete((e.currentTarget as HTMLElement).id);
+    clearTimeout(this.cardTimer_);
+    this.cardTimer_ = setTimeout(() => {
+      if (!this.hovered_.size) {
+        this.dismissCard_();
+      }
+    }, CARD_LINGER_MS);
+  }
+
+  private dismissCard_(now = false) {
+    clearTimeout(this.cardTimer_);
+    this.cardVisible_ = false;
+    if (now) {
+      this.cardShown_ = false;
+      return;
+    }
+    this.cardTimer_ = setTimeout(() => {
+      if (!this.cardVisible_) {
+        this.cardShown_ = false;
+      }
+    }, CARD_EXIT_MS);
+  }
+
+  protected onCardRowClick_(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset['id'] ?? '';
+    const item = this.recent_.find(one => one.id === id);
+    if (item && this.canDrag_(item)) {
+      downloadStatus().handler.show(id);
+    } else {
+      this.onLibraryClick_();
+    }
+  }
+
+  protected onCardRowDragstart_(e: DragEvent) {
+    e.preventDefault();
+    const id = (e.currentTarget as HTMLElement).dataset['id'] ?? '';
+    downloadStatus().handler.drag(id);
   }
 
   override updated(changedProperties: PropertyValues<this>) {
@@ -179,6 +334,10 @@ export class SpaceBarElement extends CrLitElement {
 
   openMenuAt(x: number, y: number) {
     this.openMenuFor_(this.activeId, x, y);
+  }
+
+  openMenuFor(id: string, x: number, y: number) {
+    this.openMenuFor_(id, x, y);
   }
 
   private openMenuFor_(id: string, x: number, y: number) {
@@ -550,7 +709,7 @@ export class SpaceBarElement extends CrLitElement {
     if (!width) {
       return;
     }
-    const visibleSlots = Math.max(1, Math.floor((width - 31) / 25));
+    const visibleSlots = Math.max(1, Math.floor((width - 62) / 25));
     const iconSlots = Math.max(1, visibleSlots - 1);
     const compact = this.spaces.length > iconSlots;
     this.compact_ = compact;

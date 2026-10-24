@@ -308,7 +308,8 @@ void RailSettingsUI::SetTrailDepth(int32_t depth) {
 void RailSettingsUI::GetTabSleep(GetTabSleepCallback callback) {
   PrefService* prefs = PrefsFor(web_ui());
   std::move(callback).Run(rail::GetTabSleepMinutes(prefs),
-                          rail::GetTabSleepExceptions(prefs));
+                          rail::GetTabSleepExceptions(prefs),
+                          rail::GetTabArchiveHours(prefs));
 }
 
 void RailSettingsUI::SetTabSleepMinutes(int32_t minutes) {
@@ -318,6 +319,10 @@ void RailSettingsUI::SetTabSleepMinutes(int32_t minutes) {
 void RailSettingsUI::SetTabSleepExceptions(
     const std::vector<std::string>& exceptions) {
   rail::SetTabSleepExceptions(PrefsFor(web_ui()), exceptions);
+}
+
+void RailSettingsUI::SetTabArchiveHours(int32_t hours) {
+  rail::SetTabArchiveHours(PrefsFor(web_ui()), hours);
 }
 
 void RailSettingsUI::OpenCredits() {
