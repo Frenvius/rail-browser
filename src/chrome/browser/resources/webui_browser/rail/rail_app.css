@@ -155,16 +155,30 @@
   border-radius: 0;
   --cr-button-background-color: transparent;
   --cr-button-border-color: transparent;
-  --iron-icon-width: 16px;
-  --iron-icon-height: 16px;
-  --iron-icon-stroke-color: var(--rail-text-dim);
-  --iron-icon-fill-color: transparent;
-  stroke-width: 3px;
-  color: var(--rail-text-dim);
+  color: var(--rail-text);
   height: var(--rail-titlebar-height);
   min-width: 46px;
   padding: 0;
-  shape-rendering: crispEdges;
+  transition: background-color 80ms ease;
+}
+
+.caption-glyph {
+  display: block;
+  fill: none;
+  height: 10px;
+  overflow: visible;
+  stroke: currentcolor;
+  stroke-width: 1px;
+  width: 10px;
+}
+
+.caption-glyph.restore,
+:host([maximized]) .caption-glyph.maximize {
+  display: none;
+}
+
+:host([maximized]) .caption-glyph.restore {
+  display: block;
 }
 
 cr-button > cr-icon {
@@ -182,10 +196,19 @@ cr-icon-button:focus-visible,
   background: var(--rail-hover);
 }
 
+.caption-button:active {
+  background: var(--rail-hover);
+  color: var(--rail-text-dim);
+}
+
 .caption-button:last-child:hover {
-  --iron-icon-stroke-color: #fff;
-  background: #e81123;
+  background: #c42b1c;
   color: #fff;
+}
+
+.caption-button:last-child:active {
+  background: rgb(196 43 28 / 90%);
+  color: rgb(255 255 255 / 70%);
 }
 
 cr-icon-button {
@@ -265,7 +288,8 @@ webui-browser-tab-strip {
   transform: translateX(-50%);
 }
 
-:host(:not([mini])) #extensionsBar {
+:host(:not([mini])) #extensionsBar,
+:host(:not([mini])) #extensionsBar:not([visible]) + .captionButtonsDiv {
   margin-inline-start: auto;
 }
 
@@ -850,7 +874,6 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
     .caption-button:not(:last-child:hover),
 :host([titlebar-themed][page-color-dark]:not([library-wide]))
     .caption-button:not(:last-child:hover) {
-  --iron-icon-stroke-color: var(--rail-page-foreground-primary);
   color: var(--rail-page-foreground-primary);
 }
 
