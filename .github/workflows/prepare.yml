@@ -1,0 +1,82 @@
+name: Prepare build server
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: Parallel compile jobs
+        default: '20'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rail-builder
+  cancel-in-progress: false
+
+env:
+  RAIL_REPO_DIR: C:\rail\build\rail-browser
+
+jobs:
+  prepare:
+    runs-on: [self-hosted, rail-builder]
+    timeout-minutes: 900
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Sync repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN"))
+          $auth = "http.extraheader=AUTHORIZATION: basic $basic"
+          if (-not (Test-Path "$env:RAIL_REPO_DIR\.git")) {
+            git -c $auth clone --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" $env:RAIL_REPO_DIR
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          git -C $env:RAIL_REPO_DIR -c $auth fetch --no-tags origin $env:GITHUB_SHA
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git -C $env:RAIL_REPO_DIR checkout --force --detach $env:GITHUB_SHA
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git -C $env:RAIL_REPO_DIR submodule update --init --recursive
+          exit $LASTEXITCODE
+
+      - name: Refuse a prepared tree
+        run: |
+          if (Test-Path "$env:RAIL_REPO_DIR\build\src\BUILD.gn") {
+            Write-Error 'build\src is already prepared; preparing again would reset it'
+            exit 1
+          }
+
+      - name: Python environment
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        run: |
+          if (-not (Test-Path .venv\Scripts\python.exe)) {
+            & 'C:\Program Files\Python312\python.exe' -m venv .venv
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          .\.venv\Scripts\python.exe -m pip install --disable-pip-version-check -r requirements-dev.txt
+          exit $LASTEXITCODE
+
+      - name: Prepare sources
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        run: |
+          .\.venv\Scripts\python.exe .\build.py --prepare-only --7z-path 'C:\Program Files\7-Zip\7z.exe'
+          exit $LASTEXITCODE
+
+      - name: Build release
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        env:
+          BUILD_JOBS: ${{ inputs.jobs }}
+        run: |
+          $self = Get-Process -Id $PID
+          $self.PriorityClass = 'BelowNormal'
+          $self.ProcessorAffinity = [IntPtr]0xFFFFFF
+          .\.venv\Scripts\python.exe .\build.py --reuse -j ([int]$env:BUILD_JOBS)
+          exit $LASTEXITCODE
+
+      - name: Cache statistics
+        if: always()
+        run: sccache --show-stats
