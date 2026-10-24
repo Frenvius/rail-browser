@@ -12,7 +12,8 @@ const WIDTH_PROPERTY = '--rail-sidebar-width';
 const SLIDE_MS = 180;
 const SLIDE_EASING = 'cubic-bezier(.2, 0, 0, 1)';
 const LIBRARY_ATTRIBUTE = 'library-open';
-const LIBRARY_WIDTH = 400;
+const LIBRARY_WIDE_ATTRIBUTE = 'library-wide';
+const LIBRARY_PAGE_PEEK = 64;
 
 function slidingElements(host: HTMLElement): HTMLElement[] {
   const titlebar = host.shadowRoot?.querySelector('.titlebarDiv');
@@ -59,20 +60,35 @@ export function toggleSidebarCollapsed(host: HTMLElement) {
 }
 
 let libraryRestore: {width: string, collapsed: boolean}|null = null;
+let libraryWidth = 0;
 
-export function setLibraryOpen(host: HTMLElement, open: boolean) {
-  if (host.hasAttribute(LIBRARY_ATTRIBUTE) === open) {
+function applyLibraryWidth(host: HTMLElement) {
+  applyWidth(
+      host,
+      Math.max(
+          MIN_WIDTH,
+          Math.min(libraryWidth, window.innerWidth - LIBRARY_PAGE_PEEK)));
+}
+
+export function setLibraryOpen(
+    host: HTMLElement, open: boolean, width: number) {
+  const wasOpen = host.hasAttribute(LIBRARY_ATTRIBUTE);
+  if (wasOpen === open && (!open || width === libraryWidth)) {
     return;
   }
+  libraryWidth = open ? width : 0;
   slideSidebar(host, () => {
     host.toggleAttribute(LIBRARY_ATTRIBUTE, open);
+    host.toggleAttribute(LIBRARY_WIDE_ATTRIBUTE, open && width > MAX_WIDTH);
     if (open) {
-      libraryRestore = {
-        width: host.style.getPropertyValue(WIDTH_PROPERTY),
-        collapsed: host.hasAttribute(COLLAPSED_ATTRIBUTE),
-      };
-      host.removeAttribute(COLLAPSED_ATTRIBUTE);
-      applyWidth(host, LIBRARY_WIDTH);
+      if (!wasOpen) {
+        libraryRestore = {
+          width: host.style.getPropertyValue(WIDTH_PROPERTY),
+          collapsed: host.hasAttribute(COLLAPSED_ATTRIBUTE),
+        };
+        host.removeAttribute(COLLAPSED_ATTRIBUTE);
+      }
+      applyLibraryWidth(host);
       return;
     }
     if (libraryRestore?.width) {
@@ -148,6 +164,11 @@ export function initSidebarResize(host: HTMLElement) {
       COLLAPSED_ATTRIBUTE, localStorage.getItem(COLLAPSED_KEY) === '1');
   initIconsOnly(host);
   requestAnimationFrame(() => host.setAttribute('sidebar-animate', ''));
+  window.addEventListener('resize', () => {
+    if (host.hasAttribute(LIBRARY_ATTRIBUTE)) {
+      applyLibraryWidth(host);
+    }
+  });
 
   let width = 0;
 

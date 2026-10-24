@@ -1,5 +1,6 @@
 import {html, repeat} from '//resources/lit/v3_0/lit.rollup.js';
 
+import {folderIcon} from './folder_icon.js';
 import type {RailLibraryElement} from './library.js';
 import {LIBRARY_SECTIONS} from './library.js';
 import {libraryIcon} from './library_icons.js';
@@ -28,7 +29,7 @@ export function getHtml(this: RailLibraryElement) {
 </nav>
 <section id="panel" tabindex="-1" aria-label="${this.sectionLabel_()}"
     @keydown="${this.onPanelKeydown_}">
-  <header>
+  <header ?hidden="${this.section === 'spaces'}">
     <h2>${this.sectionLabel_()}</h2>
     ${this.filtering_ ? html`
       <div id="filterPanel" role="group" aria-label="Filter downloads">
@@ -170,40 +171,141 @@ export function getHtml(this: RailLibraryElement) {
       </div>
     `}
   ` : this.section === 'spaces' ? html`
-    <div class="list">
+    <div id="board">
       ${repeat(this.spaces, space => space.id, (space, index) => html`
-        <div class="row space" data-id="${space.id}" tabindex="0"
+        <section class="column" data-id="${space.id}"
+            aria-label="${space.name}"
             style="--i: ${index}; --space-color: ${this.spaceColor_(space)}"
             ?active="${space.id === this.activeId}"
-            @click="${this.onSpaceClick_}"
-            @keydown="${this.onRowKeydown_}"
-            @contextmenu="${this.onSpaceContextmenu_}">
-          <span class="space-chip">${this.spaceIcon_(space)}</span>
-          <div class="text">
-            <span class="title">${space.name}</span>
-            <span class="detail">${this.spaceDetail_(space)}</span>
+            ?editing="${space.id === this.editing_}"
+            ?drop-target="${space.id === this.dropTarget_}"
+            @dragover="${this.onColumnDragover_}"
+            @dragleave="${this.onColumnDragleave_}"
+            @drop="${this.onColumnDrop_}">
+          <div class="column-head" @contextmenu="${this.onColumnContextmenu_}">
+            ${this.incognito_() ? html`
+              ${space.icon ? html`
+                <span class="space-icon">
+                  ${this.isGlyph_(space.icon) ? html`
+                    <cr-icon icon="${space.icon}"></cr-icon>
+                  ` : space.icon}
+                </span>
+              ` : ''}
+              <span class="space-name" title="${space.name}">
+                ${space.name}
+              </span>
+            ` : html`
+              <button class="space-icon" title="Change icon"
+                  aria-label="Change icon" ?empty="${!space.icon}"
+                  @pointerdown="${this.onEditControlPointerdown_}"
+                  @click="${this.onIconEditClick_}">
+                ${this.isGlyph_(space.icon) ? html`
+                  <cr-icon icon="${space.icon}"></cr-icon>
+                ` : space.icon}
+              </button>
+              ${space.id === this.editing_ ? html`
+                <input id="nameInput" class="space-name" spellcheck="false"
+                    aria-label="Space name" .value="${space.name}"
+                    @keydown="${this.onNameKeydown_}"
+                    @blur="${this.onNameBlur_}">
+              ` : html`
+                <button class="space-name" title="Rename ${space.name}"
+                    @click="${this.onNameClick_}">${space.name}</button>
+              `}
+              <button class="profile-badge" title="Change profile"
+                  aria-label="Profile: ${this.profileName_(space)}"
+                  @click="${this.onProfileBadgeClick_}">
+                ${libraryIcon('profile')}
+                <span>${this.profileName_(space)}</span>
+              </button>
+              <button class="action theme" title="Change theme"
+                  aria-label="Change theme of ${space.name}"
+                  @pointerdown="${this.onEditControlPointerdown_}"
+                  @click="${this.onThemeClick_}">
+                ${libraryIcon('pencil')}
+              </button>
+            `}
           </div>
-          ${space.id === this.activeId ? html`
-            <span class="badge">Current</span>
-          ` : ''}
-          <div class="actions">
-            <button class="action" data-id="${space.id}" title="Space options"
-                aria-label="Options for ${space.name}"
-                @click="${this.onSpaceMoreClick_}">
-              ${libraryIcon('more')}
-            </button>
+          <div class="column-tabs" @click="${this.onColumnTabsClick_}">
+            ${this.columnRows_(space).map(row => row.kind === 'tab' ? html`
+              <div class="board-tab" data-id="${row.tab.id}"
+                  data-folder="${row.folder}" tabindex="0"
+                  title="${row.tab.title}" draggable="true"
+                  ?nested="${!!row.folder}"
+                  ?dragging="${row.tab.id === this.draggedTab_}"
+                  @click="${this.onBoardTabClick_}"
+                  @keydown="${this.onBoardTabKeydown_}"
+                  @dragstart="${this.onBoardTabDragstart_}"
+                  @dragend="${this.onBoardTabDragend_}">
+                <img class="favicon" alt="" draggable="false"
+                    src="${this.tabFavicon_(row.tab)}">
+                <span class="title">${row.tab.title}</span>
+              </div>
+            ` : row.kind === 'folder' ? html`
+              <div class="board-folder" data-folder="${row.folder.id}"
+                  tabindex="0" title="${row.folder.name}"
+                  aria-expanded="${row.folder.expanded}"
+                  ?drop-target="${row.folder.id === this.dropFolder_}"
+                  @click="${this.onBoardFolderClick_}"
+                  @keydown="${this.onBoardTabKeydown_}"
+                  @contextmenu="${this.onBoardFolderContextmenu_}"
+                  @dragover="${this.onFolderDragover_}"
+                  @drop="${this.onFolderDrop_}">
+                ${folderIcon(row.folder.expanded, false)}
+                ${row.folder.id === this.editingFolder_ ? html`
+                  <input id="folderInput" class="folder-name"
+                      spellcheck="false" aria-label="Folder name"
+                      .value="${row.folder.name}"
+                      @keydown="${this.onFolderNameKeydown_}"
+                      @blur="${this.onFolderNameBlur_}">
+                ` : html`
+                  <span class="folder-name">${row.folder.name}</span>
+                  <span class="folder-count">${row.count}</span>
+                `}
+              </div>
+            ` : html`
+              <div class="divider">
+                <span class="rule"></span>
+                <button class="clear" title="Archive today's tabs"
+                    @click="${this.onColumnClearClick_}">
+                  ${libraryIcon('clear')}
+                  Clear
+                </button>
+              </div>
+            `)}
           </div>
-        </div>
+          <div class="column-foot">
+            ${this.incognito_() ? html`<span></span>` : html`
+              <button class="action grip" title="Drag to reorder"
+                  aria-label="Reorder ${space.name}"
+                  @pointerdown="${this.onGripPointerdown_}">
+                ${libraryIcon('grip')}
+              </button>
+            `}
+            <span class="foot-actions">
+              ${this.incognito_() ? '' : html`
+                <button class="action" title="New folder"
+                    aria-label="New folder in ${space.name}"
+                    @click="${this.onNewFolderClick_}">
+                  ${libraryIcon('folder')}
+                </button>
+              `}
+              <button class="action" title="Space options"
+                  aria-label="Options for ${space.name}"
+                  @click="${this.onSpaceMoreClick_}">
+                ${libraryIcon('more')}
+              </button>
+            </span>
+          </div>
+        </section>
       `)}
-    </div>
-    ${this.incognito_() ? '' : html`
-      <div class="footer">
-        <button class="text-action" @click="${this.onNewSpaceClick_}">
+      ${this.incognito_() ? '' : html`
+        <button id="addSpace" title="New space" aria-label="New space"
+            @click="${this.onNewSpaceClick_}">
           ${libraryIcon('plus')}
-          New space
         </button>
-      </div>
-    `}
+      `}
+    </div>
   ` : this.days_.length ? html`
     <div class="list">
       ${this.days_.map(day => html`

@@ -511,6 +511,29 @@ webui-browser-tab-strip {
   width: 1px;
 }
 
+:host([library-wide]) .titlebarDiv {
+  padding-left: min(var(--rail-sidebar-width), 100% - 160px);
+}
+
+:host([library-wide]) .titlebarDiv >
+    :not(#railLogoHit, .captionButtonsDiv) {
+  display: none;
+}
+
+:host([library-wide]) .captionButtonsDiv {
+  margin-left: auto;
+}
+
+:host([library-wide]) #main {
+  clip-path: inset(0 6px 6px 0 round 0 8px 8px 0);
+  overflow: hidden;
+}
+
+:host([library-wide]) content-region {
+  flex-shrink: 0;
+  min-width: calc(100vw - 400px);
+}
+
 :host([library-open]) #railLogoHit {
   box-sizing: border-box;
   justify-content: space-between;
@@ -729,8 +752,18 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   right: var(--rail-content-right);
   top: 6px;
   transition: background-color var(--rail-page-transition, 0ms) linear,
-      left var(--rail-sidebar-transition, 0ms) cubic-bezier(.2, 0, 0, 1);
+      left var(--rail-sidebar-transition, 0ms) cubic-bezier(.2, 0, 0, 1),
+      opacity var(--rail-sidebar-transition, 0ms) ease;
   z-index: -1;
+}
+
+:host([titlebar-themed][library-wide]) .titlebarDiv {
+  padding-right: 0;
+  padding-top: 0;
+}
+
+:host([titlebar-themed][library-wide]) .titlebarDiv::before {
+  opacity: 0;
 }
 
 :host([titlebar-themed]:not([sidebar-collapsed])) #backButton,
@@ -788,14 +821,14 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   top: 6px;
 }
 
-:host([titlebar-themed])
+:host([titlebar-themed]:not([library-wide]))
     #rootContainer:not(:has(content-region[showing-side-panel]))
     .caption-button:last-child {
   border-top-right-radius: 8px;
 }
 
-:host([titlebar-themed]) content-region,
-:host([titlebar-themed]) #emptyState {
+:host([titlebar-themed]:not([library-wide])) content-region,
+:host([titlebar-themed]:not([library-wide])) #emptyState {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   clip-path: inset(0 -8px -8px -8px);
@@ -813,16 +846,18 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   opacity: 1;
 }
 
-:host([titlebar-themed][page-color-light])
+:host([titlebar-themed][page-color-light]:not([library-wide]))
     .caption-button:not(:last-child:hover),
-:host([titlebar-themed][page-color-dark])
+:host([titlebar-themed][page-color-dark]:not([library-wide]))
     .caption-button:not(:last-child:hover) {
   --iron-icon-stroke-color: var(--rail-page-foreground-primary);
   color: var(--rail-page-foreground-primary);
 }
 
-:host([titlebar-themed][page-color-light]) .titlebarDiv > :not(#railLogoHit),
-:host([titlebar-themed][page-color-dark]) .titlebarDiv > :not(#railLogoHit),
+:host([titlebar-themed][page-color-light]:not([library-wide]))
+    .titlebarDiv > :not(#railLogoHit),
+:host([titlebar-themed][page-color-dark]:not([library-wide]))
+    .titlebarDiv > :not(#railLogoHit),
 :host([titlebar-themed][page-color-light][sidebar-collapsed]:not(
     [sidebar-icons-only])) #railLogoHit,
 :host([titlebar-themed][page-color-dark][sidebar-collapsed]:not(
@@ -835,7 +870,8 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   --rail-text-dim: var(--rail-page-foreground-secondary);
 }
 
-:host([titlebar-themed][page-color-light]) .titlebarDiv > :not(#railLogoHit),
+:host([titlebar-themed][page-color-light]:not([library-wide]))
+    .titlebarDiv > :not(#railLogoHit),
 :host([titlebar-themed][page-color-light][sidebar-collapsed]:not(
     [sidebar-icons-only])) #railLogoHit {
   color-scheme: light;

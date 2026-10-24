@@ -10,10 +10,12 @@ export interface PinnedRow {
   dormant: boolean;
 }
 
-export interface FolderSection {
+export interface FolderSectionOf<T> {
   folder: Folder;
-  rows: PinnedRow[];
+  rows: T[];
 }
+
+export type FolderSection = FolderSectionOf<PinnedRow>;
 
 export interface TidySection {
   group: Folder;
@@ -28,13 +30,15 @@ export type LooseEntry = {
   section: TidySection,
 };
 
-export type PinnedEntryRow = {
+export type PinnedLayout<T> = {
   kind: 'row',
-  row: PinnedRow,
+  row: T,
 }|{
   kind: 'folder',
-  section: FolderSection,
+  section: FolderSectionOf<T>,
 };
+
+export type PinnedEntryRow = PinnedLayout<PinnedRow>;
 
 export interface Sections {
   favoriteRows: PinnedRow[];
@@ -42,6 +46,39 @@ export interface Sections {
   folderSections: FolderSection[];
   pinnedRows: PinnedRow[];
   looseEntries: LooseEntry[];
+}
+
+export function layoutPinned<T>(
+    entries: PinnedEntry[], folders: Folder[],
+    rowFor: (entry: PinnedEntry) => T): Array<PinnedLayout<T>> {
+  const sectionsByFolder = new Map<string, FolderSectionOf<T>>(
+      folders.map(folder => [folder.id, {folder, rows: []}]));
+  const layout: Array<PinnedLayout<T>> = [];
+  const empty = [...sectionsByFolder.values()].filter(
+      section => !entries.some(entry => entry.folder === section.folder.id));
+  const placeEmpty = (after: string) => {
+    for (const section of empty.filter(
+             section => section.folder.after === after)) {
+      layout.push({kind: 'folder', section});
+    }
+  };
+
+  placeEmpty('');
+  for (const entry of entries) {
+    const row = rowFor(entry);
+    const section =
+        entry.folder ? sectionsByFolder.get(entry.folder) : undefined;
+    if (!section) {
+      layout.push({kind: 'row', row});
+    } else {
+      if (!section.rows.length) {
+        layout.push({kind: 'folder', section});
+      }
+      section.rows.push(row);
+    }
+    placeEmpty(entry.key);
+  }
+  return layout;
 }
 
 export function splitSections(
@@ -67,35 +104,9 @@ export function splitSections(
 
   const favoriteRows =
       rowsFor(pinned.favorites(spaces.profileOf(spaces.activeId)));
-  const spaceEntries = pinned.entriesIn(spaces.activeId);
-  const sectionsByFolder = new Map<string, FolderSection>(
-      folders.in(spaces.activeId).map(folder => [folder.id, {folder, rows: []}]));
-  const pinnedEntries: PinnedEntryRow[] = [];
-  const empty = [...sectionsByFolder.values()].filter(
-      section => !spaceEntries.some(entry => entry.folder === section.folder.id));
-  const placeEmpty = (after: string) => {
-    for (const section of empty.filter(
-             section => section.folder.after === after)) {
-      pinnedEntries.push({kind: 'folder', section});
-    }
-  };
-
-  placeEmpty('');
-  for (const entry of spaceEntries) {
-    const [row] = rowsFor([entry]);
-    const section =
-        entry.folder ? sectionsByFolder.get(entry.folder) : undefined;
-    if (!section) {
-      pinnedEntries.push({kind: 'row', row: row!});
-      placeEmpty(entry.key);
-      continue;
-    }
-    if (!section.rows.length) {
-      pinnedEntries.push({kind: 'folder', section});
-    }
-    section.rows.push(row!);
-    placeEmpty(entry.key);
-  }
+  const pinnedEntries = layoutPinned(
+      pinned.entriesIn(spaces.activeId), folders.in(spaces.activeId),
+      entry => rowsFor([entry])[0]!);
 
   const folderSections =
       pinnedEntries.filter(entry => entry.kind === 'folder')

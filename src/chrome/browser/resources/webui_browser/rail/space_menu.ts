@@ -67,19 +67,27 @@ function buildItems(context: SpaceMenuContext): NativeMenuItem[] {
   ]);
 }
 
+function parseCommand(raw: string): SpaceMenuDetail {
+  const mark = raw.indexOf(':');
+  const command = (mark === -1 ? raw : raw.slice(0, mark)) as SpaceMenuCommand;
+  const argument = mark === -1 ? '' : raw.slice(mark + 1);
+  return {
+    command,
+    color: command === 'recolor' ? argument : '',
+    delta: command === 'move' ? Number(argument) : 0,
+    destination: command === 'export' ? argument : '',
+    profile: command === 'set-profile' ? argument : '',
+  };
+}
+
 export function openSpaceMenu(
     context: SpaceMenuContext, run: (detail: SpaceMenuDetail) => void) {
-  showNativeMenu(buildItems(context), raw => {
-    const mark = raw.indexOf(':');
-    const command =
-        (mark === -1 ? raw : raw.slice(0, mark)) as SpaceMenuCommand;
-    const argument = mark === -1 ? '' : raw.slice(mark + 1);
-    run({
-      command,
-      color: command === 'recolor' ? argument : '',
-      delta: command === 'move' ? Number(argument) : 0,
-      destination: command === 'export' ? argument : '',
-      profile: command === 'set-profile' ? argument : '',
-    });
-  });
+  showNativeMenu(buildItems(context), raw => run(parseCommand(raw)));
+}
+
+export function openSpaceProfileMenu(
+    context: SpaceMenuContext, run: (detail: SpaceMenuDetail) => void) {
+  showNativeMenu(
+      menuItems([{label: 'Profile'}, ...profileItems(context)]),
+      raw => run(parseCommand(raw)));
 }

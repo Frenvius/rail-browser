@@ -1,15 +1,17 @@
 import {test, expect} from 'bun:test';
 import {readFileSync} from 'node:fs';
 
-const load = (file: string, name: string, mini = false) => {
+const load = (file: string, name: string, mini = false,
+    deps: Record<string, unknown> = {}) => {
   const source = readFileSync(new URL(
       `../src/chrome/browser/resources/webui_browser/rail/${file}.ts`,
       import.meta.url), 'utf8').replace(/^import[\s\S]*?;\r?\n/gm, '')
       .replace(/^export /gm, '');
   const compiled = new Bun.Transpiler({loader: 'ts'}).transformSync(source);
   return new Function('SystemBackdropMaterial', 'INCOGNITO', 'MINI',
-      'WINDOW_ID', `${compiled}\nreturn ${name};`)(
-      {kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false, mini, 'test-window');
+      'WINDOW_ID', ...Object.keys(deps), `${compiled}\nreturn ${name};`)(
+      {kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false, mini, 'test-window',
+      ...Object.values(deps));
 };
 
 const Spaces = load('spaces', 'Spaces');
@@ -437,6 +439,42 @@ test('deleting the active space lands on its neighbor', () => {
   spaces.remove('a');
   expect(spaces.activeId).toBe('c');
   expect(spaces.fallbackFor('c')).toBe('');
+});
+
+test('the space board lists every space with its pinned and today tabs', () => {
+  const spaceBoard = load('space_board', 'spaceBoard', false,
+      {layoutPinned: load('sections', 'layoutPinned')});
+  const Folders = load('folders', 'Folders');
+  const space = (id: string, tabs: string[] = []) =>
+      ({id, name: id, color: '#192e50', activeUrl: '', pinned: [], tabs});
+  const spaces = new Spaces(() => {});
+  spaces.restore({activeSpace: 'a', spaces: [
+    space('a'), space('b', ['https://asleep.test/']),
+  ]}, [], new Set());
+  spaces.adopt('live', 'https://example.test/');
+  spaces.adopt('kept', 'https://example.test/');
+  spaces.adopt('filed', 'https://example.test/');
+  const pinned = new PinnedTabs(() => {});
+  const pin = pinned.pin(tab('kept'), 'a');
+  const filed = pinned.pin(tab('filed'), 'a');
+  const folders = new Folders(() => {});
+  const folder = folders.create('a', 'Work');
+  const empty = folders.create('b', 'Empty');
+  pinned.setFolder(filed.key, folder.id);
+  const items = ['live', 'kept', 'filed'].map(id => ({type: 'tab', id,
+    tabData: {...tab(id), title: `${id} now`}}));
+  const board = spaceBoard(items, pinned, spaces, folders);
+  expect(board.a.pinned.map((one: any) => one.kind === 'row' ?
+      [one.row.id, one.row.title] :
+      [one.section.folder.name, one.section.rows.map((row: any) => row.id)]))
+      .toEqual([[pin.key, 'kept now'], ['Work', [filed.key]]]);
+  expect(board.a.today.map((one: any) => [one.id, one.title]))
+      .toEqual([['live', 'live now']]);
+  expect(board.b.pinned)
+      .toEqual([{kind: 'folder', section: {folder: empty, rows: []}}]);
+  expect(board.b.today.map((one: any) => one.url))
+      .toEqual(['https://asleep.test/']);
+  expect(board.b.today[0].id).toBe(spaces.rowsIn('b')[0].key);
 });
 
 test('space shortcuts address spaces by position', () => {

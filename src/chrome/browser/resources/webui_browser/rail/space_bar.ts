@@ -17,8 +17,8 @@ import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import {INCOGNITO} from './sidebar_state.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
-import type {SpaceMenuDetail} from './space_menu.js';
-import {openSpaceMenu} from './space_menu.js';
+import type {SpaceMenuContext, SpaceMenuDetail} from './space_menu.js';
+import {openSpaceMenu, openSpaceProfileMenu} from './space_menu.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_MATERIAL, spaceHex} from './spaces.js';
 
@@ -110,6 +110,7 @@ export class SpaceBarElement extends CrLitElement {
   protected accessor menuTarget_ = '';
   private menuX_ = 0;
   private menuY_ = 0;
+  private menuRename_: (() => void)|null = null;
   private drag_: DotDrag|null = null;
   private swallowClick_ = false;
   protected accessor recent_: Download[] = [];
@@ -336,29 +337,49 @@ export class SpaceBarElement extends CrLitElement {
     this.openMenuFor_(this.activeId, x, y);
   }
 
-  openMenuFor(id: string, x: number, y: number) {
-    this.openMenuFor_(id, x, y);
+  openMenuFor(id: string, x: number, y: number, rename?: () => void) {
+    this.openMenuFor_(id, x, y, rename);
   }
 
-  private openMenuFor_(id: string, x: number, y: number) {
+  openPicker(id: string, kind: 'color'|'icon', x: number, y: number) {
+    this.aim_(id, x, y);
+    this.openPicker_(kind);
+  }
+
+  openProfileMenuFor(id: string, x: number, y: number) {
+    const context = this.aim_(id, x, y);
+    if (context) {
+      openSpaceProfileMenu(context, detail => this.runMenuCommand_(detail));
+    }
+  }
+
+  private aim_(id: string, x: number, y: number, rename?: () => void):
+      SpaceMenuContext|null {
     this.menuTarget_ = id;
     this.menuX_ = x;
     this.menuY_ = y;
+    this.menuRename_ = rename ?? null;
     const space = this.targetSpace_();
     if (INCOGNITO || !space) {
-      return;
+      return null;
     }
-    openSpaceMenu(
-        {
-          space,
-          profiles: this.profiles,
-          spaces: this.spaces,
-          canRename: this.variant === 'title',
-          canMoveLeft: this.canMove_(-1),
-          canMoveRight: this.canMove_(1),
-          canRemove: this.canRemove_(),
-        },
-        detail => this.runMenuCommand_(detail));
+    return {
+      space,
+      profiles: this.profiles,
+      spaces: this.spaces,
+      canRename: this.variant === 'title' || !!rename,
+      canMoveLeft: this.canMove_(-1),
+      canMoveRight: this.canMove_(1),
+      canRemove: this.canRemove_(),
+    };
+  }
+
+  private openMenuFor_(
+      id: string, x: number, y: number, rename?: () => void) {
+    const context = this.aim_(id, x, y, rename);
+    if (context) {
+      openSpaceMenu(context, detail => this.runMenuCommand_(detail));
+    }
   }
 
   private runMenuCommand_(detail: SpaceMenuDetail) {
@@ -377,6 +398,10 @@ export class SpaceBarElement extends CrLitElement {
         this.openPicker_('icon');
         return;
       case 'rename':
+        if (this.menuRename_) {
+          this.menuRename_();
+          return;
+        }
         void this.startEditing_();
         return;
       case 'set-profile':

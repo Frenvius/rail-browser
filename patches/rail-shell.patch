@@ -4574,7 +4574,7 @@ index 6f872ee..aa86f39 100644
      FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
                                          discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index 8b36341..052b99a 100644
+index 8b36341..c44b431 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,18 @@ assert(!is_android)
@@ -4597,7 +4597,7 @@ index 8b36341..052b99a 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,48 @@ build_webui("build") {
+@@ -27,6 +38,49 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4629,6 +4629,7 @@ index 8b36341..052b99a 100644
 +    "rail/site_panel.ts",
 +    "rail/space_bar.html.ts",
 +    "rail/space_bar.ts",
++    "rail/space_board.ts",
 +    "rail/space_panel.html.ts",
 +    "rail/space_panel.ts",
 +    "rail/space_menu.ts",
@@ -4646,11 +4647,12 @@ index 8b36341..052b99a 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -54,6 +107,18 @@ build_webui("build") {
+@@ -54,6 +108,19 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
 +    "rail/command.css",
++    "rail/folder_icon.css",
 +    "rail/library.css",
 +    "rail/rail_app.css",
 +    "rail/settings.css",
@@ -4665,7 +4667,7 @@ index 8b36341..052b99a 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -67,7 +132,12 @@ build_webui("build") {
+@@ -67,7 +134,12 @@ build_webui("build") {
      # reference import issue.
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
@@ -4678,7 +4680,7 @@ index 8b36341..052b99a 100644
      "$root_gen_dir/components/browser_apis/bookmarks/bookmarks_api.mojom-webui.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/node_id_converter.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/tab_strip_api_types.mojom-converters.ts",
-@@ -79,4 +149,5 @@ build_webui("build") {
+@@ -79,4 +151,5 @@ build_webui("build") {
    mojo_files_deps = [
 +    "//chrome/browser/ui/webui/downloads:mojo_bindings_ts__generator",
      "//chrome/browser/ui/webui_browser:browser_mojo_bindings_ts__generator",
@@ -5053,7 +5055,7 @@ index 5e48dff..6e6308a 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..4bc5fce 100644
+index 922ef29..361048a 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -5090,7 +5092,7 @@ index 922ef29..4bc5fce 100644
 +import type {CommandBarHost} from './rail/command_registry.js';
 +import {rebindDownloads} from './rail/downloads.js';
 +import {formatDisplayUrl} from './rail/format_url.js';
-+import type {LibrarySection} from './rail/library.js';
++import type {LibraryChangedDetail, LibrarySection} from './rail/library.js';
 +import {openLogoMenu} from './rail/logo_menu.js';
 +import {adoptMiniWindow, MINI, miniMatchProfile, miniProfileName, miniSetTargetSpace, miniSpaces, miniTargetSpace} from './rail/mini_window.js';
 +import {showNativeMenu} from './rail/native_menu.js';
@@ -5255,8 +5257,8 @@ index 922ef29..4bc5fce 100644
 +    toggleSidebarCollapsed(this);
 +  }
 +
-+  protected onRailLibraryChanged_(e: CustomEvent<{open: boolean}>) {
-+    setLibraryOpen(this, e.detail.open);
++  protected onRailLibraryChanged_(e: CustomEvent<LibraryChangedDetail>) {
++    setLibraryOpen(this, e.detail.open, e.detail.width);
    }
  
    protected onMinimizeClick_(_: Event) {
@@ -6152,7 +6154,7 @@ index 0fbaf6c..e58d103 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index a15445b..44ae288 100644
+index a15445b..63a9389 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 @@ -2,30 +2,217 @@
@@ -6376,7 +6378,7 @@ index a15445b..44ae288 100644
  </div>
 +<rail-library ?inert="${!this.libraryOpen_}" .open="${this.libraryOpen_}"
 +    .section="${this.librarySection_}" .spaces="${this.spaceRows_}"
-+    .activeId="${this.activeSpace_}" .tabCounts="${this.spaceCounts_}"
++    .activeId="${this.activeSpace_}" .board="${this.spaceBoard_()}"
 +    .profiles="${this.profileRows_}" .archiveHours="${this.archiveHours_}"
 +    @rail-library-close="${this.onRailLibraryClose_}"
 +    @rail-library-section="${this.onRailLibrarySection_}"
@@ -6387,7 +6389,7 @@ index a15445b..44ae288 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..4f6cf1d 100644
+index b7a5099..17df5dd 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6400,7 +6402,7 @@ index b7a5099..4f6cf1d 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -11,24 +14,49 @@ import '//resources/cr_elements/icons.html.js';
+@@ -11,24 +14,51 @@ import '//resources/cr_elements/icons.html.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
@@ -6422,7 +6424,7 @@ index b7a5099..4f6cf1d 100644
 +import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
 +import {Folders} from '../rail/folders.js';
-+import type {LibrarySection, LibrarySpaceDetail} from '../rail/library.js';
++import type {LibrarySection, LibrarySpaceDetail, RailLibraryElement} from '../rail/library.js';
 +import {miniMatchProfile} from '../rail/mini_window.js';
 +import {NativeGroupLinks, readNativeGroups} from '../rail/native_groups.js';
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
@@ -6432,6 +6434,8 @@ index b7a5099..4f6cf1d 100644
 +import type {SidebarState} from '../rail/sidebar_state.js';
 +import {INCOGNITO, MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
++import type {BoardColumn} from '../rail/space_board.js';
++import {spaceBoard} from '../rail/space_board.js';
 +import {paintSpaceColors, SpaceSlide} from '../rail/space_slide.js';
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
 +import {backdropSettings, DEFAULT_MATERIAL, isNewTabUrl, serializeSidebar,
@@ -6458,7 +6462,7 @@ index b7a5099..4f6cf1d 100644
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-@@ -40,6 +68,8 @@ export interface TabStripElement {
+@@ -40,6 +70,8 @@ export interface TabStripElement {
    };
  }
  
@@ -6467,7 +6471,7 @@ index b7a5099..4f6cf1d 100644
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -67,8 +97,8 @@ class TabStripItemFactory {
+@@ -67,8 +99,8 @@ class TabStripItemFactory {
    }
  }
  
@@ -6478,7 +6482,7 @@ index b7a5099..4f6cf1d 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -86,6 +116,42 @@ export class TabStripElement extends CrLitElement implements
+@@ -86,6 +118,42 @@ export class TabStripElement extends CrLitElement implements
        items_: {
          type: Array,
        },
@@ -6521,7 +6525,7 @@ index b7a5099..4f6cf1d 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -95,32 +161,121 @@ export class TabStripElement extends CrLitElement implements
+@@ -95,32 +163,121 @@ export class TabStripElement extends CrLitElement implements
          reflect: true,
          attribute: 'drag-in-progress',
        },
@@ -6653,7 +6657,7 @@ index b7a5099..4f6cf1d 100644
    }
  
    override connectedCallback() {
-@@ -128,11 +283,31 @@ export class TabStripElement extends CrLitElement implements
+@@ -128,11 +285,31 @@ export class TabStripElement extends CrLitElement implements
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -6685,7 +6689,7 @@ index b7a5099..4f6cf1d 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +329,102 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +331,102 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6788,7 +6792,7 @@ index b7a5099..4f6cf1d 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -175,18 +446,8 @@ export class TabStripElement extends CrLitElement implements
+@@ -175,18 +448,8 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6809,7 +6813,7 @@ index b7a5099..4f6cf1d 100644
    }
  
  
-@@ -194,14 +455,43 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +457,43 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -6854,7 +6858,7 @@ index b7a5099..4f6cf1d 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -209,6 +499,12 @@ export class TabStripElement extends CrLitElement implements
+@@ -209,6 +501,12 @@ export class TabStripElement extends CrLitElement implements
      this.dragDelegate_.onUpdate();
    }
 
@@ -6867,7 +6871,7 @@ index b7a5099..4f6cf1d 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
 
-@@ -217,48 +513,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +515,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -6921,7 +6925,7 @@ index b7a5099..4f6cf1d 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +568,2084 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +570,2167 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7951,19 +7955,38 @@ index b7a5099..4f6cf1d 100644
 +  protected onFolderContextmenu_(e: MouseEvent) {
 +    e.preventDefault();
 +    const id = (e.currentTarget as HTMLElement).dataset['folder'] ?? '';
++    this.openFolderMenu_(id, () => this.startFolderRename_(id));
++  }
++
++  private openFolderMenu_(id: string, rename: () => void) {
 +    const folder = this.folders_.byId(id);
 +    if (!folder) {
 +      return;
 +    }
 +    openFolderMenu(folder.name, (command: FolderCommand) => {
 +      if (command === 'rename-folder') {
-+        this.startFolderRename_(id);
++        rename();
 +        return;
 +      }
 +      this.pinnedTabs_.clearFolder(id);
 +      this.folders_.remove(id);
 +      this.refreshSections_();
 +    });
++  }
++
++  private fileOnBoard_(id: string, spaceId: string, folderId: string) {
++    const entry = this.entryFor_(id) ?? this.pinTab_(id, false);
++    if (!entry) {
++      return;
++    }
++    if (entry.space !== spaceId) {
++      const target = this.targetFor(entry.key);
++      if (target) {
++        this.moveToSpace_(target, spaceId);
++      }
++    }
++    this.pinnedTabs_.setFolder(entry.key, folderId);
++    this.refreshSections_();
 +  }
 +
 +  protected onFolderNameClick_(e: Event) {
@@ -8410,20 +8433,12 @@ index b7a5099..4f6cf1d 100644
 +      return;
 +    }
 +    this.librarySection_ = section;
-+    this.setLibraryOpen_(true);
++    this.libraryOpen_ = true;
 +  }
 +
 +  async closeLibrary() {
-+    this.setLibraryOpen_(false);
++    this.libraryOpen_ = false;
 +    await this.updateComplete;
-+  }
-+
-+  private setLibraryOpen_(open: boolean) {
-+    if (this.libraryOpen_ === open) {
-+      return;
-+    }
-+    this.libraryOpen_ = open;
-+    this.fire('rail-library-changed', {open});
 +  }
 +
 +  protected onRailLibraryClose_() {
@@ -8434,18 +8449,90 @@ index b7a5099..4f6cf1d 100644
 +    this.librarySection_ = e.detail.section;
 +  }
 +
++  protected spaceBoard_(): Record<string, BoardColumn> {
++    return this.libraryOpen_ && this.librarySection_ === 'spaces' ?
++        spaceBoard(
++            this.items_, this.pinnedTabs_, this.spaces_, this.folders_) :
++        {};
++  }
++
++  private library_(): RailLibraryElement|null {
++    return this.shadowRoot.querySelector('rail-library');
++  }
++
 +  protected async onRailLibrarySpace_(e: CustomEvent<LibrarySpaceDetail>) {
-+    const {command, id, x, y} = e.detail;
-+    if (command === 'menu') {
-+      this.shadowRoot.querySelector<SpaceBarElement>('#spaceBar')
-+          ?.openMenuFor(id, x, y);
-+      return;
++    const {command, id, tab, to, folder, name, delta, x, y} = e.detail;
++    const spaceBar =
++        this.shadowRoot.querySelector<SpaceBarElement>('#spaceBar');
++    switch (command) {
++      case 'menu':
++        spaceBar?.openMenuFor(id, x, y, () => this.library_()?.editSpace(id));
++        return;
++      case 'icon':
++        spaceBar?.openPicker(id, 'icon', x, y);
++        return;
++      case 'theme':
++        spaceBar?.openPicker(id, 'color', x, y);
++        return;
++      case 'profile':
++        spaceBar?.openProfileMenuFor(id, x, y);
++        return;
++      case 'rename':
++        this.spaces_.rename(id, name.trim());
++        this.refreshSections_();
++        return;
++      case 'reorder':
++        this.spaces_.move(id, delta);
++        this.refreshSections_();
++        return;
++      case 'clear':
++        this.closeMany_(this.looseTabIds_(id));
++        return;
++      case 'move': {
++        const target = this.targetFor(tab);
++        if (target) {
++          this.moveToSpace_(target, to);
++        }
++        return;
++      }
++      case 'create': {
++        const space = this.spaces_.create();
++        this.refreshSections_();
++        await this.updateComplete;
++        this.library_()?.editSpace(space.id);
++        return;
++      }
++      case 'new-folder': {
++        const created = this.folders_.create(id, 'New Folder');
++        this.refreshSections_();
++        await this.updateComplete;
++        this.library_()?.editFolder(created.id);
++        return;
++      }
++      case 'toggle-folder':
++        this.folders_.toggle(folder);
++        this.refreshSections_();
++        return;
++      case 'rename-folder':
++        this.folders_.rename(folder, name.trim());
++        this.refreshSections_();
++        return;
++      case 'folder-menu':
++        this.openFolderMenu_(
++            folder, () => this.library_()?.editFolder(folder));
++        return;
++      case 'file':
++        this.fileOnBoard_(tab, to, folder);
++        return;
++      default:
++        break;
 +    }
 +    await this.closeLibrary();
-+    if (command === 'create') {
-+      this.newSpace();
-+    } else if (id !== this.spaces_.activeId) {
++    if (id !== this.spaces_.activeId) {
 +      this.selectSpace_(id);
++    }
++    if (command === 'open') {
++      this.activateTab(tab);
 +    }
 +  }
 +
@@ -8775,8 +8862,8 @@ index b7a5099..4f6cf1d 100644
 +    };
 +  }
 +
-+  private looseTabIds_(): string[] {
-+    return this.spaces_.rowsIn(this.spaces_.activeId)
++  private looseTabIds_(spaceId = this.spaces_.activeId): string[] {
++    return this.spaces_.rowsIn(spaceId)
 +        .filter(row => !row.tabId || !this.pinnedTabs_.byTab(row.tabId))
 +        .map(row => row.tabId || row.key);
 +  }

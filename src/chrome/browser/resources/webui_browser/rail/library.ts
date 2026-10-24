@@ -1,13 +1,18 @@
+import '//resources/cr_elements/cr_icon/cr_icon.js';
+import '//resources/cr_elements/icons.html.js';
+
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 
 import type {Download} from './downloads.js';
+import type {Folder} from './folders.js';
 import {downloadsProfile, downloadStatus, DownloadList, DownloadState, fileIconUrl, isMoving, needsReview, onDownloadsRebound} from './downloads.js';
 import {formatDisplayUrl} from './format_url.js';
 import {getCss} from './library.css.js';
 import {getHtml} from './library.html.js';
 import type {LibraryIcon} from './library_icons.js';
 import {INCOGNITO} from './sidebar_state.js';
+import type {BoardColumn, BoardTab} from './space_board.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_PROFILE_NAME, spaceHex} from './spaces.js';
 import type {ArchiveDay, ArchivedTab, ArchiveHours} from './tab_archive.js';
@@ -15,11 +20,50 @@ import {archivedTabs, archiveHoursFor, groupByDay, matchArchived} from './tab_ar
 
 export type LibrarySection = 'downloads'|'spaces'|'archive';
 
+export type LibrarySpaceCommand = 'clear'|'create'|'file'|'folder-menu'|
+    'icon'|'menu'|'move'|'new-folder'|'open'|'profile'|'rename'|
+    'rename-folder'|'reorder'|'select'|'theme'|'toggle-folder';
+
 export interface LibrarySpaceDetail {
-  command: 'select'|'create'|'menu';
+  command: LibrarySpaceCommand;
   id: string;
+  tab: string;
+  to: string;
+  folder: string;
+  name: string;
+  delta: number;
   x: number;
   y: number;
+}
+
+export type BoardRow = {
+  kind: 'tab',
+  tab: BoardTab,
+  folder: string,
+}|{
+  kind: 'folder',
+  folder: Folder,
+  count: number,
+}|{
+  kind: 'divider',
+};
+
+export interface LibraryChangedDetail {
+  open: boolean;
+  width: number;
+}
+
+interface ColumnDrag {
+  id: string;
+  pointerId: number;
+  startX: number;
+  grip: HTMLElement;
+  column: HTMLElement;
+  columns: HTMLElement[];
+  pitch: number;
+  from: number;
+  to: number;
+  moved: boolean;
 }
 
 export const LIBRARY_SECTIONS:
@@ -29,6 +73,13 @@ export const LIBRARY_SECTIONS:
       {id: 'archive', label: 'Archived Tabs', icon: 'archive'},
     ];
 
+const LIBRARY_WIDTH = 400;
+const LIBRARY_NAV_WIDTH = 84;
+const BOARD_COLUMN_PITCH = 232;
+const BOARD_TRAIL = 76;
+const DRAG_THRESHOLD = 4;
+const TAB_DRAG_TYPE = 'application/x-rail-board-tab';
+const EMPTY_COLUMN: BoardColumn = {pinned: [], today: []};
 const CONFIRM_MS = 3000;
 const KB = 1024;
 const MB = KB * 1024;
@@ -55,6 +106,12 @@ function hostOf(url: string): string {
   }
 }
 
+function faviconFor(favicon: string, url: string): string {
+  return favicon ||
+      `chrome://favicon2/?pageUrl=${
+             encodeURIComponent(url)}&size=16&scaleFactor=2x`;
+}
+
 export class RailLibraryElement extends CrLitElement {
   static get is() {
     return 'rail-library';
@@ -74,7 +131,7 @@ export class RailLibraryElement extends CrLitElement {
       section: {type: String, reflect: true},
       spaces: {type: Array},
       activeId: {type: String},
-      tabCounts: {type: Object},
+      board: {type: Object},
       profiles: {type: Array},
       archiveHours: {type: Object},
       query_: {type: String, state: true},
@@ -84,6 +141,11 @@ export class RailLibraryElement extends CrLitElement {
       filterProfile_: {type: String, state: true},
       confirming_: {type: String, state: true},
       filtering_: {type: Boolean, state: true},
+      editing_: {type: String, state: true},
+      draggedTab_: {type: String, state: true},
+      dropTarget_: {type: String, state: true},
+      editingFolder_: {type: String, state: true},
+      dropFolder_: {type: String, state: true},
     };
   }
 
@@ -91,7 +153,7 @@ export class RailLibraryElement extends CrLitElement {
   accessor section: LibrarySection = 'downloads';
   accessor spaces: Space[] = [];
   accessor activeId = '';
-  accessor tabCounts: Record<string, number> = {};
+  accessor board: Record<string, BoardColumn> = {};
   accessor profiles: SpaceProfile[] = [];
   accessor archiveHours: ArchiveHours = {};
   protected accessor query_ = '';
@@ -101,6 +163,14 @@ export class RailLibraryElement extends CrLitElement {
   protected accessor filterProfile_ = '';
   protected accessor confirming_ = '';
   protected accessor filtering_ = false;
+  protected accessor editing_ = '';
+  protected accessor draggedTab_ = '';
+  protected accessor dropTarget_ = '';
+  protected accessor editingFolder_ = '';
+  protected accessor dropFolder_ = '';
+  private dragSource_ = '';
+  private dragFolder_ = '';
+  private columnDrag_: ColumnDrag|null = null;
   private list_: DownloadList|null = null;
   private stopList_: (() => void)|null = null;
   private stopWatching_: Array<() => void> = [];
@@ -147,6 +217,8 @@ export class RailLibraryElement extends CrLitElement {
     if (changedProperties.has('section') || changedProperties.has('open')) {
       this.query_ = '';
       this.filtering_ = false;
+      this.editing_ = '';
+      this.editingFolder_ = '';
       this.setConfirming_('');
     }
     if (changedProperties.has('open') && !this.open) {
@@ -174,6 +246,12 @@ export class RailLibraryElement extends CrLitElement {
 
   override updated(changedProperties: PropertyValues<this>) {
     super.updated(changedProperties);
+    if (changedProperties.has('section') || changedProperties.has('open') ||
+        changedProperties.has('spaces')) {
+      this.fire<LibraryChangedDetail>(
+          'rail-library-changed',
+          {open: this.open, width: this.desiredWidth_()});
+    }
     if (changedProperties.has('section') || changedProperties.has('open')) {
       this.placeIndicator_(!changedProperties.has('open'));
     }
@@ -204,6 +282,14 @@ export class RailLibraryElement extends CrLitElement {
     indicator.toggleAttribute('instant', !animate);
     indicator.style.transform = `translateY(${button.offsetTop}px)`;
     indicator.style.height = `${button.offsetHeight}px`;
+  }
+
+  private desiredWidth_(): number {
+    if (this.section !== 'spaces') {
+      return LIBRARY_WIDTH;
+    }
+    return LIBRARY_NAV_WIDTH + this.spaces.length * BOARD_COLUMN_PITCH +
+        BOARD_TRAIL;
   }
 
   private spaceProfile_(): string {
@@ -565,46 +651,433 @@ export class RailLibraryElement extends CrLitElement {
     }
   }
 
-  protected spaceIcon_(space: Space): string {
-    return space.icon.startsWith('cr:') ? '' : space.icon;
+  editSpace(id: string) {
+    void this.startEditing_(id);
+  }
+
+  protected isGlyph_(icon: string): boolean {
+    return icon.startsWith('cr:');
   }
 
   protected spaceColor_(space: Space): string {
     return spaceHex(space.color);
   }
 
-  protected spaceDetail_(space: Space): string {
-    const count = this.tabCounts[space.id] ?? 0;
-    const tabs = `${count} tab${count === 1 ? '' : 's'}`;
-    const profile = space.profile ?
-        this.profiles.find(one => one.id === space.profile)?.name :
+  editFolder(id: string) {
+    void this.startEditingFolder_(id);
+  }
+
+  protected columnRows_(space: Space): BoardRow[] {
+    const {pinned, today} = this.board[space.id] ?? EMPTY_COLUMN;
+    const rows = pinned.flatMap((entry): BoardRow[] => {
+      if (entry.kind === 'row') {
+        return [{kind: 'tab', tab: entry.row, folder: ''}];
+      }
+      const {folder, rows: tabs} = entry.section;
+      return [
+        {kind: 'folder', folder, count: tabs.length},
+        ...folder.expanded ?
+            tabs.map(tab => ({kind: 'tab' as const, tab, folder: folder.id})) :
+            [],
+      ];
+    });
+    return today.length ?
+        [
+          ...rows,
+          {kind: 'divider'},
+          ...today.map(tab => ({kind: 'tab' as const, tab, folder: ''})),
+        ] :
+        rows;
+  }
+
+  protected profileName_(space: Space): string {
+    return this.profileChips_().find(one => one.id === space.profile)?.name ??
+        DEFAULT_PROFILE_NAME;
+  }
+
+  protected tabFavicon_(tab: BoardTab): string {
+    return faviconFor(tab.favicon, tab.url);
+  }
+
+  private spaceOf_(e: Event): string {
+    return (e.currentTarget as HTMLElement)
+               .closest<HTMLElement>('.column')
+               ?.dataset['id'] ??
         '';
-    return profile ? `${tabs} · ${profile}` : tabs;
   }
 
-  protected onSpaceClick_(e: Event) {
-    this.fireSpace_('select', this.idOf_(e));
+  private anchorOf_(e: Event): {x: number, y: number} {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return {x: Math.round(rect.left), y: Math.round(rect.bottom)};
   }
 
-  protected onSpaceContextmenu_(e: MouseEvent) {
+  protected onBoardTabClick_(e: Event) {
+    this.fireSpace_('open', this.spaceOf_(e), {tab: this.idOf_(e)});
+  }
+
+  protected onBoardTabKeydown_(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).click();
+    }
+  }
+
+  protected onColumnTabsClick_(e: Event) {
+    if (e.target === e.currentTarget) {
+      this.fireSpace_('select', this.spaceOf_(e));
+    }
+  }
+
+  protected onColumnClearClick_(e: Event) {
+    this.fireSpace_('clear', this.spaceOf_(e));
+  }
+
+  protected onColumnContextmenu_(e: MouseEvent) {
     e.preventDefault();
-    this.fireSpace_('menu', this.idOf_(e), e.clientX, e.clientY);
+    this.fireSpace_(
+        'menu', this.spaceOf_(e), {x: e.clientX, y: e.clientY});
   }
 
   protected onSpaceMoreClick_(e: Event) {
-    e.stopPropagation();
-    const button = e.currentTarget as HTMLElement;
-    const rect = button.getBoundingClientRect();
-    this.fireSpace_('menu', this.idOf_(e), rect.left, rect.bottom);
+    this.fireSpace_('menu', this.spaceOf_(e), this.anchorOf_(e));
+  }
+
+  protected onProfileBadgeClick_(e: Event) {
+    this.fireSpace_('profile', this.spaceOf_(e), this.anchorOf_(e));
+  }
+
+  protected onIconEditClick_(e: Event) {
+    this.fireSpace_('icon', this.spaceOf_(e), this.anchorOf_(e));
   }
 
   protected onNewSpaceClick_() {
     this.fireSpace_('create', '');
   }
 
+  protected onNewFolderClick_(e: Event) {
+    this.fireSpace_('new-folder', this.spaceOf_(e));
+  }
+
+  private folderOf_(e: Event): string {
+    return (e.currentTarget as HTMLElement).dataset['folder'] ?? '';
+  }
+
+  protected onBoardFolderClick_(e: Event) {
+    const folder = this.folderOf_(e);
+    if (folder !== this.editingFolder_) {
+      this.fireSpace_('toggle-folder', this.spaceOf_(e), {folder});
+    }
+  }
+
+  protected onBoardFolderContextmenu_(e: MouseEvent) {
+    e.preventDefault();
+    if (INCOGNITO) {
+      return;
+    }
+    this.fireSpace_(
+        'folder-menu', this.spaceOf_(e),
+        {folder: this.folderOf_(e), x: e.clientX, y: e.clientY});
+  }
+
+  protected onFolderNameKeydown_(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      this.stopEditingFolder_(true);
+    } else if (e.key === 'Escape') {
+      this.stopEditingFolder_(false);
+    }
+  }
+
+  protected onFolderNameBlur_() {
+    this.stopEditingFolder_(true);
+  }
+
+  private async startEditingFolder_(id: string) {
+    if (INCOGNITO || !id) {
+      return;
+    }
+    this.editingFolder_ = id;
+    await this.updateComplete;
+    const input =
+        this.shadowRoot.querySelector<HTMLInputElement>('#folderInput');
+    input?.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    input?.focus();
+    input?.select();
+  }
+
+  private stopEditingFolder_(commit: boolean) {
+    const folder = this.editingFolder_;
+    if (!folder) {
+      return;
+    }
+    const name =
+        this.shadowRoot.querySelector<HTMLInputElement>('#folderInput')
+            ?.value ??
+        '';
+    this.editingFolder_ = '';
+    if (commit && name.trim()) {
+      this.fireSpace_('rename-folder', '', {folder, name});
+    }
+  }
+
+  protected onEditControlPointerdown_(e: PointerEvent) {
+    e.preventDefault();
+  }
+
+  protected onThemeClick_(e: Event) {
+    this.fireSpace_('theme', this.spaceOf_(e), this.anchorOf_(e));
+  }
+
+  protected onNameClick_(e: Event) {
+    this.stopEditing_(true);
+    void this.startEditing_(this.spaceOf_(e));
+  }
+
+  protected onNameKeydown_(e: KeyboardEvent) {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      this.stopEditing_(true);
+    } else if (e.key === 'Escape') {
+      this.stopEditing_(false);
+    }
+  }
+
+  protected onNameBlur_() {
+    this.stopEditing_(true);
+  }
+
+  private async startEditing_(id: string) {
+    if (INCOGNITO || !id) {
+      return;
+    }
+    this.editing_ = id;
+    await this.updateComplete;
+    this.shadowRoot.querySelector(`.column[data-id="${id}"]`)
+        ?.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    const input = this.shadowRoot.querySelector<HTMLInputElement>('#nameInput');
+    input?.focus();
+    input?.select();
+  }
+
+  private stopEditing_(commit: boolean) {
+    const id = this.editing_;
+    if (!id) {
+      return;
+    }
+    const name =
+        this.shadowRoot.querySelector<HTMLInputElement>('#nameInput')?.value ??
+        '';
+    this.editing_ = '';
+    if (commit && name.trim()) {
+      this.fireSpace_('rename', id, {name});
+    }
+  }
+
+  protected onBoardTabDragstart_(e: DragEvent) {
+    e.stopPropagation();
+    const id = this.idOf_(e);
+    if (INCOGNITO || !e.dataTransfer) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(TAB_DRAG_TYPE, id);
+    this.dragSource_ = this.spaceOf_(e);
+    this.dragFolder_ = this.folderOf_(e);
+    this.draggedTab_ = id;
+  }
+
+  protected onBoardTabDragend_() {
+    this.dragSource_ = '';
+    this.dragFolder_ = '';
+    this.draggedTab_ = '';
+    this.dropTarget_ = '';
+    this.dropFolder_ = '';
+  }
+
+  protected onColumnDragover_(e: DragEvent) {
+    if (!this.draggedTab_) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const space = this.spaceOf_(e);
+    const accepts = space !== this.dragSource_ || !!this.dragFolder_;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = accepts ? 'move' : 'none';
+    }
+    this.dropTarget_ = accepts ? space : '';
+    this.dropFolder_ = '';
+  }
+
+  protected onFolderDragover_(e: DragEvent) {
+    if (!this.draggedTab_) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const folder = this.folderOf_(e);
+    const accepts = folder !== this.dragFolder_;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = accepts ? 'move' : 'none';
+    }
+    this.dropTarget_ = '';
+    this.dropFolder_ = accepts ? folder : '';
+  }
+
+  protected onFolderDrop_(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const folder = this.folderOf_(e);
+    const tab = this.draggedTab_;
+    const from = this.dragFolder_;
+    const to = this.spaceOf_(e);
+    this.onBoardTabDragend_();
+    if (tab && folder !== from) {
+      this.fireSpace_('file', to, {tab, to, folder});
+    }
+  }
+
+  protected onColumnDragleave_(e: DragEvent) {
+    const column = e.currentTarget as HTMLElement;
+    if (column.contains(e.relatedTarget as Node | null)) {
+      return;
+    }
+    this.dropFolder_ = '';
+    if (this.dropTarget_ === column.dataset['id']) {
+      this.dropTarget_ = '';
+    }
+  }
+
+  protected onColumnDrop_(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const to = this.spaceOf_(e);
+    const tab = this.draggedTab_;
+    const from = this.dragSource_;
+    const filed = !!this.dragFolder_;
+    this.onBoardTabDragend_();
+    if (!tab || !to) {
+      return;
+    }
+    if (to !== from) {
+      this.fireSpace_('move', from, {tab, to});
+    } else if (filed) {
+      this.fireSpace_('file', to, {tab, to, folder: ''});
+    }
+  }
+
+  protected onGripPointerdown_(e: PointerEvent) {
+    if (e.button !== 0 || INCOGNITO || this.columnDrag_ ||
+        this.spaces.length < 2) {
+      return;
+    }
+    e.preventDefault();
+    const grip = e.currentTarget as HTMLElement;
+    const column = grip.closest<HTMLElement>('.column')!;
+    const columns =
+        [...this.shadowRoot.querySelectorAll<HTMLElement>('.column')];
+    const from = columns.indexOf(column);
+    this.columnDrag_ = {
+      id: column.dataset['id'] ?? '',
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      grip,
+      column,
+      columns,
+      pitch: columns[1]!.offsetLeft - columns[0]!.offsetLeft,
+      from,
+      to: from,
+      moved: false,
+    };
+    grip.setPointerCapture(e.pointerId);
+    grip.addEventListener('pointermove', this.onColumnDragMove_);
+    grip.addEventListener('pointerup', this.onColumnDragEnd_);
+    grip.addEventListener('pointercancel', this.onColumnDragEnd_);
+  }
+
+  private onColumnDragMove_ = (e: PointerEvent) => {
+    const drag = this.columnDrag_;
+    if (!drag || e.pointerId !== drag.pointerId) {
+      return;
+    }
+    if (!drag.moved) {
+      if (Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD) {
+        return;
+      }
+      drag.moved = true;
+      drag.column.toggleAttribute('lifted', true);
+    }
+    const last = drag.columns.length - 1;
+    const offset = Math.min(
+        (last - drag.from) * drag.pitch,
+        Math.max(-drag.from * drag.pitch, e.clientX - drag.startX));
+    drag.column.style.transform = `translateX(${offset}px)`;
+    drag.to = Math.min(
+        last, Math.max(0, Math.round(drag.from + offset / drag.pitch)));
+    drag.columns.forEach((column, index) => {
+      if (index === drag.from) {
+        return;
+      }
+      const shift = index > drag.from && index <= drag.to ? -drag.pitch :
+          index < drag.from && index >= drag.to           ? drag.pitch :
+                                                            0;
+      column.style.transform = shift ? `translateX(${shift}px)` : '';
+    });
+  };
+
+  private onColumnDragEnd_ = async (e: PointerEvent) => {
+    const drag = this.columnDrag_;
+    if (!drag || e.pointerId !== drag.pointerId) {
+      return;
+    }
+    this.columnDrag_ = null;
+    drag.grip.removeEventListener('pointermove', this.onColumnDragMove_);
+    drag.grip.removeEventListener('pointerup', this.onColumnDragEnd_);
+    drag.grip.removeEventListener('pointercancel', this.onColumnDragEnd_);
+    if (drag.grip.hasPointerCapture(e.pointerId)) {
+      drag.grip.releasePointerCapture(e.pointerId);
+    }
+    if (!drag.moved) {
+      return;
+    }
+    const dropX = drag.column.getBoundingClientRect().left;
+    const board = this.shadowRoot.querySelector<HTMLElement>('#board');
+    board?.toggleAttribute('settling', true);
+    drag.column.removeAttribute('lifted');
+    for (const column of drag.columns) {
+      column.style.transform = '';
+    }
+    if (e.type === 'pointerup' && drag.to !== drag.from) {
+      const order = [...this.spaces];
+      const [moved] = order.splice(drag.from, 1);
+      order.splice(drag.to, 0, moved!);
+      this.spaces = order;
+      this.fireSpace_('reorder', drag.id, {delta: drag.to - drag.from});
+      await this.updateComplete;
+    }
+    drag.column.style.transform =
+        `translateX(${dropX - drag.column.getBoundingClientRect().left}px)`;
+    void getComputedStyle(drag.column).transform;
+    board?.removeAttribute('settling');
+    drag.column.style.transform = '';
+  };
+
   private fireSpace_(
-      command: LibrarySpaceDetail['command'], id: string, x = 0, y = 0) {
-    this.fire<LibrarySpaceDetail>('rail-library-space', {command, id, x, y});
+      command: LibrarySpaceCommand, id: string,
+      extra: Partial<LibrarySpaceDetail> = {}) {
+    this.fire<LibrarySpaceDetail>('rail-library-space', {
+      command,
+      id,
+      tab: '',
+      to: '',
+      folder: '',
+      name: '',
+      delta: 0,
+      x: 0,
+      y: 0,
+      ...extra,
+    });
   }
 
   protected archiveDetail_(tab: ArchivedTab): string {
@@ -622,9 +1095,7 @@ export class RailLibraryElement extends CrLitElement {
   }
 
   protected archiveFavicon_(tab: ArchivedTab): string {
-    return tab.favicon ||
-        `chrome://favicon2/?pageUrl=${
-               encodeURIComponent(tab.url)}&size=16&scaleFactor=2x`;
+    return faviconFor(tab.favicon, tab.url);
   }
 
   protected archiveCount_(): string {
