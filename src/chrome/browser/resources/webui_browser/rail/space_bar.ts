@@ -61,6 +61,12 @@ const SPACE_KEYS = 8;
 const CARD_LINGER_MS = 1000;
 const CARD_EXIT_MS = 500;
 const RING_LENGTH = 2 * Math.PI * 10;
+const FLIGHT_MS = 700;
+const FLIGHT_STEPS = 36;
+const FLIGHT_CHIP = 44;
+const FLIGHT_ICON = 28;
+const FLIGHT_RISE = 140;
+const FLIGHT_POP = 0.15;
 
 export class SpaceBarElement extends CrLitElement {
   static get is() {
@@ -155,8 +161,74 @@ export class SpaceBarElement extends CrLitElement {
     this.unsubscribe_ = [
       list.subscribe(sync),
       list.onFinish(() => this.bounce_()),
+      list.onStart(item => this.fly_(item)),
     ];
     sync();
+  }
+
+  private fly_(item: Download) {
+    const target = this.shadowRoot.querySelector('#library');
+    const content = document.querySelector('webui-browser-app')
+                        ?.shadowRoot?.querySelector('#contentRegion');
+    if (!target || !content || !item.filePath ||
+        matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    const end = target.getBoundingClientRect();
+    if (!end.width || end.right <= 0 || end.left >= window.innerWidth) {
+      return;
+    }
+    const start = content.getBoundingClientRect();
+    const sx = start.left + start.width / 2;
+    const sy = start.top + start.height / 2;
+    const ex = end.left + end.width / 2;
+    const ey = end.top + end.height / 2;
+    const cx = (sx + ex) / 2;
+    const cy = Math.min(sy, ey) - FLIGHT_RISE;
+    const frames = Array.from({length: FLIGHT_STEPS + 1}, (_, step) => {
+      const p = step / FLIGHT_STEPS;
+      const t = p * p;
+      const u = 1 - t;
+      const x = u * u * sx + 2 * u * t * cx + t * t * ex - FLIGHT_CHIP / 2;
+      const y = u * u * sy + 2 * u * t * cy + t * t * ey - FLIGHT_CHIP / 2;
+      const scale = p < FLIGHT_POP ?
+          0.6 + 0.55 * p / FLIGHT_POP :
+          1.15 - 0.7 * (p - FLIGHT_POP) / (1 - FLIGHT_POP);
+      return {
+        transform: `translate(${x}px, ${y}px) scale(${scale})`,
+        opacity: p < 0.9 ? 1 : (1 - p) / 0.1,
+      };
+    });
+    const chip = document.createElement('div');
+    Object.assign(chip.style, {
+      position: 'fixed',
+      left: '0',
+      top: '0',
+      width: `${FLIGHT_CHIP}px`,
+      height: `${FLIGHT_CHIP}px`,
+      display: 'grid',
+      placeItems: 'center',
+      boxSizing: 'border-box',
+      background: 'color-mix(in srgb, var(--rail-space-color, #7c5cfc) 38%,' +
+          ' rgb(20 20 24))',
+      border: '1px solid rgb(255 255 255 / 16%)',
+      borderRadius: '12px',
+      boxShadow: '0 8px 24px rgb(0 0 0 / 40%), 0 2px 6px rgb(0 0 0 / 30%)',
+      pointerEvents: 'none',
+      zIndex: '1000',
+    });
+    const icon = document.createElement('img');
+    icon.src = fileIconUrl(item);
+    icon.alt = '';
+    icon.width = icon.height = FLIGHT_ICON;
+    chip.appendChild(icon);
+    icon.decode().then(() => {
+      document.body.appendChild(chip);
+      chip.animate(frames, {duration: FLIGHT_MS}).onfinish = () => {
+        chip.remove();
+        this.bounce_();
+      };
+    }, () => {});
   }
 
   private bounce_() {

@@ -6,6 +6,7 @@ export type {Data as Download};
 export {State as DownloadState};
 
 const RECENT_COUNT = 4;
+const FRESH_START_S = 60;
 
 const MOVING = new Set([
   State.kInProgress,
@@ -75,6 +76,8 @@ export class DownloadList {
   private terms_: string[] = [];
   private moving_ = new Set<string>();
   private readonly finishListeners_ = new Set<(item: Data) => void>();
+  private readonly startListeners_ = new Set<(item: Data) => void>();
+  private readonly seen_ = new Set<string>();
 
   constructor(readonly profile: string) {
     const page = Mojo.createMessagePipe();
@@ -125,6 +128,7 @@ export class DownloadList {
     this.router_.$.close();
     this.listeners_.clear();
     this.finishListeners_.clear();
+    this.startListeners_.clear();
   }
 
   subscribe(listener: () => void): () => void {
@@ -137,8 +141,20 @@ export class DownloadList {
     return () => this.finishListeners_.delete(listener);
   }
 
+  onStart(listener: (item: Data) => void): () => void {
+    this.startListeners_.add(listener);
+    return () => this.startListeners_.delete(listener);
+  }
+
   private changed_() {
+    const nowS = Date.now() / 1000;
     for (const item of this.items_) {
+      if (!this.seen_.has(item.id)) {
+        this.seen_.add(item.id);
+        if (nowS - item.started < FRESH_START_S) {
+          this.startListeners_.forEach(listener => listener(item));
+        }
+      }
       if (item.state === State.kComplete && this.moving_.has(item.id)) {
         this.finishListeners_.forEach(listener => listener(item));
       }
