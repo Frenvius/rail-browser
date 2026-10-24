@@ -642,3 +642,79 @@ test('archived tabs group by day', () => {
     ['Older', ['ancient']],
   ]);
 });
+
+test('archived tabs of one group gather under the group within a day', () => {
+  const groupByDay = load('tab_archive', 'groupByDay');
+  const ArchiveStore = load('tab_archive', 'ArchiveStore');
+  const noon = new Date(2026, 9, 23, 12).getTime();
+  const research = {id: 'g', name: 'Research'};
+  const at = (id: string, group?: object) =>
+      ({id, url: `https://${id}.test/`, title: id, favicon: '', space: 's',
+        group, archivedAt: noon});
+  const [today] = groupByDay(
+      [at('a', research), at('loose'), at('b', research)], noon);
+  expect(today.entries.map((entry: any) => entry.kind === 'tab' ?
+      entry.tab.id : [entry.group.name, entry.tabs.map((tab: any) => tab.id)]))
+      .toEqual([['Research', ['a', 'b']], 'loose']);
+  const archive = new ArchiveStore(memoryStore(), () => noon);
+  archive.add([at('a', research), at('loose'), at('b', research)]);
+  expect(archive.takeMany(['b', 'gone', 'a']).map((tab: any) => tab.id))
+      .toEqual(['b', 'a']);
+  expect(archive.list().map((tab: any) => tab.id)).toEqual(['loose']);
+});
+
+test('restoring archived tabs brings their group back once', () => {
+  const restoreArchivedRows = load('tab_archive', 'restoreArchivedRows');
+  const Folders = load('folders', 'Folders');
+  const spaces = new Spaces(() => {});
+  spaces.restore(state, [tab('a')], new Set());
+  const tidyGroups = new Folders(() => {});
+  const archived = (id: string, space: string, group?: object) =>
+      ({id, url: `https://${id}.test/`, title: id, favicon: '', space, group,
+        archivedAt: 0});
+  const research = {id: 'g', name: 'Research'};
+  const rows = restoreArchivedRows(
+      [archived('x', 's', research), archived('y', 'gone', research),
+       archived('z', 'gone')],
+      spaces, tidyGroups);
+  expect(rows.map((row: any) => [row.url, row.space, row.group])).toEqual([
+    ['https://x.test/', 's', 'g'],
+    ['https://y.test/', 's', 'g'],
+    ['https://z.test/', 's', ''],
+  ]);
+  expect(tidyGroups.in('s').map((group: any) => [group.id, group.name]))
+      .toEqual([['g', 'Research']]);
+});
+
+test('an empty group keeps its place and new tabs open below it', () => {
+  const deps = {dormantTabData: load('pinned_tabs', 'dormantTabData')};
+  const splitSections = load('sections', 'splitSections', false, deps);
+  const reanchorEmptyGroups =
+      load('sections', 'reanchorEmptyGroups', false, deps);
+  const Folders = load('folders', 'Folders');
+  const spaces = new Spaces(() => {});
+  spaces.restore(state, [tab('a'), tab('b')], new Set());
+  const pinned = new PinnedTabs(() => {});
+  const tidyGroups = new Folders(() => {});
+  const group = tidyGroups.create('s', 'G');
+  const legacy = tidyGroups.create('s', 'Legacy');
+  spaces.setGroup(spaces.byTab('b').key, group.id);
+  let looseEntries: any[] = [];
+  const layout = (ids: string[]) => {
+    reanchorEmptyGroups(looseEntries, spaces, tidyGroups);
+    ({looseEntries} = splitSections(
+        ids.map(id => ({type: 'tab', id, tabData: tab(id)})), pinned, spaces,
+        new Folders(() => {}), tidyGroups));
+    return looseEntries.map((entry: any) => entry.kind === 'item' ?
+        entry.item.id : `[${entry.section.group.name}]`);
+  };
+  expect(layout(['a', 'b'])).toEqual(['a', '[G]', '[Legacy]']);
+  spaces.adopt('c', 'https://c.test/');
+  expect(layout(['a', 'b', 'c'])).toEqual(['a', '[G]', '[Legacy]', 'c']);
+  spaces.forget('b');
+  expect(layout(['a', 'c'])).toEqual(['a', '[G]', '[Legacy]', 'c']);
+  spaces.adopt('d', 'https://d.test/');
+  expect(layout(['a', 'c', 'd'])).toEqual(['a', '[G]', '[Legacy]', 'c', 'd']);
+  spaces.forget('a');
+  expect(layout(['c', 'd'])).toEqual(['[G]', '[Legacy]', 'c', 'd']);
+});

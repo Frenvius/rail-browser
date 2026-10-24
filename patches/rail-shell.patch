@@ -6413,7 +6413,7 @@ index a15445b..63a9389 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..78ac095 100644
+index b7a5099..017a276 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6454,7 +6454,7 @@ index b7a5099..78ac095 100644
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
 +import {favoritesKey, isFavorites, PinnedTabs, ReopenHistory} from '../rail/pinned_tabs.js';
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow, TidySection} from '../rail/sections.js';
-+import {splitSections} from '../rail/sections.js';
++import {anchorDroppedGroups, reanchorEmptyGroups, splitSections} from '../rail/sections.js';
 +import type {SidebarState} from '../rail/sidebar_state.js';
 +import {INCOGNITO, MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
@@ -6469,8 +6469,8 @@ index b7a5099..78ac095 100644
 +import type {FolderCommand, GroupCommand, TabCommand, TabCommandDetail, TabMenuTarget} from '../rail/tab_menu.js';
 +import {openFolderMenu, openGroupMenu, openTabMenu} from '../rail/tab_menu.js';
 +import {actsOnSelection, TabSelection} from '../rail/tab_selection.js';
-+import type {ArchiveCandidate, ArchiveHours} from '../rail/tab_archive.js';
-+import {archivedTabs, TabArchive} from '../rail/tab_archive.js';
++import type {ArchiveCandidate, ArchivedGroup, ArchiveHours} from '../rail/tab_archive.js';
++import {archivedTabs, restoreArchivedRows, TabArchive} from '../rail/tab_archive.js';
 +import {TabSleep} from '../rail/tab_sleep.js';
 +import type {SleepCandidate} from '../rail/tab_sleep.js';
 +import type {TidyGroupPlan, TidyTab} from '../rail/tidy_tabs.js';
@@ -6837,7 +6837,7 @@ index b7a5099..78ac095 100644
    }
  
  
-@@ -194,14 +457,43 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +457,39 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -6869,11 +6869,7 @@ index b7a5099..78ac095 100644
 +      this.pinnedTabs_.release(nodeId);
        this.removeItem(nodeId);
      });
-+    for (const group of groups) {
-+      if (group && !this.spaces_.keysInGroup(group).length) {
-+        this.tidyGroups_.remove(group);
-+      }
-+    }
++    this.removeEmptiedGroups_(groups);
 +    if (successor) {
 +      this.activateTab(successor);
 +    }
@@ -6882,7 +6878,7 @@ index b7a5099..78ac095 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -209,6 +501,12 @@ export class TabStripElement extends CrLitElement implements
+@@ -209,6 +497,12 @@ export class TabStripElement extends CrLitElement implements
      this.dragDelegate_.onUpdate();
    }
 
@@ -6895,7 +6891,7 @@ index b7a5099..78ac095 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
 
-@@ -217,48 +515,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +511,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -6949,7 +6945,7 @@ index b7a5099..78ac095 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +570,2261 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +566,2280 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7816,8 +7812,9 @@ index b7a5099..78ac095 100644
 +  private closeGroup_(id: string) {
 +    const keys = this.spaces_.keysInGroup(id);
 +    this.nativeGroups_.release(id);
-+    this.tidyGroups_.remove(id);
 +    this.closeMany_(keys);
++    this.tidyGroups_.remove(id);
++    this.refreshSections_();
 +  }
 +
 +  private ungroupGroup_(id: string) {
@@ -8306,13 +8303,23 @@ index b7a5099..78ac095 100644
 +
 +  private dropRow_(id: string): boolean {
 +    const remote = this.spaces_.remoteOf(id);
++    const group = this.spaces_.dormantByKey(id)?.group ?? '';
 +    if (!this.spaces_.drop(id)) {
 +      return false;
 +    }
++    this.removeEmptiedGroups_([group]);
 +    if (remote) {
 +      browserProxyFactory.getInstance().handler.closeRemoteTab(remote);
 +    }
 +    return true;
++  }
++
++  private removeEmptiedGroups_(groups: Iterable<string>) {
++    for (const group of groups) {
++      if (group && !this.spaces_.keysInGroup(group).length) {
++        this.tidyGroups_.remove(group);
++      }
++    }
 +  }
 +
 +  private async wakeRow_(row: TabRow) {
@@ -8447,8 +8454,14 @@ index b7a5099..78ac095 100644
 +                                  title: row.title,
 +                                  favicon: row.favicon,
 +                                  space: row.space,
++                                  group: this.archivedGroup_(row.group),
 +                                })));
 +    this.tabArchive_.forget(rows.map(row => row.key));
++  }
++
++  private archivedGroup_(id: string): ArchivedGroup|undefined {
++    const group = this.tidyGroups_.byId(id);
++    return group && {id: group.id, name: group.name};
 +  }
 +
 +  private archiveCandidates_(): ArchiveCandidate[] {
@@ -8486,18 +8499,18 @@ index b7a5099..78ac095 100644
 +    }
 +  }
 +
-+  private async restoreArchived_(id: string) {
-+    const tab = archivedTabs().take(id);
-+    if (!tab) {
++  private async restoreArchived_(ids: string[]) {
++    const [first] = restoreArchivedRows(
++        archivedTabs().takeMany(ids), this.spaces_, this.tidyGroups_);
++    if (!first) {
 +      return;
 +    }
-+    const space =
-+        this.spaces_.byId(tab.space) ? tab.space : this.spaces_.activeId;
 +    await this.closeLibrary();
-+    if (space !== this.spaces_.activeId) {
-+      this.selectSpace_(space);
++    this.activateTab(first.key);
++    if (first.space !== this.spaces_.activeId) {
++      this.selectSpace_(first.space);
 +    }
-+    await this.createTab_(tab.url, space);
++    this.refreshSections_();
 +  }
 +
 +  get libraryOpen(): boolean {
@@ -8654,8 +8667,8 @@ index b7a5099..78ac095 100644
 +    }
 +  }
 +
-+  protected onRailArchiveRestore_(e: CustomEvent<{id: string}>) {
-+    this.restoreArchived_(e.detail.id);
++  protected onRailArchiveRestore_(e: CustomEvent<{ids: string[]}>) {
++    this.restoreArchived_(e.detail.ids);
 +  }
 +
 +  protected async onRailLibraryOpenUrl_(e: CustomEvent<{url: string}>) {
@@ -8747,6 +8760,7 @@ index b7a5099..78ac095 100644
 +  }
 +
 +  private refreshSections_() {
++    reanchorEmptyGroups(this.looseEntries_, this.spaces_, this.tidyGroups_);
 +    const sections = splitSections(
 +        this.items_, this.pinnedTabs_, this.spaces_, this.folders_,
 +        this.tidyGroups_);
@@ -9209,6 +9223,7 @@ index b7a5099..78ac095 100644
 +          key => !placed.has(key)));
 +    }
 +    this.spaces_.reorder(this.spaces_.activeId, ids);
++    anchorDroppedGroups(slots, this.spaces_, this.tidyGroups_);
 +    for (const group of occupied) {
 +      if (!this.spaces_.keysInGroup(group.id).length) {
 +        this.tidyGroups_.remove(group.id);

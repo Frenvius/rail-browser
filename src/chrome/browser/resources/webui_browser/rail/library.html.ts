@@ -351,22 +351,59 @@ export function getHtml(this: RailLibraryElement) {
   ` : this.days_.length ? html`
     <div class="list">
       ${this.days_.map(day => html`
-        <div class="day">${day.label}</div>
-        ${repeat(day.tabs, tab => tab.id, (tab, index) => html`
-          <div class="row archived" data-id="${tab.id}" tabindex="0"
-              style="--i: ${index}" title="${tab.url}"
+        <div class="day archive-day">
+          ${day.label}
+          <button class="text-action restore-day"
+              data-ids="${this.archiveIds_(day.tabs)}"
+              title="Restore every tab archived ${day.label.toLowerCase()}"
+              @click="${this.onArchivedClick_}">Restore All</button>
+        </div>
+        ${repeat(this.archiveRows_(day), row => row.key, (row, index) =>
+            row.kind === 'tab' ? html`
+          <div class="row archived" data-ids="${row.tab.id}" tabindex="0"
+              style="--i: ${index}" title="${row.tab.url}"
+              ?nested="${row.nested}"
               @click="${this.onArchivedClick_}"
               @keydown="${this.onRowKeydown_}">
             <span class="tile">
-              <img class="favicon" alt="" src="${this.archiveFavicon_(tab)}">
+              <img class="favicon" alt="" src="${this.archiveFavicon_(row.tab)}">
             </span>
             <div class="text">
-              <span class="title">${tab.title || tab.url}</span>
-              <span class="detail">${this.archiveDetail_(tab)}</span>
+              <span class="title">${row.tab.title || row.tab.url}</span>
+              <span class="detail">${this.archiveDetail_(row.tab)}</span>
             </div>
-            <span class="time">${this.archiveTime_(tab)}</span>
+            <span class="time">${this.archiveTime_(row.tab)}</span>
             <div class="actions">
-              <button class="action remove" data-id="${tab.id}"
+              <button class="action remove" data-ids="${row.tab.id}"
+                  title="Remove from archive"
+                  @click="${this.onArchivedRemoveClick_}">
+                ${libraryIcon('close')}
+              </button>
+            </div>
+          </div>
+        ` : html`
+          <div class="row archived archived-group" tabindex="0"
+              data-ids="${this.archiveIds_(row.tabs)}"
+              style="--i: ${index}" title="Restore ${row.group.name}"
+              @click="${this.onArchivedClick_}"
+              @keydown="${this.onRowKeydown_}">
+            <span class="tile">${libraryIcon('group')}</span>
+            <div class="text">
+              <span class="title">${row.group.name}</span>
+              <span class="detail">${this.archiveGroupDetail_(row.tabs)}</span>
+            </div>
+            <span class="time">${this.archiveTime_(row.tabs[0]!)}</span>
+            <div class="actions">
+              <button class="action expand"
+                  title="${row.expanded ? 'Hide tabs' : 'Show tabs'}"
+                  aria-label="Show tabs of ${row.group.name}"
+                  aria-expanded="${row.expanded}" data-key="${row.key}"
+                  @click="${this.onArchivedExpandClick_}">
+                <cr-icon class="group-chevron" icon="cr:keyboard-arrow-down">
+                </cr-icon>
+              </button>
+              <button class="action remove"
+                  data-ids="${this.archiveIds_(row.tabs)}"
                   title="Remove from archive"
                   @click="${this.onArchivedRemoveClick_}">
                 ${libraryIcon('close')}

@@ -1,3 +1,6 @@
+import type {Folders} from './folders.js';
+import type {Spaces, TabRow} from './spaces.js';
+
 const ARCHIVE_KEY = 'rail.archivedTabs';
 const SEEN_KEY = 'rail.tabSeen';
 const CHECK_MS = 60 * 1000;
@@ -20,18 +23,34 @@ export function archiveHoursFor(hours: ArchiveHours, profile: string): number {
   return hours[archiveSource(hours, profile)] ?? DEFAULT_ARCHIVE_HOURS;
 }
 
+export interface ArchivedGroup {
+  id: string;
+  name: string;
+}
+
 export interface ArchivedTab {
   id: string;
   url: string;
   title: string;
   favicon: string;
   space: string;
+  group?: ArchivedGroup;
   archivedAt: number;
 }
+
+export type ArchiveEntry = {
+  kind: 'tab',
+  tab: ArchivedTab,
+}|{
+  kind: 'group',
+  group: ArchivedGroup,
+  tabs: ArchivedTab[],
+};
 
 export interface ArchiveDay {
   label: string;
   tabs: ArchivedTab[];
+  entries: ArchiveEntry[];
 }
 
 export interface ArchiveCandidate {
@@ -94,12 +113,17 @@ export class ArchiveStore {
   }
 
   take(id: string): ArchivedTab|undefined {
+    return this.takeMany([id])[0];
+  }
+
+  takeMany(ids: string[]): ArchivedTab[] {
     const tabs = this.list();
-    const tab = tabs.find(one => one.id === id);
-    if (tab) {
-      this.save_(tabs.filter(one => one !== tab));
+    const taken = ids.map(id => tabs.find(one => one.id === id))
+                      .filter(tab => tab !== undefined);
+    if (taken.length) {
+      this.save_(tabs.filter(one => !taken.includes(one)));
     }
-    return tab;
+    return taken;
   }
 
   clear() {
@@ -136,6 +160,30 @@ export function archivedTabs(): ArchiveStore {
   return shared;
 }
 
+export function restoreArchivedRows(
+    tabs: ArchivedTab[], spaces: Spaces, tidyGroups: Folders): TabRow[] {
+  const rows: TabRow[] = [];
+  for (const tab of tabs) {
+    const group = tab.group && tidyGroups.byId(tab.group.id);
+    const space = group ? group.space :
+        spaces.byId(tab.space) ? tab.space :
+                                 spaces.activeId;
+    const row = spaces.addDormant(
+        space, {url: tab.url, title: tab.title, favicon: tab.favicon});
+    if (!row) {
+      continue;
+    }
+    if (tab.group) {
+      spaces.setGroup(
+          row.key,
+          group ? group.id :
+                  tidyGroups.create(space, tab.group.name, tab.group.id).id);
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
 export function matchArchived(tabs: ArchivedTab[], query: string):
     ArchivedTab[] {
   const needle = query.trim().toLowerCase();
@@ -151,12 +199,8 @@ export function groupByDay(tabs: ArchivedTab[], now: number): ArchiveDay[] {
   const midnight = new Date(now);
   midnight.setHours(0, 0, 0, 0);
   const today = midnight.getTime();
-  const days: ArchiveDay[] = [
-    {label: 'Today', tabs: []},
-    {label: 'Yesterday', tabs: []},
-    {label: 'This Week', tabs: []},
-    {label: 'Older', tabs: []},
-  ];
+  const days: ArchiveDay[] = ['Today', 'Yesterday', 'This Week', 'Older'].map(
+      label => ({label, tabs: [], entries: []}));
   for (const tab of tabs) {
     const day = tab.archivedAt >= today ? 0 :
         tab.archivedAt >= today - DAY_MS ? 1 :
@@ -164,7 +208,30 @@ export function groupByDay(tabs: ArchivedTab[], now: number): ArchiveDay[] {
                                               3;
     days[day]!.tabs.push(tab);
   }
+  for (const day of days) {
+    day.entries = entriesOf(day.tabs);
+  }
   return days.filter(day => day.tabs.length);
+}
+
+function entriesOf(tabs: ArchivedTab[]): ArchiveEntry[] {
+  const entries: ArchiveEntry[] = [];
+  const groups = new Map<string, ArchivedTab[]>();
+  for (const tab of tabs) {
+    if (!tab.group?.id) {
+      entries.push({kind: 'tab', tab});
+      continue;
+    }
+    const grouped = groups.get(tab.group.id);
+    if (grouped) {
+      grouped.push(tab);
+      continue;
+    }
+    const fresh = [tab];
+    groups.set(tab.group.id, fresh);
+    entries.push({kind: 'group', group: tab.group, tabs: fresh});
+  }
+  return entries;
 }
 
 export class TabArchive {

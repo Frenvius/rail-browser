@@ -56,9 +56,10 @@ export class Folders {
     this.onChange_();
   }
 
-  create(spaceId: string, name: string): Folder {
+  create(spaceId: string, name: string, id: string = crypto.randomUUID()):
+      Folder {
     const folder: Folder = {
-      id: crypto.randomUUID(),
+      id,
       space: spaceId,
       name,
       expanded: true,

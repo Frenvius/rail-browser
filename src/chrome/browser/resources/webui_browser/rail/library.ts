@@ -16,7 +16,7 @@ import type {FolderSectionOf, PinnedLayout} from './sections.js';
 import type {BoardColumn, BoardTab} from './space_board.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_PROFILE_NAME, spaceHex} from './spaces.js';
-import type {ArchiveDay, ArchivedTab, ArchiveHours} from './tab_archive.js';
+import type {ArchiveDay, ArchivedGroup, ArchivedTab, ArchiveHours} from './tab_archive.js';
 import {archivedTabs, archiveHoursFor, groupByDay, matchArchived} from './tab_archive.js';
 
 export type LibrarySection = 'downloads'|'spaces'|'archive';
@@ -56,6 +56,19 @@ export type BoardRow = {
   count: number,
 }|{
   kind: 'divider',
+};
+
+export type ArchiveRow = {
+  kind: 'tab',
+  key: string,
+  tab: ArchivedTab,
+  nested: boolean,
+}|{
+  kind: 'group',
+  key: string,
+  group: ArchivedGroup,
+  tabs: ArchivedTab[],
+  expanded: boolean,
 };
 
 export interface LibraryChangedDetail {
@@ -150,6 +163,7 @@ export class RailLibraryElement extends CrLitElement {
       downloads_: {type: Array, state: true},
       archived_: {type: Array, state: true},
       days_: {type: Array, state: true},
+      expandedGroups_: {type: Object, state: true},
       filterProfile_: {type: String, state: true},
       confirming_: {type: String, state: true},
       filtering_: {type: Boolean, state: true},
@@ -175,6 +189,7 @@ export class RailLibraryElement extends CrLitElement {
   protected accessor downloads_: Download[] = [];
   protected accessor archived_: ArchivedTab[] = [];
   protected accessor days_: ArchiveDay[] = [];
+  protected accessor expandedGroups_ = new Set<string>();
   protected accessor filterProfile_ = '';
   protected accessor confirming_ = '';
   protected accessor filtering_ = false;
@@ -238,6 +253,7 @@ export class RailLibraryElement extends CrLitElement {
     }
     if (changedProperties.has('section') || changedProperties.has('open')) {
       this.query_ = '';
+      this.expandedGroups_ = new Set();
       this.filtering_ = false;
       this.editing_ = '';
       this.editingFolder_ = '';
@@ -1463,13 +1479,58 @@ export class RailLibraryElement extends CrLitElement {
     return `Tabs you close, or leave alone for ${span}, land here.`;
   }
 
+  protected archiveIds_(tabs: ArchivedTab[]): string {
+    return tabs.map(tab => tab.id).join(' ');
+  }
+
+  protected archiveRows_(day: ArchiveDay): ArchiveRow[] {
+    return day.entries.flatMap((entry): ArchiveRow[] => {
+      if (entry.kind === 'tab') {
+        return [{kind: 'tab', key: entry.tab.id, tab: entry.tab, nested: false}];
+      }
+      const key = `${day.label}/${entry.group.id}`;
+      const expanded = this.expandedGroups_.has(key);
+      return [
+        {kind: 'group', key, group: entry.group, tabs: entry.tabs, expanded},
+        ...(expanded ? entry.tabs : [])
+            .map(tab => ({kind: 'tab' as const, key: tab.id, tab, nested: true})),
+      ];
+    });
+  }
+
+  protected archiveGroupDetail_(tabs: ArchivedTab[]): string {
+    const spaces = new Set(tabs.map(tab => tab.space));
+    const space = spaces.size === 1 && this.spaces.length > 1 ?
+        this.spaces.find(one => spaces.has(one.id)) :
+        undefined;
+    return [`${tabs.length} tab${tabs.length === 1 ? '' : 's'}`, space?.name]
+        .filter(Boolean)
+        .join(' · ');
+  }
+
+  private archiveIdsOf_(e: Event): string[] {
+    return ((e.currentTarget as HTMLElement).dataset['ids'] ?? '')
+        .split(' ')
+        .filter(Boolean);
+  }
+
   protected onArchivedClick_(e: Event) {
-    this.fire('rail-archive-restore', {id: this.idOf_(e)});
+    this.fire('rail-archive-restore', {ids: this.archiveIdsOf_(e)});
   }
 
   protected onArchivedRemoveClick_(e: Event) {
     e.stopPropagation();
-    archivedTabs().take(this.idOf_(e));
+    archivedTabs().takeMany(this.archiveIdsOf_(e));
+  }
+
+  protected onArchivedExpandClick_(e: Event) {
+    e.stopPropagation();
+    const key = (e.currentTarget as HTMLElement).dataset['key'] ?? '';
+    const expanded = new Set(this.expandedGroups_);
+    if (!expanded.delete(key)) {
+      expanded.add(key);
+    }
+    this.expandedGroups_ = expanded;
   }
 }
 

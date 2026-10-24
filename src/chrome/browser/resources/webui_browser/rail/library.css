@@ -546,6 +546,34 @@ h2 {
   opacity: 0;
 }
 
+.row.archived[nested] {
+  margin-inline-start: 22px;
+}
+
+.archived-group .tile .icon {
+  color: var(--rail-text-muted, #cfcfcf);
+  height: 16px;
+  width: 16px;
+}
+
+.expand[aria-expanded='false'] .group-chevron {
+  transform: rotate(-90deg);
+}
+
+.archive-day {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.restore-day {
+  font-size: 11px;
+  height: 22px;
+  letter-spacing: 0;
+  margin-block: -4px;
+  text-transform: none;
+}
+
 .progress {
   background: var(--rail-elevated, rgb(255 255 255 / 6%));
   border-radius: 2px;

@@ -81,6 +81,46 @@ export function layoutPinned<T>(
   return layout;
 }
 
+export const TOP_ANCHOR = 'top';
+
+export function reanchorEmptyGroups(
+    previous: LooseEntry[], spaces: Spaces, tidyGroups: Folders) {
+  const keyOf = (id: string) => spaces.rowFor(id)?.key ?? '';
+  let anchor = TOP_ANCHOR;
+  for (const entry of previous) {
+    if (entry.kind === 'item') {
+      anchor = keyOf(entry.item.id) || anchor;
+      continue;
+    }
+    const {group, items} = entry.section;
+    const anchored = group.after === TOP_ANCHOR ||
+        spaces.rowsIn(group.space).some(row => row.key === group.after);
+    if (!spaces.keysInGroup(group.id).length && (items.length || !anchored)) {
+      tidyGroups.setAfter(group.id, anchor);
+    }
+    for (const item of items) {
+      anchor = keyOf(item.id) || anchor;
+    }
+  }
+}
+
+export function anchorDroppedGroups(
+    slots: Array<{id: string, kind: string}>, spaces: Spaces,
+    tidyGroups: Folders) {
+  let anchor = TOP_ANCHOR;
+  for (const slot of slots) {
+    const keys =
+        slot.kind === 'tab' ? [slot.id] : spaces.keysInGroup(slot.id);
+    if (slot.kind !== 'tab' && !keys.length) {
+      tidyGroups.setAfter(slot.id, anchor);
+    }
+    const last = keys.at(-1);
+    if (last) {
+      anchor = spaces.rowFor(last)?.key ?? anchor;
+    }
+  }
+}
+
 export function splitSections(
     items: TabStripItem[], pinned: PinnedTabs, spaces: Spaces, folders: Folders,
     tidyGroups: Folders): Sections {
@@ -132,29 +172,35 @@ export function splitSections(
     looseEntries.push({kind: 'group', section});
   };
 
-  for (const row of spaces.rowsIn(spaces.activeId)) {
+  const rows = spaces.rowsIn(spaces.activeId);
+  const anchors = new Set([TOP_ANCHOR, ...rows.map(row => row.key)]);
+  const empty = tidyGroups.in(spaces.activeId)
+                    .filter(group => !spaces.keysInGroup(group.id).length);
+  const placeEmpty = (after: string) => {
+    for (const group of empty.filter(group => group.after === after)) {
+      looseEntries.push({kind: 'group', section: {group, items: []}});
+    }
+  };
+
+  placeEmpty(TOP_ANCHOR);
+  for (const row of rows) {
+    const item = row.tabId ? items.find(
+                                 (candidate): candidate is TabItem =>
+                                     candidate.type === 'tab' &&
+                                     candidate.id === row.tabId) :
+                             undefined;
     if (!row.tabId) {
       collect(
           row.group,
           {type: 'tab', id: row.key, tabData: dormantTabData(row)});
-      continue;
-    }
-    if (claimed.has(row.tabId) || pinned.byTab(row.tabId)) {
-      continue;
-    }
-    const item = items.find(
-        (candidate): candidate is TabItem =>
-            candidate.type === 'tab' && candidate.id === row.tabId);
-    if (item) {
+    } else if (item && !claimed.has(item.id) && !pinned.byTab(row.tabId)) {
       claimed.add(item.id);
       collect(row.group, item);
     }
+    placeEmpty(row.key);
   }
-
-  for (const group of tidyGroups.in(spaces.activeId)) {
-    if (!spaces.keysInGroup(group.id).length) {
-      looseEntries.push({kind: 'group', section: {group, items: []}});
-    }
+  for (const group of empty.filter(group => !anchors.has(group.after))) {
+    looseEntries.push({kind: 'group', section: {group, items: []}});
   }
 
   for (const item of items) {
