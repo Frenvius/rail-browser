@@ -58,6 +58,9 @@ interface DotDrag {
 }
 
 const DRAG_THRESHOLD = 4;
+const SLOT_WIDTH = 25;
+const COMPACT_SLOT_WIDTH = 14;
+const BAR_CHROME_WIDTH = 62;
 const SPACE_KEYS = 8;
 const CARD_LINGER_MS = 1000;
 const CARD_EXIT_MS = 500;
@@ -617,7 +620,7 @@ export class SpaceBarElement extends CrLitElement {
       dot,
       dots,
       centers,
-      pitch: centers[1]! - centers[0]!,
+      pitch: dot.getBoundingClientRect().width,
       from,
       to: from,
       moved: false,
@@ -819,12 +822,22 @@ export class SpaceBarElement extends CrLitElement {
     if (!width) {
       return;
     }
-    const visibleSlots = Math.max(1, Math.floor((width - 62) / 25));
-    const iconSlots = Math.max(1, visibleSlots - 1);
-    const compact = this.spaces.length > iconSlots;
-    this.compact_ = compact;
-    this.visibleCount_ = this.spaces.length > visibleSlots ?
-        Math.max(1, visibleSlots - 1) : visibleSlots;
+    const dotsWidth = width - BAR_CHROME_WIDTH;
+    const iconSlots = Math.floor(dotsWidth / SLOT_WIDTH);
+    this.compact_ = this.spaces.length > iconSlots;
+    if (!this.compact_) {
+      this.visibleCount_ = this.spaces.length;
+      return;
+    }
+    const compactSlots = this.compactSlots_(dotsWidth);
+    this.visibleCount_ = this.spaces.length > compactSlots ?
+        this.compactSlots_(dotsWidth - SLOT_WIDTH) :
+        compactSlots;
+  }
+
+  private compactSlots_(width: number): number {
+    const dots = Math.floor((width - SLOT_WIDTH) / COMPACT_SLOT_WIDTH);
+    return 1 + Math.max(0, dots);
   }
 
   private input_(): HTMLInputElement|null {

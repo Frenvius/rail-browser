@@ -342,6 +342,11 @@ cr-dialog {
   color: var(--rail-text, #f0f0ff);
 }
 
+.dot[compact]:not([selected]) {
+  flex-basis: 14px;
+  width: 14px;
+}
+
 .dot[compact]:not([selected])::after {
   background: currentcolor;
   border-radius: 50%;

@@ -245,7 +245,7 @@ webui-browser-tab-strip {
   flex: 0 0 var(--rail-sidebar-width);
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
   width: var(--rail-sidebar-width);
 }
 

@@ -10,7 +10,7 @@
   flex-direction: column;
   interpolate-size: allow-keywords;
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
   position: relative;
 }
 
