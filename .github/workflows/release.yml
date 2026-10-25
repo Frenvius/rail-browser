@@ -89,11 +89,13 @@ jobs:
 
       - name: Build release
         working-directory: ${{ env.RAIL_REPO_DIR }}
+        env:
+          RAIL_VERSION: ${{ steps.version.outputs.version }}
         run: |
           $self = Get-Process -Id $PID
           $self.PriorityClass = 'BelowNormal'
           $self.ProcessorAffinity = [IntPtr]0xFFFFFF
-          .\.venv\Scripts\python.exe .\build.py --reuse --regenerate -j 20
+          .\.venv\Scripts\python.exe .\build.py --reuse --regenerate --rail-version $env:RAIL_VERSION -j 20
           exit $LASTEXITCODE
 
       - name: Package

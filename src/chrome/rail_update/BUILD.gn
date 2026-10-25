@@ -1,0 +1,13 @@
+executable("rail_update") {
+  sources = [ "rail_update_main.cc" ]
+
+  configs -= [ "//build/config/win:console" ]
+  configs += [ "//build/config/win:windowed" ]
+
+  deps = [
+    "//base",
+    "//build/win:default_exe_manifest",
+  ]
+
+  libs = [ "winhttp.lib" ]
+}

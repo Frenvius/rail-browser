@@ -430,6 +430,10 @@ def main():
         action='store_true',
         help='Rewrite args.gn and rerun GN while reusing the prepared source tree')
     parser.add_argument(
+        '--rail-version',
+        help=('Rail release version, MAJOR.MINOR.PATCH, compiled into the build. '
+              'It turns on the updater and requires --regenerate on an existing output'))
+    parser.add_argument(
         '--prepare-only',
         action='store_true',
         help='Download, patch, and prepare Chromium sources, then stop before GN/Ninja')
@@ -440,6 +444,8 @@ def main():
         help=('Ninja target to build. May be repeated. Defaults to chrome in --dev mode; '
               'otherwise chrome, chromedriver, and mini_installer'))
     args = parser.parse_args()
+    if args.rail_version is not None and not re.fullmatch(r'\d+\.\d+\.\d+', args.rail_version):
+        parser.error('--rail-version must be MAJOR.MINOR.PATCH')
 
     # Set common variables
     source_tree = _ROOT_DIR / 'build' / 'src'
@@ -611,8 +617,12 @@ def main():
             windows_flags = windows_flags.replace('x64', 'arm64')
         if args.tarball:
             windows_flags += '\nchrome_pgo_phase=0\n'
+        if args.rail_version:
+            windows_flags += '\nrail_version="{}"\n'.format(args.rail_version)
         gn_flags += windows_flags
         (source_tree / output_dir / 'args.gn').write_text(gn_flags, encoding=ENCODING)
+    elif args.rail_version:
+        raise RuntimeError('--rail-version only takes effect with --regenerate')
 
     expected_debug_flag = 'is_debug={}'.format('true' if args.dev else 'false')
     args_gn = source_tree / output_dir / 'args.gn'

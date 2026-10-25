@@ -1,3 +1,15 @@
+diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
+index a8c5e14..44abfc6 100644
+--- a/chrome/BUILD.gn
++++ b/chrome/BUILD.gn
+@@ -194,6 +194,7 @@ if (!is_android && !is_mac) {
+         "//chrome/chrome_proxy",
+         "//chrome/elevation_service",
+         "//chrome/notification_helper",
++        "//chrome/rail_update",
+         "//chrome/windows_services/elevated_tracing_service",
+         "//components/crash/win:chrome_wer",
+       ]
 diff --git a/chrome/app/chromium_strings.grd b/chrome/app/chromium_strings.grd
 index 509d092..5f3b2c9 100644
 --- a/chrome/app/chromium_strings.grd
@@ -3894,6 +3906,24 @@ index 084302d..c1f26f6 100644
    }
  
    if (features::IsWebUIToolbarEnabled() ||
+diff --git a/chrome/browser/chrome_browser_main.cc b/chrome/browser/chrome_browser_main.cc
+index 5a70068..91fd5a4 100644
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -80,6 +80,7 @@
+ #include "chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.h"
+ #include "chrome/browser/ui/webui/chrome_web_ui_configs.h"
+ #include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
+ #include "chrome/browser/updater/updater.h"
+ #include "chrome/common/chrome_features.h"
+ #include "chrome/common/chrome_paths.h"
+@@ -851,4 +852,5 @@ std::unique_ptr<content::BrowserMainParts> ChromeBrowserMainParts::Create(
+ #if !BUILDFLAG(IS_ANDROID)
+   main_parts->AddParts(
+       std::make_unique<headless::ChromeBrowserMainExtraPartsHeadless>());
++  main_parts->AddParts(rail::CreateUpdaterMainParts());
+ #endif
 diff --git a/chrome/browser/chrome_content_browser_client_receiver_bindings.cc b/chrome/browser/chrome_content_browser_client_receiver_bindings.cc
 index a805557..9250aa9 100644
 --- a/chrome/browser/chrome_content_browser_client_receiver_bindings.cc
@@ -4506,19 +4536,28 @@ index dfb3bab..7d63026 100644
                                      ? WindowOpenDisposition::NEW_FOREGROUND_TAB
                                      : WindowOpenDisposition::NEW_BACKGROUND_TAB;
 diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
-index 65facca..7fb15fa 100644
+index 65facca..3aa8fda 100644
 --- a/chrome/browser/prefs/browser_prefs.cc
 +++ b/chrome/browser/prefs/browser_prefs.cc
-@@ -94,6 +94,8 @@
+@@ -94,6 +94,9 @@
  #include "chrome/browser/ui/safety_hub/safety_hub_prefs.h"
  #include "chrome/browser/ui/tabs/organizer/organizer_prefs.h"
  #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
  #include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_prefs.h"
  #include "chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h"
  #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
-@@ -1758,6 +1760,8 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+@@ -1466,6 +1469,7 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+   ProfileAttributesStorage::RegisterPrefs(registry);
+   ProfileNetworkContextService::RegisterLocalStatePrefs(registry);
+   profiles::RegisterPrefs(registry);
++  rail::RegisterUpdaterLocalStatePrefs(registry);
+   feature_engagement::RegisterLocalStatePrefs(registry);
+ #if BUILDFLAG(IS_ANDROID)
+   PushMessagingServiceImpl::RegisterPrefs(registry);
+@@ -1758,6 +1762,8 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
    ChromeLocationBarModelDelegate::RegisterProfilePrefs(registry);
    content_settings::CookieSettings::RegisterProfilePrefs(registry);
    ChromeVersionService::RegisterProfilePrefs(registry);
@@ -4574,13 +4613,13 @@ index 6f872ee..aa86f39 100644
      FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
                                          discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index 8b36341..ab7e1c3 100644
+index 8b36341..645db7f 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,18 @@ assert(!is_android)
  build_webui("build") {
    grd_prefix = "webui_browser"
- 
+
 -  static_files = [ "webui_browser.html" ]
 +  static_files = [
 +    "rail/command.html",
@@ -4597,7 +4636,7 @@ index 8b36341..ab7e1c3 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,50 @@ build_webui("build") {
+@@ -27,6 +38,52 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4644,11 +4683,13 @@ index 8b36341..ab7e1c3 100644
 +    "rail/tidy_tabs.ts",
 +    "rail/toast.html.ts",
 +    "rail/toast.ts",
++    "rail/update_badge.html.ts",
++    "rail/update_badge.ts",
 +    "rail/window_controls.ts",
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -54,6 +109,19 @@ build_webui("build") {
+@@ -54,6 +111,20 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4665,10 +4706,11 @@ index 8b36341..ab7e1c3 100644
 +    "rail/space_bar.css",
 +    "rail/space_panel.css",
 +    "rail/toast.css",
++    "rail/update_badge.css",
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -67,7 +135,12 @@ build_webui("build") {
+@@ -67,7 +138,12 @@ build_webui("build") {
      # reference import issue.
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
@@ -4681,7 +4723,7 @@ index 8b36341..ab7e1c3 100644
      "$root_gen_dir/components/browser_apis/bookmarks/bookmarks_api.mojom-webui.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/node_id_converter.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/tab_strip_api_types.mojom-converters.ts",
-@@ -79,4 +152,5 @@ build_webui("build") {
+@@ -79,4 +155,5 @@ build_webui("build") {
    mojo_files_deps = [
 +    "//chrome/browser/ui/webui/downloads:mojo_bindings_ts__generator",
      "//chrome/browser/ui/webui_browser:browser_mojo_bindings_ts__generator",
@@ -10571,10 +10613,10 @@ index d4957bd..752166d 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index ffbd17c..ac7b9e8 100644
+index ffbd17c..8c0aa24 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,24 @@ source_set("headers") {
+@@ -13,6 +13,25 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
@@ -10596,10 +10638,11 @@ index ffbd17c..ac7b9e8 100644
 +    "rail/rail_profiles.h",
 +    "rail/rail_mini_window.h",
 +    "rail/rail_tab_transfer.h",
++    "rail/rail_updater.h",
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -26,6 +44,8 @@ source_set("webui_browser") {
+@@ -26,6 +45,8 @@ source_set("webui_browser") {
      ":headers",
      "//base",
      "//chrome/browser/ui/bookmarks",
@@ -10608,7 +10651,7 @@ index ffbd17c..ac7b9e8 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -36,7 +56,9 @@ source_set("webui_browser") {
+@@ -36,7 +57,9 @@ source_set("webui_browser") {
      "//chrome/browser/ui/views/location_bar",
      "//chrome/browser/ui/views/side_panel",
      "//chrome/browser/ui/webui/cr_components/searchbox",
@@ -10618,7 +10661,7 @@ index ffbd17c..ac7b9e8 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/bookmarks",
      "//components/browser_apis/tab_drag:mojom",
-@@ -44,6 +66,7 @@ source_set("webui_browser") {
+@@ -44,6 +67,7 @@ source_set("webui_browser") {
      "//components/browser_apis/tab_strip:mojom_ui_controller",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
      "//components/guest_contents/common:mojom",
@@ -10626,7 +10669,7 @@ index ffbd17c..ac7b9e8 100644
      "//content/public/browser",
      "//ui/base/unowned_user_data",
      "//ui/color",
-@@ -57,6 +80,46 @@ source_set("impl") {
+@@ -57,6 +81,47 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -10670,10 +10713,11 @@ index ffbd17c..ac7b9e8 100644
 +    "rail/rail_tab_sleep.cc",
 +    "rail/rail_tab_sleep.h",
 +    "rail/rail_tab_transfer.cc",
++    "rail/rail_updater.cc",
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -80,6 +143,17 @@ source_set("impl") {
+@@ -80,6 +145,17 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -10691,7 +10735,7 @@ index ffbd17c..ac7b9e8 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -89,8 +163,11 @@ source_set("impl") {
+@@ -89,8 +165,11 @@ source_set("impl") {
      "//chrome/browser/bookmarks",
      "//chrome/browser/contextual_search",
      "//chrome/browser/devtools",
@@ -10703,7 +10747,7 @@ index ffbd17c..ac7b9e8 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/resources/webui_toolbar_shared:resources",
      "//chrome/browser/themes",
-@@ -106,6 +183,7 @@ source_set("impl") {
+@@ -106,6 +185,7 @@ source_set("impl") {
      "//chrome/browser/ui/find_bar",
      "//chrome/browser/ui/fullscreen",
      "//chrome/browser/ui/location_bar",
@@ -10711,7 +10755,7 @@ index ffbd17c..ac7b9e8 100644
      "//chrome/browser/ui/side_panel",
      "//chrome/browser/ui/side_panel:side_panel_views_dependent",
      "//chrome/browser/ui/tabs:tabs_public",
-@@ -123,8 +201,12 @@ source_set("impl") {
+@@ -123,8 +203,12 @@ source_set("impl") {
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
      "//chrome/browser/ui/webui:favicon_source",
@@ -10724,7 +10768,7 @@ index ffbd17c..ac7b9e8 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +214,23 @@ source_set("impl") {
+@@ -132,13 +216,27 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
@@ -10740,15 +10784,19 @@ index ffbd17c..ac7b9e8 100644
      "//content/public/browser",
 +    "//components/os_crypt/async/browser:browser",
 +    "//components/os_crypt/async/common",
++    "//net",
 +    "//net/traffic_annotation",
++    "//services/data_decoder/public/cpp",
 +    "//services/network/public/cpp",
      "//services/network/public/mojom",
 +    "//third_party/blink/renderer/core/rail:mojom",
 +    "//third_party/blink/renderer/core/rail:sampler",
++    "//third_party/boringssl",
++    "rail:buildflags",
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +251,31 @@ source_set("impl") {
+@@ -159,17 +257,31 @@ source_set("impl") {
        "//ui/base/accelerators/global_accelerator_listener",
      ]
    }
@@ -10781,7 +10829,7 @@ index ffbd17c..ac7b9e8 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..15c26a2 100644
+index 7e0800a..58560d3 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -10860,7 +10908,7 @@ index 7e0800a..15c26a2 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,47 @@ interface Page {
+@@ -44,6 +91,49 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -10894,6 +10942,8 @@ index 7e0800a..15c26a2 100644
 +
 +  OnTrailDepthChanged(int32 depth);
 +
++  OnRailUpdateReady(string version);
++
 +  OnTabDiscarded(tabs_api.mojom.NodeId id);
 +
 +  OnPageColorChanged(tabs_api.mojom.NodeId tab, bool has_color, uint32 color,
@@ -10908,7 +10958,7 @@ index 7e0800a..15c26a2 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -58,7 +146,7 @@ interface PageHandler {
+@@ -58,7 +148,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -10917,7 +10967,7 @@ index 7e0800a..15c26a2 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +181,95 @@ interface PageHandler {
+@@ -93,6 +183,99 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -11006,6 +11056,10 @@ index 7e0800a..15c26a2 100644
 +  OpenRailSitePanel(gfx.mojom.Point anchor, string space_color);
 +
 +  OpenRailSettings();
++
++  GetRailUpdate() => (string? version);
++
++  ApplyRailUpdate();
 +
 +  OrganizeTabs(string prompt) => (string? response);
 +
@@ -11207,7 +11261,7 @@ index 5e6d29d..76021ae 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index cb0e145..d74435b 100644
+index cb0e145..2ee820b 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,8 @@
@@ -11219,7 +11273,7 @@ index cb0e145..d74435b 100644
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
-@@ -27,12 +29,26 @@
+@@ -27,12 +29,27 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
@@ -11236,6 +11290,7 @@ index cb0e145..d74435b 100644
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_sleep.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_transfer.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
  #include "components/browser_apis/tab_strip/types/node_id.h"
@@ -11246,7 +11301,7 @@ index cb0e145..d74435b 100644
  #include "components/vector_icons/vector_icons.h"
  #include "content/public/browser/devtools_agent_host.h"
  #include "content/public/browser/navigation_controller.h"
-@@ -41,6 +57,7 @@
+@@ -41,6 +58,7 @@
  #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/ui_base_features.h"
  #include "ui/gfx/vector_icon_types.h"
@@ -11254,7 +11309,7 @@ index cb0e145..d74435b 100644
  #include "ui/views/controls/menu/menu_model_adapter.h"
  #include "ui/views/controls/menu/menu_runner.h"
  #include "ui/views/interaction/element_tracker_views.h"
-@@ -199,12 +216,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -199,12 +217,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
    }
  
    if (!tab) {
@@ -11269,7 +11324,7 @@ index cb0e145..d74435b 100644
      return;
    }
  
-@@ -290,7 +307,83 @@ void WebUIBrowserPageHandler::Close() {
+@@ -290,7 +308,94 @@ void WebUIBrowserPageHandler::Close() {
    GetBrowserWindow()->Close();
  }
  
@@ -11322,6 +11377,17 @@ index cb0e145..d74435b 100644
 +  GetBrowserWindow()->OpenRailSettings();
 +}
 +
++void WebUIBrowserPageHandler::GetRailUpdate(GetRailUpdateCallback callback) {
++  rail::Updater* updater = rail::Updater::Get();
++  std::move(callback).Run(updater ? updater->ready_version() : std::nullopt);
++}
++
++void WebUIBrowserPageHandler::ApplyRailUpdate() {
++  if (rail::Updater* updater = rail::Updater::Get()) {
++    updater->Apply();
++  }
++}
++
 +void WebUIBrowserPageHandler::OrganizeTabs(const std::string& prompt,
 +                                           OrganizeTabsCallback callback) {
 +  BrowserWindowInterface* browser = GetBrowser();
@@ -11353,7 +11419,7 @@ index cb0e145..d74435b 100644
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
    back_forward_menu_model_.reset();
-@@ -314,12 +407,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
+@@ -314,12 +419,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
                              : BackForwardMenuModel::ModelType::kForward);
    back_forward_menu_model_adapter_ =
        std::make_unique<views::MenuModelAdapter>(back_forward_menu_model_.get());
@@ -11377,7 +11443,7 @@ index cb0e145..d74435b 100644
  }
  
  // static
-@@ -337,6 +438,352 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +450,358 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -11460,6 +11526,12 @@ index cb0e145..d74435b 100644
 +  if (browser && controller_) {
 +    controller_->page()->OnTrailDepthChanged(
 +        rail::GetTrailDepth(browser->GetProfile()->GetPrefs()));
++  }
++}
++
++void WebUIBrowserPageHandler::OnRailUpdateReady(const std::string& version) {
++  if (controller_) {
++    controller_->page()->OnRailUpdateReady(version);
 +  }
 +}
 +
@@ -11730,7 +11802,7 @@ index cb0e145..d74435b 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +791,47 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +809,52 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -11775,15 +11847,23 @@ index cb0e145..d74435b 100644
 +        base::BindRepeating(&WebUIBrowserPageHandler::OnTabDiscarded,
 +                            weak_factory_.GetWeakPtr()));
 +  }
++  if (rail::Updater* updater = rail::Updater::Get()) {
++    update_subscription_ = updater->AddReadyCallback(
++        base::BindRepeating(&WebUIBrowserPageHandler::OnRailUpdateReady,
++                            weak_factory_.GetWeakPtr()));
++  }
 +}
- 
+
  BrowserWindowInterface* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 41a8923..697e632 100644
+index 41a8923..0af189b 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-@@ -9,8 +9,12 @@
+@@ -7,10 +7,15 @@
+
++#include "base/callback_list.h"
+ #include "base/memory/weak_ptr.h"
  #include "base/values.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/webui_browser/browser.mojom.h"
@@ -11796,7 +11876,7 @@ index 41a8923..697e632 100644
  #include "content/public/browser/document_service.h"
  #include "content/public/browser/web_contents.h"
  #include "mojo/public/cpp/bindings/pending_receiver.h"
-@@ -25,6 +29,11 @@ class MenuModelAdapter;
+@@ -25,6 +30,11 @@ class MenuModelAdapter;
  class MenuRunner;
  }  // namespace views
  
@@ -11808,7 +11888,7 @@ index 41a8923..697e632 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,10 +65,94 @@ class WebUIBrowserPageHandler
+@@ -56,10 +66,97 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -11872,6 +11952,8 @@ index 41a8923..697e632 100644
 +      rail_command::mojom::CommandContextPtr context) override;
 +  void OpenRailCommandBar(bool new_tab_mode, bool select_all) override;
 +  void OpenRailSettings() override;
++  void GetRailUpdate(GetRailUpdateCallback callback) override;
++  void ApplyRailUpdate() override;
 +  void OrganizeTabs(const std::string& prompt,
 +                    OrganizeTabsCallback callback) override;
 +  void OpenRailSpacePanel(webui_browser::mojom::SpacePanelRequestPtr request,
@@ -11891,6 +11973,7 @@ index 41a8923..697e632 100644
 +  void OnThemedTitlebarChanged();
 +  void OnTabSleepChanged();
 +  void OnTrailDepthChanged();
++  void OnRailUpdateReady(const std::string& version);
 +  void OnTabDiscarded(const tabs_api::NodeId& id);
 +  void TrackPageColor(bool themed);
 +  void OnPageColorChanged(const tabs_api::NodeId& tab,
@@ -11903,7 +11986,7 @@ index 41a8923..697e632 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -71,19 +164,29 @@ class WebUIBrowserPageHandler
+@@ -71,19 +168,30 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -11928,10 +12011,11 @@ index 41a8923..697e632 100644
    base::WeakPtr<WebUIBrowserUI> controller_;
 +
 +  PrefChangeRegistrar sidebar_state_registrar_;
++  base::CallbackListSubscription update_subscription_;
 +
 +  base::WeakPtrFactory<WebUIBrowserPageHandler> weak_factory_{this};
  };
- 
+
  #endif  // CHROME_BROWSER_UI_WEBUI_BROWSER_WEBUI_BROWSER_PAGE_HANDLER_H_
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.cc b/chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.cc
 index 2843563..ecf5cb3 100644
@@ -12872,6 +12956,18 @@ index a6d969d..cb5a225 100644
          .tracing_service_iid = {0xe0b03e2d,
                                  0x7682,
                                  0x4d83,
+diff --git a/chrome/installer/mini_installer/chrome.release b/chrome/installer/mini_installer/chrome.release
+index d097a06..b01e709 100644
+--- a/chrome/installer/mini_installer/chrome.release
++++ b/chrome/installer/mini_installer/chrome.release
+@@ -33,6 +33,7 @@ libGLESv2.dll: %(VersionDir)s\
+ libLiteRtWebGpuAccelerator.dll: %(VersionDir)s\
+ notification_helper.exe: %(VersionDir)s\
+ optimization_guide_internal.dll: %(VersionDir)s\
++rail_update.exe: %(VersionDir)s\
+ resources.pak: %(VersionDir)s\
+ vk_swiftshader.dll: %(VersionDir)s\
+ vk_swiftshader_icd.json: %(VersionDir)s\
 diff --git a/chrome/renderer/BUILD.gn b/chrome/renderer/BUILD.gn
 index aaedc5f..dfbc3df 100644
 --- a/chrome/renderer/BUILD.gn
@@ -12906,15 +13002,19 @@ index 522cb72..f6390ea 100644
    extensions::ExtensionsRendererClient::Get()->RunScriptsAtDocumentStart(
        render_frame);
 diff --git a/chrome/tools/build/win/FILES.cfg b/chrome/tools/build/win/FILES.cfg
-index 5abdf31..4224e1f 100644
+index 5abdf31..7a82be9 100644
 --- a/chrome/tools/build/win/FILES.cfg
 +++ b/chrome/tools/build/win/FILES.cfg
-@@ -369,6 +369,10 @@ FILES = [
+@@ -369,6 +369,14 @@ FILES = [
      'arch': ['arm'],
      'buildtype': ['official'],
    },
 +  {
 +    'filename': 'Microsoft.WindowsAppRuntime.Bootstrap.dll',
++    'buildtype': ['dev', 'official'],
++  },
++  {
++    'filename': 'rail_update.exe',
 +    'buildtype': ['dev', 'official'],
 +  },
    # ANGLE files:

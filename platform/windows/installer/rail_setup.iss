@@ -62,6 +62,16 @@ begin
   Result := Succeeded;
 end;
 
+function RelaunchRequested: Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), '/RELAUNCH') = 0 then
+      Result := True;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Status: Integer;
@@ -74,6 +84,8 @@ begin
   Succeeded := (Status = 0) or (Status = 1) or (Status = 2) or (Status = 30);
   if not Succeeded then
     SuppressibleMsgBox(FmtMessage(CustomMessage('InstallFailed'), [IntToStr(Status), ExpandConstant('{%TEMP}\chromium_installer.log')]), mbCriticalError, MB_OK, IDOK);
+  if RelaunchRequested then
+    Exec(ExpandConstant('{localappdata}\Rail\Application\chrome.exe'), '', '', SW_SHOWNORMAL, ewNoWait, Status);
 end;
 
 function GetCustomSetupExitCode: Integer;

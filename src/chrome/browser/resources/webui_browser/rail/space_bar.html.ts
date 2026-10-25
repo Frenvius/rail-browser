@@ -70,6 +70,7 @@ ${this.variant === 'title' ? html`
       `)}
     </div>
   ` : ''}
+  <rail-update-badge></rail-update-badge>
   <div id="bar">
     <button id="library" title="Library (Ctrl+J)" aria-label="Library"
         @click="${this.onLibraryClick_}"

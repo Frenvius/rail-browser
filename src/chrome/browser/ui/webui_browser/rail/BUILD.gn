@@ -1,0 +1,10 @@
+import("//build/buildflag_header.gni")
+
+declare_args() {
+  rail_version = ""
+}
+
+buildflag_header("buildflags") {
+  header = "rail_buildflags.h"
+  flags = [ "RAIL_VERSION=\"$rail_version\"" ]
+}

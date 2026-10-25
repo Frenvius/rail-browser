@@ -1,0 +1,66 @@
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #scheme=relative
+ * #css_wrapper_metadata_end */
+
+:host {
+  display: block;
+  margin: 8px 8px 4px;
+}
+
+:host(:not([ready])) {
+  display: none;
+}
+
+#update {
+  -webkit-app-region: no-drag;
+  animation: rise 320ms cubic-bezier(.2, 0, 0, 1);
+  background: rgb(255 255 255 / 10%);
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 999px;
+  color: var(--rail-text, #f2f2f2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  height: 26px;
+  overflow: hidden;
+  padding: 0 12px;
+  text-overflow: ellipsis;
+  transition: background-color 140ms ease, border-color 140ms ease,
+      transform 120ms ease;
+  white-space: nowrap;
+  width: 100%;
+}
+
+#update:hover {
+  background: rgb(255 255 255 / 16%);
+  border-color: rgb(255 255 255 / 22%);
+}
+
+#update:active {
+  transform: scale(.98);
+}
+
+#update:focus-visible {
+  outline: 2px solid var(--rail-accent, #7c5cfc);
+  outline-offset: 2px;
+}
+
+#update:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #update {
+    animation: none;
+  }
+}
