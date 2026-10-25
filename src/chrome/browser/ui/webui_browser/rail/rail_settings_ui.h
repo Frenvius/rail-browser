@@ -28,8 +28,6 @@ class RailSettingsUI;
 
 inline constexpr char kRailSettingsHost[] = "rail-settings";
 inline constexpr char kRailSettingsURL[] = "chrome://rail-settings/";
-inline constexpr char kRailCreditsPath[] = "credits";
-inline constexpr char kRailCreditsURL[] = "chrome://rail-settings/credits";
 
 class RailSettingsUIConfig
     : public DefaultTopChromeWebUIConfig<RailSettingsUI> {
@@ -85,7 +83,8 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetTabSleepExceptions(
       const std::vector<std::string>& exceptions) override;
   void SetTabArchiveHours(const std::string& id, int32_t hours) override;
-  void OpenCredits() override;
+  void GetVersions(GetVersionsCallback callback) override;
+  void OpenUrl(const std::string& url) override;
   void Close() override;
 
   void OnProfileCreated(CreateProfileCallback callback,

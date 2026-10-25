@@ -5,6 +5,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/version_info/version_info.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
@@ -18,6 +19,7 @@
 #include "url/gurl.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_buildflags.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
@@ -72,8 +74,6 @@ RailSettingsUI::RailSettingsUI(content::WebUI* web_ui)
       web_ui->GetWebContents()->GetBrowserContext(), kRailSettingsHost);
   webui::SetupWebUIDataSource(source, kWebuiBrowserResources,
                               IDR_WEBUI_BROWSER_RAIL_SETTINGS_HTML);
-  source->AddResourcePath(kRailCreditsPath,
-                          IDR_WEBUI_BROWSER_RAIL_CREDITS_HTML);
 }
 
 RailSettingsUI::~RailSettingsUI() = default;
@@ -326,9 +326,19 @@ void RailSettingsUI::SetTabArchiveHours(const std::string& id,
   rail::SetTabArchiveHours(PrefsFor(web_ui()), id, hours);
 }
 
-void RailSettingsUI::OpenCredits() {
-  rail::CreateTabInProfile(BrowserFor(web_ui()), std::string(),
-                           GURL(kRailCreditsURL), base::DoNothing());
+void RailSettingsUI::GetVersions(GetVersionsCallback callback) {
+  std::move(callback).Run(BUILDFLAG(RAIL_VERSION),
+                          std::string(version_info::GetVersionNumber()));
+}
+
+void RailSettingsUI::OpenUrl(const std::string& url) {
+  GURL target(url);
+  if (!target.SchemeIsHTTPOrHTTPS() &&
+      !target.SchemeIs(content::kChromeUIScheme)) {
+    return;
+  }
+  rail::CreateTabInProfile(BrowserFor(web_ui()), std::string(), target,
+                           base::DoNothing());
   Close();
 }
 

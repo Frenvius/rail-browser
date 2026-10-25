@@ -76,6 +76,8 @@ export class RailSettingsElement extends CrLitElement {
       section_: {type: String, state: true},
       customModel_: {type: Boolean, state: true},
       editingKey_: {type: Boolean, state: true},
+      railVersion_: {type: String, state: true},
+      chromiumVersion_: {type: String, state: true},
     };
   }
 
@@ -104,6 +106,8 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor archiveHours_: ArchiveHours = {};
   protected accessor customModel_ = false;
   protected accessor editingKey_ = false;
+  protected accessor railVersion_ = '';
+  protected accessor chromiumVersion_ = '';
   protected readonly models_ = [
     {id: 'z-ai/glm-5.3-flash', name: 'GLM 5.3 Flash', price: '$0.01 / $0.20'},
     {
@@ -174,6 +178,9 @@ export class RailSettingsElement extends CrLitElement {
     this.sleepMinutes_ = sleep.minutes;
     this.sleepSites_ = sleep.exceptions;
     this.archiveHours_ = sleep.archiveHours;
+    const versions = await handler.getVersions();
+    this.railVersion_ = versions.rail;
+    this.chromiumVersion_ = versions.chromium;
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -331,8 +338,10 @@ export class RailSettingsElement extends CrLitElement {
     this.onBackClick_();
   }
 
-  protected onCreditsClick_() {
-    browserProxyFactory.getInstance().handler.openCredits();
+  protected onLinkClick_(e: Event) {
+    e.preventDefault();
+    browserProxyFactory.getInstance().handler.openUrl(
+        (e.currentTarget as HTMLAnchorElement).href);
   }
 
   protected onClearKeyClick_() {

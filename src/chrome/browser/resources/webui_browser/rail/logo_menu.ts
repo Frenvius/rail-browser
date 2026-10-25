@@ -86,7 +86,6 @@ export async function openLogoMenu(host: CommandBarHost) {
       label: 'Help',
       children: [
         browserCommand('about', 'About Rail'),
-        {command: 'chrome://rail-settings/credits', label: 'Credits'},
       ],
     },
     shellCommand('settings', tab),

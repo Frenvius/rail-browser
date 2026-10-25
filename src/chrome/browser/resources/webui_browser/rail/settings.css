@@ -163,6 +163,56 @@ select:focus-visible {
   font-size: 12px;
 }
 
+.aboutrail {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+
+.aboutlogo {
+  background-color: var(--rail-accent);
+  flex: none;
+  height: 40px;
+  mask-image: url('/rail/rail_logo.svg');
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  width: 40px;
+}
+
+.abouttitle {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+a.sitebutton {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  text-decoration: none;
+}
+
+.credit {
+  align-items: flex-start;
+}
+
+.credittext {
+  color: var(--rail-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.credittext a {
+  color: var(--rail-accent);
+}
+
+.credittext code {
+  font-family: inherit;
+  font-weight: 600;
+}
+
 #crumbs {
   align-items: center;
   display: flex;

@@ -72,7 +72,9 @@ interface PageHandler {
 
   SetTabArchiveHours(string id, int32 hours);
 
-  OpenCredits();
+  GetVersions() => (string rail, string chromium);
+
+  OpenUrl(string url);
 
   Close();
 };

@@ -281,14 +281,70 @@ ${this.section_ === 'organizer' ? html`
 ` : nothing}
 ${this.section_ === 'about' ? html`
   <div class="group">
-    <div class="item row" @click="${this.onCreditsClick_}">
-      <div class="rowtext">
-        <span class="cardtitle">Credits</span>
-        <span class="cardhint">
-          Third-party software Rail ships, and its license terms
-        </span>
+    <div class="item">
+      <div class="aboutrail">
+        <div class="aboutlogo"></div>
+        <div class="rowtext">
+          <span class="abouttitle">Rail</span>
+          <span class="cardhint">
+            ${this.railVersion_ ? `Version ${this.railVersion_}` :
+                                  'Development build'}
+            · Chromium ${this.chromiumVersion_}
+          </span>
+        </div>
       </div>
-      <cr-icon class="chevron" icon="cr:open-in-new"></cr-icon>
+      <a class="sitebutton" href="https://github.com/Frenvius/rail-browser"
+          @click="${this.onLinkClick_}">GitHub</a>
+    </div>
+  </div>
+  <h2 class="section">Third-party software</h2>
+  <div class="group">
+    <div class="item credit">
+      <div class="rowtext">
+        <span class="cardtitle">uBlock Origin 1.74.0</span>
+        <span class="cardhint">
+          Raymond Hill &amp; contributors · GNU GPL, version 3
+        </span>
+        <p class="credittext">
+          Preinstalled and removable from
+          <a href="chrome://extensions" @click="${this.onLinkClick_}">
+            chrome://extensions</a>.
+          Shipped unmodified, with its license text inside. The source for this
+          version is <code>uBlock-1.74.0-source.tar.gz</code> on the
+          <a href="https://github.com/Frenvius/rail-browser/releases"
+              @click="${this.onLinkClick_}">Rail release page</a>.
+          Upstream:
+          <a href="https://github.com/gorhill/uBlock"
+              @click="${this.onLinkClick_}">github.com/gorhill/uBlock</a>.
+        </p>
+      </div>
+    </div>
+    <div class="item credit">
+      <div class="rowtext">
+        <span class="cardtitle">Chromium</span>
+        <span class="cardhint">The Chromium Authors · BSD 3-Clause</span>
+        <p class="credittext">
+          The engine Rail is built on. Licenses for every component it bundles
+          are at
+          <a href="chrome://credits" @click="${this.onLinkClick_}">
+            chrome://credits</a>.
+        </p>
+      </div>
+    </div>
+    <div class="item credit">
+      <div class="rowtext">
+        <span class="cardtitle">ungoogled-chromium</span>
+        <span class="cardhint">
+          The ungoogled-chromium Authors · BSD 3-Clause
+        </span>
+        <p class="credittext">
+          The patch set that removes Google web service integration and
+          background requests from the engine. Upstream:
+          <a href="https://github.com/ungoogled-software/ungoogled-chromium"
+              @click="${this.onLinkClick_}">
+            github.com/ungoogled-software/ungoogled-chromium</a>.
+        </p>
+      </div>
     </div>
   </div>
 ` : nothing}

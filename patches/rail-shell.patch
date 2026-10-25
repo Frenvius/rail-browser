@@ -4613,17 +4613,16 @@ index 6f872ee..aa86f39 100644
      FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
                                          discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index 8b36341..645db7f 100644
+index 8b36341..8a18953 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
-@@ -9,7 +9,18 @@ assert(!is_android)
+@@ -9,7 +9,17 @@ assert(!is_android)
  build_webui("build") {
    grd_prefix = "webui_browser"
 
 -  static_files = [ "webui_browser.html" ]
 +  static_files = [
 +    "rail/command.html",
-+    "rail/credits.html",
 +    "rail/rail_link.svg",
 +    "rail/rail_logo.svg",
 +    "rail/rail_sidebar.svg",
@@ -4636,7 +4635,7 @@ index 8b36341..645db7f 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,52 @@ build_webui("build") {
+@@ -27,6 +37,52 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4689,7 +4688,7 @@ index 8b36341..645db7f 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -54,6 +111,20 @@ build_webui("build") {
+@@ -54,6 +110,20 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4710,7 +4709,7 @@ index 8b36341..645db7f 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -67,7 +138,12 @@ build_webui("build") {
+@@ -67,7 +137,12 @@ build_webui("build") {
      # reference import issue.
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
@@ -4723,7 +4722,7 @@ index 8b36341..645db7f 100644
      "$root_gen_dir/components/browser_apis/bookmarks/bookmarks_api.mojom-webui.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/node_id_converter.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/tab_strip_api_types.mojom-converters.ts",
-@@ -79,4 +155,5 @@ build_webui("build") {
+@@ -79,4 +154,5 @@ build_webui("build") {
    mojo_files_deps = [
 +    "//chrome/browser/ui/webui/downloads:mojo_bindings_ts__generator",
      "//chrome/browser/ui/webui_browser:browser_mojo_bindings_ts__generator",

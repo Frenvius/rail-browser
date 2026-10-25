@@ -94,6 +94,8 @@ gate it, takes this feature with it.
    something outside Rail's control. The CRX, which is the artifact that ships,
    is pinned.
 3. Keep the directions reachable from the product, not only from this file.
+   The About section of Rail's settings lists uBlock Origin with its version,
+   license, and the name of the source archive on the Rail release page.
 4. Add no term to Rail's own licensing that restricts use, copying, or
    modification of uBlock Origin.
 
@@ -103,7 +105,10 @@ code is not a derivative work and is not placed under the GPL.
 
 ## Bumping the version
 
-Update `_UBLOCK_VERSION` and `_UBLOCK_SHA256` in `build.py`, and this file.
+Update `_UBLOCK_VERSION` and `_UBLOCK_SHA256` in `build.py`, this file, and
+the About section in
+`src/chrome/browser/resources/webui_browser/rail/settings.html.ts`, which names
+the version and the source archive.
 Confirm `_UBLOCK_EXTENSION_ID` still matches: the ID follows the signing key, so
 it survives a version bump but not a key rotation, and Chromium calls
 `set_expected_version` with `fail_install_if_unexpected`, so a mismatched
