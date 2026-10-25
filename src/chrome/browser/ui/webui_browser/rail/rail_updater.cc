@@ -257,7 +257,9 @@ void Updater::LaunchPendingInstaller() {
   if (relaunch_) {
     command.AppendArg("/RELAUNCH");
   }
-  base::LaunchProcess(command, base::LaunchOptions());
+  base::LaunchOptions options;
+  options.current_directory = ready_installer_.DirName();
+  base::LaunchProcess(command, options);
 }
 
 void Updater::ScheduleCheck(base::TimeDelta delay) {
