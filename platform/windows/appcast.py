@@ -1,6 +1,7 @@
 import argparse
 import base64
 import email.utils
+import hashlib
 import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -9,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 SPARKLE_NAMESPACE = 'http://www.andymatuschak.org/xml-namespaces/sparkle'
+RAIL_NAMESPACE = 'https://github.com/Frenvius/rail-browser/xml-namespaces/update'
 PUBLIC_KEY_PATH = Path(__file__).resolve().parent / 'update_public_key.txt'
 
 
@@ -24,10 +26,18 @@ def load_signing_key(variable):
     return key
 
 
+def release_message(version, payload):
+    return 'rail-update\n{}\n{}'.format(version, hashlib.sha256(payload).hexdigest()).encode('ascii')
+
+
 def build_appcast(installer, version, repository, key):
+    if version != '.'.join(str(int(part)) for part in version.split('.')):
+        raise SystemExit('version {} is not in canonical form'.format(version))
     tag = 'v' + version
     sparkle = '{' + SPARKLE_NAMESPACE + '}'
+    rail = '{' + RAIL_NAMESPACE + '}'
     ET.register_namespace('sparkle', SPARKLE_NAMESPACE)
+    ET.register_namespace('rail', RAIL_NAMESPACE)
 
     rss = ET.Element('rss', {'version': '2.0'})
     channel = ET.SubElement(rss, 'channel')
@@ -46,6 +56,8 @@ def build_appcast(installer, version, repository, key):
         'type': 'application/octet-stream',
         sparkle + 'os': 'windows',
         sparkle + 'edSignature': base64.b64encode(key.sign(payload)).decode('ascii'),
+        rail + 'releaseSignature': base64.b64encode(
+            key.sign(release_message(version, payload))).decode('ascii'),
     })
     ET.indent(rss)
     return ET.tostring(rss, encoding='utf-8', xml_declaration=True)

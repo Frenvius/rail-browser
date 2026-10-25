@@ -46,6 +46,7 @@ class Updater {
     GURL url;
     int64_t length = 0;
     std::string signature;
+    std::string release_signature;
   };
 
   Updater();

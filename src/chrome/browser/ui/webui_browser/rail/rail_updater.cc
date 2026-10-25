@@ -6,6 +6,7 @@
 
 #include "base/base64.h"
 #include "base/command_line.h"
+#include "base/containers/span.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
@@ -33,6 +34,7 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "third_party/boringssl/src/include/openssl/curve25519.h"
+#include "third_party/boringssl/src/include/openssl/sha.h"
 
 namespace rail {
 
@@ -49,6 +51,8 @@ constexpr base::FilePath::CharType kDownloadHelper[] =
 constexpr char kPublicKey[] = "rx3nRriYut1fS5rA73ajbOg7x54sJRj1jBHm4/UQcbQ=";
 constexpr char kSparkleNamespace[] =
     "http://www.andymatuschak.org/xml-namespaces/sparkle";
+constexpr char kRailNamespace[] =
+    "https://github.com/Frenvius/rail-browser/xml-namespaces/update";
 constexpr base::FilePath::CharType kUpdateDirectory[] =
     FILE_PATH_LITERAL("Rail Update");
 constexpr base::TimeDelta kFirstCheckDelay = base::Minutes(1);
@@ -90,8 +94,11 @@ base::FilePath UpdateDirectory() {
 
 std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
   std::string prefix;
+  std::string rail_prefix;
   if (!data_decoder::GetXmlElementNamespacePrefix(rss, kSparkleNamespace,
-                                                  &prefix)) {
+                                                  &prefix) ||
+      !data_decoder::GetXmlElementNamespacePrefix(rss, kRailNamespace,
+                                                  &rail_prefix)) {
     return std::nullopt;
   }
   const base::Value* item =
@@ -115,6 +122,9 @@ std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
   release.url = GURL(data_decoder::GetXmlElementAttribute(*enclosure, "url"));
   release.signature = data_decoder::GetXmlElementAttribute(
       *enclosure, data_decoder::GetXmlQualifiedName(prefix, "edSignature"));
+  release.release_signature = data_decoder::GetXmlElementAttribute(
+      *enclosure,
+      data_decoder::GetXmlQualifiedName(rail_prefix, "releaseSignature"));
   if (!release.version.IsValid() || !release.url.SchemeIsHTTPOrHTTPS() ||
       !base::StringToInt64(
           data_decoder::GetXmlElementAttribute(*enclosure, "length"),
@@ -125,19 +135,34 @@ std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
   return release;
 }
 
-bool VerifyInstaller(const base::FilePath& installer,
-                     int64_t length,
+bool VerifySignature(base::span<const uint8_t> message,
                      const std::string& signature) {
-  std::optional<std::vector<uint8_t>> payload =
-      base::ReadFileToBytes(installer);
   std::optional<std::vector<uint8_t>> key = base::Base64Decode(kPublicKey);
   std::optional<std::vector<uint8_t>> sig = base::Base64Decode(signature);
-  bool valid = payload && key && sig &&
-               payload->size() == static_cast<size_t>(length) &&
-               key->size() == ED25519_PUBLIC_KEY_LEN &&
-               sig->size() == ED25519_SIGNATURE_LEN &&
-               ED25519_verify(payload->data(), payload->size(), sig->data(),
-                              key->data()) == 1;
+  return key && sig && key->size() == ED25519_PUBLIC_KEY_LEN &&
+         sig->size() == ED25519_SIGNATURE_LEN &&
+         ED25519_verify(message.data(), message.size(), sig->data(),
+                        key->data()) == 1;
+}
+
+std::string ReleaseMessage(const base::Version& version,
+                           base::span<const uint8_t> payload) {
+  uint8_t digest[SHA256_DIGEST_LENGTH];
+  SHA256(payload.data(), payload.size(), digest);
+  return "rail-update\n" + version.GetString() + "\n" +
+         base::HexEncodeLower(digest);
+}
+
+bool VerifyInstaller(const base::FilePath& installer,
+                     const Updater::Release& release) {
+  std::optional<std::vector<uint8_t>> payload =
+      base::ReadFileToBytes(installer);
+  bool valid =
+      payload && payload->size() == static_cast<size_t>(release.length) &&
+      VerifySignature(*payload, release.signature) &&
+      VerifySignature(
+          base::as_byte_span(ReleaseMessage(release.version, *payload)),
+          release.release_signature);
   if (!valid) {
     base::DeleteFile(installer);
   }
@@ -145,8 +170,7 @@ bool VerifyInstaller(const base::FilePath& installer,
 }
 
 bool PrepareInstaller(const base::FilePath& installer,
-                      int64_t length,
-                      const std::string& signature) {
+                      const Updater::Release& release) {
   base::FilePath directory = installer.DirName();
   base::CreateDirectory(directory);
   base::FileEnumerator files(directory, false, base::FileEnumerator::FILES);
@@ -155,8 +179,7 @@ bool PrepareInstaller(const base::FilePath& installer,
       base::DeleteFile(file);
     }
   }
-  return base::PathExists(installer) &&
-         VerifyInstaller(installer, length, signature);
+  return base::PathExists(installer) && VerifyInstaller(installer, release);
 }
 
 bool DownloadInstaller(const GURL& url,
@@ -326,8 +349,7 @@ void Updater::OnFeedParsed(base::expected<base::Value, std::string> result) {
       "RailSetup-" + release->version.GetString() + ".exe");
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(&PrepareInstaller, installer, release->length,
-                     release->signature),
+      base::BindOnce(&PrepareInstaller, installer, *release),
       base::BindOnce(&Updater::OnInstallerPrepared, weak_factory_.GetWeakPtr(),
                      *release, installer));
 }
@@ -361,8 +383,7 @@ void Updater::OnDownloaded(Release release,
   }
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(&VerifyInstaller, installer, release.length,
-                     release.signature),
+      base::BindOnce(&VerifyInstaller, installer, release),
       base::BindOnce(&Updater::OnVerified, weak_factory_.GetWeakPtr(),
                      release, installer));
 }
