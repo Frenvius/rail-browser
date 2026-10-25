@@ -30,7 +30,7 @@ jobs:
         id: version
         run: |
           if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+$') {
-            Write-Error "tag $env:GITHUB_REF_NAME is not vMAJOR.RELEASE.HOTFIX"
+            Write-Error "tag $env:GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH"
             exit 1
           }
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$($env:GITHUB_REF_NAME.Substring(1))`n")
@@ -51,8 +51,6 @@ jobs:
 
       - name: Sync Chromium tree
         working-directory: ${{ env.RAIL_REPO_DIR }}
-        env:
-          RAIL_VERSION: ${{ steps.version.outputs.version }}
         run: |
           $ErrorActionPreference = 'Stop'
           $applied = (Get-Content $env:RAIL_APPLIED_SHA -Raw).Trim()
@@ -60,10 +58,6 @@ jobs:
           $tree = (Get-Content build\src\chrome\VERSION | ForEach-Object { ($_ -split '=')[1] }) -join '.'
           if ($tree -ne $chromium) {
             Write-Error "the prepared tree is Chromium $tree but $env:GITHUB_SHA needs $chromium; prepare a fresh tree"
-            exit 1
-          }
-          if ($env:RAIL_VERSION.Split('.')[0] -ne $chromium.Split('.')[0]) {
-            Write-Error "version $env:RAIL_VERSION must start with the Chromium major of $chromium"
             exit 1
           }
           git diff --quiet $applied $env:GITHUB_SHA -- ungoogled-chromium patches platform/windows/patches platform/windows/domain_substitution.list platform/windows/pruning.list platform/windows/downloads.ini ':(exclude)patches/rail-shell.patch'
