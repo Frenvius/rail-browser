@@ -222,6 +222,19 @@ base::CallbackListSubscription Updater::AddReadyCallback(
   return ready_callbacks_.Add(std::move(callback));
 }
 
+base::CallbackListSubscription Updater::AddStatusCallback(
+    base::RepeatingClosure callback) {
+  return status_callbacks_.Add(std::move(callback));
+}
+
+void Updater::CheckNow() {
+  if (!check_timer_.IsRunning()) {
+    return;
+  }
+  check_timer_.Stop();
+  Check();
+}
+
 void Updater::Apply() {
   if (!ready_version_) {
     return;
@@ -253,6 +266,7 @@ void Updater::ScheduleCheck(base::TimeDelta delay) {
 }
 
 void Updater::Check() {
+  SetStatus(Status::kChecking);
   const base::CommandLine& command_line =
       *base::CommandLine::ForCurrentProcess();
   GURL feed(command_line.HasSwitch(kFeedUrlSwitch)
@@ -260,7 +274,7 @@ void Updater::Check() {
                 : g_browser_process->local_state()->GetString(
                       kUpdateFeedUrlPref));
   if (!feed.SchemeIsHTTPOrHTTPS()) {
-    Finish();
+    Finish(Status::kFailed);
     return;
   }
 
@@ -279,7 +293,7 @@ void Updater::Check() {
 void Updater::OnFeedLoaded(std::optional<std::string> body) {
   loader_.reset();
   if (!body) {
-    Finish();
+    Finish(Status::kFailed);
     return;
   }
   data_decoder::DataDecoder::ParseXmlIsolated(
@@ -291,18 +305,18 @@ void Updater::OnFeedParsed(base::expected<base::Value, std::string> result) {
   std::optional<Release> release =
       result.has_value() ? ParseRelease(*result) : std::nullopt;
   if (!release) {
-    Finish();
+    Finish(Status::kFailed);
     return;
   }
   if (release->version <= CurrentVersion()) {
     base::ThreadPool::PostTask(
         FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
         base::GetDeletePathRecursivelyCallback(UpdateDirectory()));
-    Finish();
+    Finish(Status::kUpToDate);
     return;
   }
   if (ready_version_ == release->version.GetString()) {
-    Finish();
+    Finish(Status::kReady);
     return;
   }
 
@@ -324,6 +338,7 @@ void Updater::OnInstallerPrepared(Release release,
     return;
   }
 
+  SetStatus(Status::kDownloading);
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,
       {base::MayBlock(), base::WithBaseSyncPrimitives(),
@@ -339,7 +354,7 @@ void Updater::OnDownloaded(Release release,
                            base::FilePath installer,
                            bool downloaded) {
   if (!downloaded) {
-    Finish();
+    Finish(Status::kFailed);
     return;
   }
   base::ThreadPool::PostTaskAndReplyWithResult(
@@ -358,11 +373,17 @@ void Updater::OnVerified(Release release,
     ready_installer_ = std::move(installer);
     ready_callbacks_.Notify(*ready_version_);
   }
-  Finish();
+  Finish(valid ? Status::kReady : Status::kFailed);
 }
 
-void Updater::Finish() {
+void Updater::SetStatus(Status status) {
+  status_ = ready_version_ ? Status::kReady : status;
+  status_callbacks_.Notify();
+}
+
+void Updater::Finish(Status status) {
   loader_.reset();
+  SetStatus(status);
   ScheduleCheck(kCheckInterval);
 }
 

@@ -10828,7 +10828,7 @@ index ffbd17c..8c0aa24 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..58560d3 100644
+index 7e0800a..1f18d42 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,11 @@
@@ -10966,7 +10966,7 @@ index 7e0800a..58560d3 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +183,99 @@ interface PageHandler {
+@@ -93,6 +183,101 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -11056,7 +11056,9 @@ index 7e0800a..58560d3 100644
 +
 +  OpenRailSettings();
 +
-+  GetRailUpdate() => (string? version);
++  GetRailUpdate() => (string? version, bool downloading);
++
++  CheckRailUpdate();
 +
 +  ApplyRailUpdate();
 +
@@ -11260,7 +11262,7 @@ index 5e6d29d..76021ae 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index cb0e145..2ee820b 100644
+index cb0e145..f7c95f4 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,8 @@
@@ -11323,7 +11325,7 @@ index cb0e145..2ee820b 100644
      return;
    }
  
-@@ -290,7 +308,94 @@ void WebUIBrowserPageHandler::Close() {
+@@ -290,7 +308,107 @@ void WebUIBrowserPageHandler::Close() {
    GetBrowserWindow()->Close();
  }
  
@@ -11373,12 +11375,25 @@ index cb0e145..2ee820b 100644
 +}
 +
 +void WebUIBrowserPageHandler::OpenRailSettings() {
-+  GetBrowserWindow()->OpenRailSettings();
++  GetBrowserWindow()->OpenRailSettings(std::string());
 +}
 +
 +void WebUIBrowserPageHandler::GetRailUpdate(GetRailUpdateCallback callback) {
 +  rail::Updater* updater = rail::Updater::Get();
-+  std::move(callback).Run(updater ? updater->ready_version() : std::nullopt);
++  if (!updater) {
++    std::move(callback).Run(std::nullopt, false);
++    return;
++  }
++  std::move(callback).Run(
++      updater->ready_version(),
++      updater->status() == rail::Updater::Status::kDownloading);
++}
++
++void WebUIBrowserPageHandler::CheckRailUpdate() {
++  if (rail::Updater* updater = rail::Updater::Get()) {
++    updater->CheckNow();
++  }
++  GetBrowserWindow()->OpenRailSettings("about");
 +}
 +
 +void WebUIBrowserPageHandler::ApplyRailUpdate() {
@@ -11418,7 +11433,7 @@ index cb0e145..2ee820b 100644
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
    back_forward_menu_model_.reset();
-@@ -314,12 +419,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
+@@ -314,12 +432,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
                              : BackForwardMenuModel::ModelType::kForward);
    back_forward_menu_model_adapter_ =
        std::make_unique<views::MenuModelAdapter>(back_forward_menu_model_.get());
@@ -11442,7 +11457,7 @@ index cb0e145..2ee820b 100644
  }
  
  // static
-@@ -337,6 +450,358 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +463,358 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -11801,7 +11816,7 @@ index cb0e145..2ee820b 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +809,52 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +822,52 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -11856,7 +11871,7 @@ index cb0e145..2ee820b 100644
  BrowserWindowInterface* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 41a8923..0af189b 100644
+index 41a8923..07df1cb 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -7,10 +7,15 @@
@@ -11887,7 +11902,7 @@ index 41a8923..0af189b 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,10 +66,97 @@ class WebUIBrowserPageHandler
+@@ -56,10 +66,98 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -11952,6 +11967,7 @@ index 41a8923..0af189b 100644
 +  void OpenRailCommandBar(bool new_tab_mode, bool select_all) override;
 +  void OpenRailSettings() override;
 +  void GetRailUpdate(GetRailUpdateCallback callback) override;
++  void CheckRailUpdate() override;
 +  void ApplyRailUpdate() override;
 +  void OrganizeTabs(const std::string& prompt,
 +                    OrganizeTabsCallback callback) override;
@@ -11985,7 +12001,7 @@ index 41a8923..0af189b 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -71,19 +168,30 @@ class WebUIBrowserPageHandler
+@@ -71,19 +169,30 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
@@ -12279,7 +12295,7 @@ index d1169b1..a4d417e 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 0a49a8e..013918e 100644
+index 0a49a8e..5cf33bb 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -8,6 +8,8 @@
@@ -12558,11 +12574,11 @@ index 0a49a8e..013918e 100644
 +  site_panel_->Show(anchor, space_color);
 +}
 +
-+void WebUIBrowserWindow::OpenRailSettings() {
++void WebUIBrowserWindow::OpenRailSettings(const std::string& section) {
 +  if (!settings_window_) {
 +    settings_window_ = std::make_unique<rail::RailSettingsWindow>(this);
 +  }
-+  settings_window_->Show();
++  settings_window_->Show(section);
 +}
 +
 +void WebUIBrowserWindow::SetSystemBackdrop(
@@ -12777,7 +12793,7 @@ index 0a49a8e..013918e 100644
    return static_cast<WebUIBrowserSidePanelUI*>(SidePanelUI::From(browser_));
  }
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.h b/chrome/browser/ui/webui_browser/webui_browser_window.h
-index 0e493cc..3cd4d53 100644
+index 0e493cc..59bdeba 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.h
 @@ -15,6 +15,8 @@
@@ -12824,7 +12840,7 @@ index 0e493cc..3cd4d53 100644
 +                          const gfx::Point& anchor);
 +  void OpenRailSitePanel(const gfx::Point& anchor,
 +                         const std::string& space_color);
-+  void OpenRailSettings();
++  void OpenRailSettings(const std::string& section);
 +  void SetSystemBackdrop(
 +      webui_browser::mojom::SystemBackdropSettingsPtr settings);
 +

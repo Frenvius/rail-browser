@@ -32,6 +32,15 @@ class Updater {
  public:
   using ReadyCallback = base::RepeatingCallback<void(const std::string&)>;
 
+  enum class Status {
+    kIdle,
+    kChecking,
+    kDownloading,
+    kUpToDate,
+    kReady,
+    kFailed,
+  };
+
   struct Release {
     base::Version version;
     GURL url;
@@ -50,7 +59,14 @@ class Updater {
     return ready_version_;
   }
 
+  Status status() const { return status_; }
+
   base::CallbackListSubscription AddReadyCallback(ReadyCallback callback);
+
+  base::CallbackListSubscription AddStatusCallback(
+      base::RepeatingClosure callback);
+
+  void CheckNow();
 
   void Apply();
 
@@ -68,14 +84,17 @@ class Updater {
                     base::FilePath installer,
                     bool downloaded);
   void OnVerified(Release release, base::FilePath installer, bool valid);
-  void Finish();
+  void SetStatus(Status status);
+  void Finish(Status status);
 
   base::OneShotTimer check_timer_;
   std::unique_ptr<network::SimpleURLLoader> loader_;
   bool relaunch_ = false;
+  Status status_ = Status::kIdle;
   std::optional<std::string> ready_version_;
   base::FilePath ready_installer_;
   base::RepeatingCallbackList<void(const std::string&)> ready_callbacks_;
+  base::RepeatingClosureList status_callbacks_;
 
   base::WeakPtrFactory<Updater> weak_factory_{this};
 };

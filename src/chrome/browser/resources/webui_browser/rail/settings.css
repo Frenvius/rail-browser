@@ -193,6 +193,31 @@ a.sitebutton {
   text-decoration: none;
 }
 
+.cardhint a {
+  color: var(--rail-accent);
+}
+
+.sitebutton[data-ready] {
+  background: var(--rail-accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.sitebutton[data-ready]:hover {
+  background: var(--rail-accent);
+  filter: brightness(1.12);
+}
+
+.sitebutton[disabled] {
+  color: var(--rail-text-dim);
+  opacity: .6;
+}
+
+.sitebutton[disabled]:hover {
+  background: rgb(255 255 255 / 9%);
+}
+
 .credit {
   align-items: flex-start;
 }

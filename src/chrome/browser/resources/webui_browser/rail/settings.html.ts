@@ -296,6 +296,26 @@ ${this.section_ === 'about' ? html`
       <a class="sitebutton" href="https://github.com/Frenvius/rail-browser"
           @click="${this.onLinkClick_}">GitHub</a>
     </div>
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Updates</span>
+        <span class="cardhint">
+          ${this.updateMessage_()}
+          ${this.isUpdateReady_() ? html`
+            <a href="https://github.com/Frenvius/rail-browser/releases/tag/v${
+                this.readyVersion_}"
+                @click="${this.onLinkClick_}">What's new</a>
+          ` : nothing}
+        </span>
+      </div>
+      ${this.isUpdateAvailable_() ? html`
+        <button class="sitebutton" ?data-ready="${this.isUpdateReady_()}"
+            ?disabled="${this.isUpdateBusy_()}"
+            @click="${this.onUpdateClick_}">
+          ${this.updateButtonLabel_()}
+        </button>
+      ` : nothing}
+    </div>
   </div>
   <h2 class="section">Third-party software</h2>
   <div class="group">

@@ -49,6 +49,8 @@ class RailSettingsUI : public TopChromeWebUIController,
   void BindInterface(
       mojo::PendingReceiver<rail_settings::mojom::PageHandlerFactory> receiver);
 
+  void ShowSection(const std::string& section);
+
  private:
   void CreatePageHandler(
       mojo::PendingRemote<rail_settings::mojom::Page> page,
@@ -84,8 +86,13 @@ class RailSettingsUI : public TopChromeWebUIController,
       const std::vector<std::string>& exceptions) override;
   void SetTabArchiveHours(const std::string& id, int32_t hours) override;
   void GetVersions(GetVersionsCallback callback) override;
+  void GetUpdateStatus(GetUpdateStatusCallback callback) override;
+  void CheckForUpdates() override;
+  void ApplyUpdate() override;
   void OpenUrl(const std::string& url) override;
   void Close() override;
+
+  void OnUpdateStatusChanged();
 
   void OnProfileCreated(CreateProfileCallback callback,
                         std::optional<ProfileEntry> entry);
@@ -97,6 +104,8 @@ class RailSettingsUI : public TopChromeWebUIController,
                                   Profile* profile);
 
   std::vector<base::CallbackListSubscription> search_engine_subscriptions_;
+  base::CallbackListSubscription update_subscription_;
+  std::string pending_section_;
 
   mojo::Receiver<rail_settings::mojom::PageHandlerFactory>
       page_factory_receiver_{this};

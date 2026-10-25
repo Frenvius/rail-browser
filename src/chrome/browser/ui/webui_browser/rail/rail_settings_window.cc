@@ -302,9 +302,13 @@ void RailSettingsWindow::CreateWidget() {
   observation_.Observe(widget_.get());
 }
 
-void RailSettingsWindow::Show() {
+void RailSettingsWindow::Show(const std::string& section) {
   EnsureContents();
   CreateWidget();
+  if (RailSettingsUI* controller = contents_->GetController();
+      controller && !section.empty()) {
+    controller->ShowSection(section);
+  }
   ShowUI();
 }
 

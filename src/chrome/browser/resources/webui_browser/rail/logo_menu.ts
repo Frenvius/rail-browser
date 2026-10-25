@@ -22,12 +22,25 @@ function shellCommand(
   return {command: id, label: command.label, accelerator: command.hint};
 }
 
+function updateItem(version: string|null, downloading: boolean):
+    NativeMenuItem {
+  if (version) {
+    return {command: 'apply-update', label: 'Install Update...'};
+  }
+  if (downloading) {
+    return {label: 'Downloading Update...'};
+  }
+  return {command: 'check-update', label: 'Check for Updates...'};
+}
+
 export async function openLogoMenu(host: CommandBarHost) {
   const handler = browserProxyFactory.getInstance().handler;
-  const {isDefault} = await handler.isDefaultBrowser();
+  const [{isDefault}, update] =
+      await Promise.all([handler.isDefaultBrowser(), handler.getRailUpdate()]);
   const tab = host.activeTab();
   const items = menuItems([
     !isDefault && {command: 'set-default', label: 'Set Rail as Default Browser'},
+    updateItem(update.version, update.downloading),
     browserCommand('import-settings', 'Import from Another Browser'),
     separator(),
     {command: 'new-tab', label: 'New Tab', accelerator: 'Ctrl+T'},
@@ -101,6 +114,10 @@ export async function openLogoMenu(host: CommandBarHost) {
       host.openUrl(command);
     } else if (command === 'set-default') {
       handler.setAsDefaultBrowser();
+    } else if (command === 'check-update') {
+      handler.checkRailUpdate();
+    } else if (command === 'apply-update') {
+      handler.applyRailUpdate();
     } else if (command === 'new-tab') {
       handler.openRailCommandBar(true, false);
     } else if (command === 'close') {

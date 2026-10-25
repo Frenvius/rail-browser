@@ -2,6 +2,7 @@
 #define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SETTINGS_WINDOW_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -37,7 +38,7 @@ class RailSettingsWindow : public WebUIContentsWrapper::Host,
   RailSettingsWindow& operator=(const RailSettingsWindow&) = delete;
   ~RailSettingsWindow() override;
 
-  void Show();
+  void Show(const std::string& section);
 
   // WebUIContentsWrapper::Host:
   void ShowUI() override;

@@ -4,6 +4,7 @@
 
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
+#include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/version_info/version_info.h"
 #include "chrome/browser/browser_process.h"
@@ -22,6 +23,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_buildflags.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 #include "chrome/grit/webui_browser_resources.h"
 #include "chrome/grit/webui_browser_resources_map.h"
@@ -60,6 +62,32 @@ std::string ProfileName(Profile* profile) {
                : std::string();
 }
 
+rail_settings::mojom::UpdateStatus UpdateStatusOf(const Updater* updater) {
+  using rail_settings::mojom::UpdateStatus;
+  if (!updater) {
+    return UpdateStatus::kUnavailable;
+  }
+  switch (updater->status()) {
+    case Updater::Status::kIdle:
+      return UpdateStatus::kIdle;
+    case Updater::Status::kChecking:
+      return UpdateStatus::kChecking;
+    case Updater::Status::kDownloading:
+      return UpdateStatus::kDownloading;
+    case Updater::Status::kUpToDate:
+      return UpdateStatus::kUpToDate;
+    case Updater::Status::kReady:
+      return UpdateStatus::kReady;
+    case Updater::Status::kFailed:
+      return UpdateStatus::kFailed;
+  }
+  NOTREACHED();
+}
+
+std::optional<std::string> ReadyVersionOf(const Updater* updater) {
+  return updater ? updater->ready_version() : std::nullopt;
+}
+
 }
 
 RailSettingsUIConfig::RailSettingsUIConfig()
@@ -74,9 +102,22 @@ RailSettingsUI::RailSettingsUI(content::WebUI* web_ui)
       web_ui->GetWebContents()->GetBrowserContext(), kRailSettingsHost);
   webui::SetupWebUIDataSource(source, kWebuiBrowserResources,
                               IDR_WEBUI_BROWSER_RAIL_SETTINGS_HTML);
+  if (Updater* updater = Updater::Get()) {
+    update_subscription_ = updater->AddStatusCallback(
+        base::BindRepeating(&RailSettingsUI::OnUpdateStatusChanged,
+                            weak_factory_.GetWeakPtr()));
+  }
 }
 
 RailSettingsUI::~RailSettingsUI() = default;
+
+void RailSettingsUI::ShowSection(const std::string& section) {
+  if (!page_) {
+    pending_section_ = section;
+    return;
+  }
+  page_->OnShowSection(section);
+}
 
 void RailSettingsUI::BindInterface(
     mojo::PendingReceiver<rail_settings::mojom::PageHandlerFactory> receiver) {
@@ -91,6 +132,9 @@ void RailSettingsUI::CreatePageHandler(
   page_.Bind(std::move(page));
   page_handler_receiver_.reset();
   page_handler_receiver_.Bind(std::move(handler));
+  if (!pending_section_.empty()) {
+    page_->OnShowSection(std::exchange(pending_section_, std::string()));
+  }
 }
 
 void RailSettingsUI::ListProfiles(ListProfilesCallback callback) {
@@ -329,6 +373,32 @@ void RailSettingsUI::SetTabArchiveHours(const std::string& id,
 void RailSettingsUI::GetVersions(GetVersionsCallback callback) {
   std::move(callback).Run(BUILDFLAG(RAIL_VERSION),
                           std::string(version_info::GetVersionNumber()));
+}
+
+void RailSettingsUI::GetUpdateStatus(GetUpdateStatusCallback callback) {
+  Updater* updater = Updater::Get();
+  std::move(callback).Run(UpdateStatusOf(updater), ReadyVersionOf(updater));
+}
+
+void RailSettingsUI::CheckForUpdates() {
+  if (Updater* updater = Updater::Get()) {
+    updater->CheckNow();
+  }
+}
+
+void RailSettingsUI::ApplyUpdate() {
+  if (Updater* updater = Updater::Get()) {
+    updater->Apply();
+  }
+}
+
+void RailSettingsUI::OnUpdateStatusChanged() {
+  if (!page_) {
+    return;
+  }
+  Updater* updater = Updater::Get();
+  page_->OnUpdateStatusChanged(UpdateStatusOf(updater),
+                               ReadyVersionOf(updater));
 }
 
 void RailSettingsUI::OpenUrl(const std::string& url) {

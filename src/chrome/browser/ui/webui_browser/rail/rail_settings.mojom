@@ -22,6 +22,16 @@ struct ProfileDetail {
   bool search_suggestions;
 };
 
+enum UpdateStatus {
+  kUnavailable,
+  kIdle,
+  kChecking,
+  kDownloading,
+  kUpToDate,
+  kReady,
+  kFailed,
+};
+
 interface PageHandler {
   ListProfiles() => (array<SettingsProfile> profiles);
 
@@ -74,6 +84,12 @@ interface PageHandler {
 
   GetVersions() => (string rail, string chromium);
 
+  GetUpdateStatus() => (UpdateStatus status, string? version);
+
+  CheckForUpdates();
+
+  ApplyUpdate();
+
   OpenUrl(string url);
 
   Close();
@@ -81,4 +97,8 @@ interface PageHandler {
 
 interface Page {
   OnProfilesChanged();
+
+  OnUpdateStatusChanged(UpdateStatus status, string? version);
+
+  OnShowSection(string section);
 };

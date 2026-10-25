@@ -5,7 +5,7 @@ import '//resources/cr_elements/icons.html.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
 import type {ProfileDetail, SettingsProfile} from '../rail_settings.mojom-webui.js';
-import {browserProxyFactory} from '../rail_settings.mojom-webui.js';
+import {browserProxyFactory, UpdateStatus} from '../rail_settings.mojom-webui.js';
 
 import {getCss} from './settings.css.js';
 import {getHtml} from './settings.html.js';
@@ -78,6 +78,8 @@ export class RailSettingsElement extends CrLitElement {
       editingKey_: {type: Boolean, state: true},
       railVersion_: {type: String, state: true},
       chromiumVersion_: {type: String, state: true},
+      updateStatus_: {type: Number, state: true},
+      readyVersion_: {type: String, state: true},
     };
   }
 
@@ -108,6 +110,8 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor editingKey_ = false;
   protected accessor railVersion_ = '';
   protected accessor chromiumVersion_ = '';
+  protected accessor updateStatus_ = UpdateStatus.kUnavailable;
+  protected accessor readyVersion_ = '';
   protected readonly models_ = [
     {id: 'z-ai/glm-5.3-flash', name: 'GLM 5.3 Flash', price: '$0.01 / $0.20'},
     {
@@ -160,6 +164,14 @@ export class RailSettingsElement extends CrLitElement {
   override connectedCallback() {
     super.connectedCallback();
     this.addEventListener('keydown', e => this.onKeydown_(e), true);
+    const router = browserProxyFactory.getInstance().callbackRouter;
+    router.onUpdateStatusChanged.addListener(
+        (status: UpdateStatus, version: string|null) =>
+            this.setUpdateStatus_(status, version));
+    router.onShowSection.addListener((section: string) => {
+      this.section_ = section;
+      this.onBackClick_();
+    });
     this.load_();
   }
 
@@ -181,6 +193,8 @@ export class RailSettingsElement extends CrLitElement {
     const versions = await handler.getVersions();
     this.railVersion_ = versions.rail;
     this.chromiumVersion_ = versions.chromium;
+    const update = await handler.getUpdateStatus();
+    this.setUpdateStatus_(update.status, update.version);
     const names = spaceNamesByProfile(value);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
@@ -336,6 +350,69 @@ export class RailSettingsElement extends CrLitElement {
   protected onSectionClick_(e: Event) {
     this.section_ = (e.currentTarget as HTMLElement).dataset['section']!;
     this.onBackClick_();
+  }
+
+  private setUpdateStatus_(status: UpdateStatus, version: string|null) {
+    this.updateStatus_ = status;
+    this.readyVersion_ = version ?? '';
+  }
+
+  protected updateMessage_(): string {
+    switch (this.updateStatus_) {
+      case UpdateStatus.kChecking:
+        return 'Checking for updates...';
+      case UpdateStatus.kDownloading:
+        return 'A new version is downloading. You can keep browsing.';
+      case UpdateStatus.kUpToDate:
+        return 'Rail is up to date.';
+      case UpdateStatus.kReady:
+        return `Rail ${this.readyVersion_} is ready. ` +
+            'Restart Rail to finish updating.';
+      case UpdateStatus.kFailed:
+        return 'Couldn\'t check for updates. Check your connection and ' +
+            'try again.';
+      case UpdateStatus.kUnavailable:
+        return 'Development builds don\'t update automatically.';
+      default:
+        return 'Rail checks for updates automatically.';
+    }
+  }
+
+  protected updateButtonLabel_(): string {
+    switch (this.updateStatus_) {
+      case UpdateStatus.kChecking:
+        return 'Checking...';
+      case UpdateStatus.kDownloading:
+        return 'Downloading...';
+      case UpdateStatus.kReady:
+        return 'Restart to Update';
+      case UpdateStatus.kFailed:
+        return 'Try Again';
+      default:
+        return 'Check for Updates';
+    }
+  }
+
+  protected isUpdateBusy_(): boolean {
+    return this.updateStatus_ === UpdateStatus.kChecking ||
+        this.updateStatus_ === UpdateStatus.kDownloading;
+  }
+
+  protected isUpdateReady_(): boolean {
+    return this.updateStatus_ === UpdateStatus.kReady;
+  }
+
+  protected isUpdateAvailable_(): boolean {
+    return this.updateStatus_ !== UpdateStatus.kUnavailable;
+  }
+
+  protected onUpdateClick_() {
+    const handler = browserProxyFactory.getInstance().handler;
+    if (this.isUpdateReady_()) {
+      handler.applyUpdate();
+      return;
+    }
+    handler.checkForUpdates();
   }
 
   protected onLinkClick_(e: Event) {
