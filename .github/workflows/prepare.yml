@@ -16,6 +16,7 @@ concurrency:
 
 env:
   RAIL_REPO_DIR: C:\rail\build\rail-browser
+  RAIL_APPLIED_SHA: C:\rail\build\applied-sha
 
 jobs:
   prepare:
@@ -64,7 +65,8 @@ jobs:
         working-directory: ${{ env.RAIL_REPO_DIR }}
         run: |
           .\.venv\Scripts\python.exe .\build.py --prepare-only --7z-path 'C:\Program Files\7-Zip\7z.exe'
-          exit $LASTEXITCODE
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          [IO.File]::WriteAllText($env:RAIL_APPLIED_SHA, $env:GITHUB_SHA)
 
       - name: Build release
         working-directory: ${{ env.RAIL_REPO_DIR }}

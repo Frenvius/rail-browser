@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rail-builder
+  cancel-in-progress: false
+
+env:
+  RAIL_REPO_DIR: C:\rail\build\rail-browser
+  RAIL_APPLIED_SHA: C:\rail\build\applied-sha
+
+jobs:
+  build:
+    runs-on: [self-hosted, rail-builder]
+    timeout-minutes: 600
+    defaults:
+      run:
+        shell: powershell
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      assets: ${{ steps.package.outputs.assets }}
+    steps:
+      - name: Version
+        id: version
+        run: |
+          if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+$') {
+            Write-Error "tag $env:GITHUB_REF_NAME is not vMAJOR.RELEASE.HOTFIX"
+            exit 1
+          }
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$($env:GITHUB_REF_NAME.Substring(1))`n")
+
+      - name: Sync repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN"))
+          $auth = "http.extraheader=AUTHORIZATION: basic $basic"
+          git -C $env:RAIL_REPO_DIR -c $auth fetch --no-tags origin $env:GITHUB_SHA
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git -C $env:RAIL_REPO_DIR checkout --force --detach $env:GITHUB_SHA
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          git -C $env:RAIL_REPO_DIR submodule update --init --recursive
+          exit $LASTEXITCODE
+
+      - name: Sync Chromium tree
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        env:
+          RAIL_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $applied = (Get-Content $env:RAIL_APPLIED_SHA -Raw).Trim()
+          $chromium = (Get-Content ungoogled-chromium\chromium_version.txt -Raw).Trim()
+          $tree = (Get-Content build\src\chrome\VERSION | ForEach-Object { ($_ -split '=')[1] }) -join '.'
+          if ($tree -ne $chromium) {
+            Write-Error "the prepared tree is Chromium $tree but $env:GITHUB_SHA needs $chromium; prepare a fresh tree"
+            exit 1
+          }
+          if ($env:RAIL_VERSION.Split('.')[0] -ne $chromium.Split('.')[0]) {
+            Write-Error "version $env:RAIL_VERSION must start with the Chromium major of $chromium"
+            exit 1
+          }
+          git diff --quiet $applied $env:GITHUB_SHA -- ungoogled-chromium patches platform/windows/patches platform/windows/domain_substitution.list platform/windows/pruning.list platform/windows/downloads.ini ':(exclude)patches/rail-shell.patch'
+          if ($LASTEXITCODE) {
+            Write-Error "patch layers below rail-shell.patch changed since $applied; prepare a fresh tree"
+            exit 1
+          }
+          git diff --quiet $applied $env:GITHUB_SHA -- patches/rail-shell.patch
+          if ($LASTEXITCODE) {
+            $previous = Join-Path $env:RUNNER_TEMP 'applied-rail-shell.patch'
+            cmd /c "git show ${applied}:patches/rail-shell.patch > `"$previous`""
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            git -C build\src apply --reverse $previous
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            git -C build\src apply "$env:RAIL_REPO_DIR\patches\rail-shell.patch"
+            if ($LASTEXITCODE) {
+              git -C build\src apply $previous
+              Write-Error 'rail-shell.patch does not apply over the prepared tree; restored the previous one'
+              exit 1
+            }
+          }
+          [IO.File]::WriteAllText($env:RAIL_APPLIED_SHA, $env:GITHUB_SHA)
+
+      - name: Python environment
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        run: |
+          .\.venv\Scripts\python.exe -m pip install --disable-pip-version-check -q -r requirements-dev.txt
+          exit $LASTEXITCODE
+
+      - name: Build release
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        run: |
+          $self = Get-Process -Id $PID
+          $self.PriorityClass = 'BelowNormal'
+          $self.ProcessorAffinity = [IntPtr]0xFFFFFF
+          .\.venv\Scripts\python.exe .\build.py --reuse --regenerate -j 20
+          exit $LASTEXITCODE
+
+      - name: Package
+        id: package
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        env:
+          RAIL_VERSION: ${{ steps.version.outputs.version }}
+          RAIL_UPDATE_ED25519_KEY: ${{ secrets.RAIL_UPDATE_ED25519_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assets = Join-Path $env:RAIL_REPO_DIR "build\release\$env:RAIL_VERSION"
+          if (Test-Path $assets) { Remove-Item $assets -Recurse -Force }
+          New-Item -ItemType Directory $assets | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q `
+            "/DMiniInstaller=$env:RAIL_REPO_DIR\build\src\out\Release\mini_installer.exe" `
+            "/DOutputDir=$assets" "/DAppVersion=$env:RAIL_VERSION" `
+            platform\windows\installer\rail_setup.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $ublock = .\.venv\Scripts\python.exe -c "import build; print(build._UBLOCK_VERSION)"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item "build\download_cache\uBlock-$ublock.tar.gz" (Join-Path $assets "uBlock-$ublock-source.tar.gz")
+          .\.venv\Scripts\python.exe platform\windows\appcast.py `
+            --installer (Join-Path $assets "RailSetup-$env:RAIL_VERSION.exe") `
+            --version $env:RAIL_VERSION --repository $env:GITHUB_REPOSITORY `
+            --output (Join-Path $assets 'appcast.xml')
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $sums = Get-ChildItem $assets -File | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
+          [IO.File]::WriteAllText((Join-Path $assets 'SHA256SUMS'), (($sums -join "`n") + "`n"))
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "assets=$assets`n")
+
+  publish:
+    needs: build
+    runs-on: [self-hosted, rail-builder]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAIL_VERSION: ${{ needs.build.outputs.version }}
+          RAIL_ASSETS: ${{ needs.build.outputs.assets }}
+        run: |
+          $files = (Get-ChildItem $env:RAIL_ASSETS -File).FullName
+          gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --verify-tag --draft `
+            --title "Rail $env:RAIL_VERSION" --generate-notes @files
+          exit $LASTEXITCODE

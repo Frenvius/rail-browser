@@ -4,7 +4,9 @@
 #ifndef OutputDir
   #define OutputDir "..\..\..\build"
 #endif
-#define AppVersion GetVersionNumbersString(MiniInstaller)
+#ifndef AppVersion
+  #define AppVersion GetVersionNumbersString(MiniInstaller)
+#endif
 
 [Setup]
 AppName=Rail
