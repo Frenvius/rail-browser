@@ -10,8 +10,7 @@ interface PageHandlerFactory {
 interface PageHandler {
   Ready(int32 height);
 
-  Restyle(string color, string icon,
-          webui_browser.mojom.SystemBackdropMaterial material);
+  Restyle(webui_browser.mojom.SpaceStyle style);
 
   SetSystemBackdrop(webui_browser.mojom.SystemBackdropSettings settings);
 

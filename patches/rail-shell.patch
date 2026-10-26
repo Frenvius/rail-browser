@@ -5126,7 +5126,7 @@ index 5e48dff..1d88d6a 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..0763e3c 100644
+index 922ef29..9f2b423 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -5156,7 +5156,7 @@ index 922ef29..0763e3c 100644
  
  import {getCss} from './app.css.js';
  import {getHtml} from './app.html.js';
-+import type {SystemBackdropMaterial} from './browser.mojom-webui.js';
++import type {SpaceStyle} from './browser.mojom-webui.js';
  import {browserProxyFactory, FullscreenContext, SecurityIcon} from './browser.mojom-webui.js';
  import type {ContentRegionElement} from './content_region.js';
 +import {ActiveProfile} from './rail/active_profile.js';
@@ -5472,7 +5472,7 @@ index 922ef29..0763e3c 100644
        this.forwardButtonDisabled_ = !canGoForward;
      } else {
        this.backButtonDisabled_ = true;
-@@ -327,32 +455,101 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -327,32 +455,100 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -5500,9 +5500,8 @@ index 922ef29..0763e3c 100644
 +                this.$.tabstrip.openSpaceMenu(point.x, point.y));
 +    browserProxyFactory.getInstance()
 +        .callbackRouter.onRailSpaceRestyle.addListener(
-+            (id: string, color: string, icon: string,
-+             material: SystemBackdropMaterial) =>
-+                this.$.tabstrip.restyleSpace(id, color, icon, material));
++            (id: string, style: SpaceStyle) =>
++                this.$.tabstrip.restyleSpace(id, style));
 +    browserProxyFactory.getInstance().callbackRouter.onRailAdoptTab.addListener(
 +        (id: string, spaceId: string) =>
 +            this.$.tabstrip.adoptTab(id, spaceId));
@@ -5592,7 +5591,7 @@ index 922ef29..0763e3c 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -371,6 +568,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -371,6 +567,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5609,7 +5608,7 @@ index 922ef29..0763e3c 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -400,9 +607,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -400,9 +606,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -6505,7 +6504,7 @@ index a15445b..3cd8ae6 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..64fd998 100644
+index b7a5099..3d4aa8a 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6537,7 +6536,7 @@ index b7a5099..64fd998 100644
  
 -import {DropTargetReceiver, DropTargetRegistrationRemote, TabDragService} from '../tab_drag_api.mojom-webui.js';
 -import type {DropTargetInterface, DropTargetRegistrationRemote as DropTargetRegistrationRemoteType, TabDragServiceRemote} from '../tab_drag_api.mojom-webui.js';
-+import type {SystemBackdropMaterial} from '../browser.mojom-webui.js';
++import type {SpaceStyle, SystemBackdropMaterial} from '../browser.mojom-webui.js';
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
 +import type {ImportSite} from '../rail/import_merge.js';
 +import {importSiteOf} from '../rail/import_merge.js';
@@ -7049,7 +7048,7 @@ index b7a5099..64fd998 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +578,2320 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +578,2314 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8313,16 +8312,13 @@ index b7a5099..64fd998 100644
 +    }
 +  }
 +
-+  restyleSpace(
-+      id: string, color: string, icon: string,
-+      material: SystemBackdropMaterial) {
-+    this.spaces_.restyle(id, color, icon, material);
++  restyleSpace(id: string, style: SpaceStyle) {
++    this.spaces_.restyle(id, style);
 +    this.refreshSections_();
 +  }
 +
 +  protected onRailSpaceCommand_(e: CustomEvent<SpaceCommandDetail>) {
-+    const {command, id, name, color, icon, delta, destination, profile} =
-+        e.detail;
++    const {command, id, name, delta, destination, profile} = e.detail;
 +    switch (command) {
 +      case 'select':
 +        this.selectSpace_(id);
@@ -8355,10 +8351,6 @@ index b7a5099..64fd998 100644
 +        break;
 +      case 'rename':
 +        this.spaces_.rename(id, name.trim());
-+        this.refreshSections_();
-+        break;
-+      case 'restyle':
-+        this.spaces_.restyle(id, color, icon);
 +        this.refreshSections_();
 +        break;
 +      case 'move':
@@ -8919,7 +8911,8 @@ index b7a5099..64fd998 100644
 +    this.backdropMaterial_ = this.spaces_.material;
 +    this.syncSelection_();
 +    paintSpaceColors(
-+        spaceHex(this.spaces_.active.color), this.spaces_.active.color);
++        spaceHex(this.spaces_.active.color), this.spaces_.active.color,
++        this.spaces_.active.grain);
 +    this.pushBackdrop_();
 +    this.fire('space-content-changed', {hasContent: this.hasActiveContent});
 +    this.fire(
@@ -8930,8 +8923,8 @@ index b7a5099..64fd998 100644
 +  private pushBackdrop_() {
 +    const space = this.spaces_.active;
 +    const settings = backdropSettings(
-+        space.color, Math.round(tintStrength(space.color) * 100),
-+        this.spaces_.material);
++        space.color, space.gradient,
++        Math.round(tintStrength(space.color) * 100), this.spaces_.material);
 +    const key = JSON.stringify(settings);
 +    if (key === this.backdropKey_) {
 +      return;
@@ -11001,7 +10994,7 @@ index ffbd17c..4097a2d 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..001f929 100644
+index 7e0800a..0b35656 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,12 @@
@@ -11017,7 +11010,7 @@ index 7e0800a..001f929 100644
  import "url/mojom/url.mojom";
  
  // Used by the WebUI page to bootstrap communication to/from the browser
-@@ -26,13 +29,57 @@ enum FullscreenContext {
+@@ -26,13 +29,64 @@ enum FullscreenContext {
    kTab,
  };
  
@@ -11046,16 +11039,23 @@ index 7e0800a..001f929 100644
 +struct SystemBackdropSettings {
 +  SystemBackdropMaterial material;
 +  uint32 tint_color;
++  array<uint32> gradient_colors;
 +  float tint_opacity;
 +  float luminosity_opacity;
++};
++
++struct SpaceStyle {
++  string color;
++  array<string> gradient;
++  float grain;
++  string icon;
++  SystemBackdropMaterial material;
 +};
 +
 +struct SpacePanelRequest {
 +  string kind;
 +  string space_id;
-+  string color;
-+  string icon;
-+  SystemBackdropMaterial material;
++  SpaceStyle style;
 +};
 +
 +struct RailMenuItem {
@@ -11080,7 +11080,7 @@ index 7e0800a..001f929 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +91,55 @@ interface Page {
+@@ -44,6 +98,54 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -11100,8 +11100,7 @@ index 7e0800a..001f929 100644
 +
 +  OnRailMenuClosed();
 +
-+  OnRailSpaceRestyle(string space_id, string color, string icon,
-+                     SystemBackdropMaterial material);
++  OnRailSpaceRestyle(string space_id, SpaceStyle style);
 +
 +  OnRailAdoptTab(tabs_api.mojom.NodeId id, string space_id);
 +
@@ -11136,7 +11135,7 @@ index 7e0800a..001f929 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -58,7 +154,7 @@ interface PageHandler {
+@@ -58,7 +160,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -11145,7 +11144,7 @@ index 7e0800a..001f929 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +189,109 @@ interface PageHandler {
+@@ -93,6 +195,109 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -12538,7 +12537,7 @@ index d1169b1..a4d417e 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 0a49a8e..5004cd4 100644
+index 0a49a8e..99073f8 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -8,6 +8,8 @@
@@ -12743,7 +12742,7 @@ index 0a49a8e..5004cd4 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -735,10 +805,125 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -735,10 +805,127 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -12852,6 +12851,8 @@ index 0a49a8e..5004cd4 100644
 +      break;
 +  }
 +  config.tint_color = settings->tint_color;
++  config.gradient_colors.assign(settings->gradient_colors.begin(),
++                                settings->gradient_colors.end());
 +  config.tint_opacity = settings->tint_opacity;
 +  config.luminosity_opacity = settings->luminosity_opacity;
 +  backdrop_controller_->SetConfig(config);
@@ -12869,7 +12870,7 @@ index 0a49a8e..5004cd4 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -807,6 +992,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -807,6 +994,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -12878,7 +12879,7 @@ index 0a49a8e..5004cd4 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -864,9 +1051,10 @@ ui::AcceleratorProvider* WebUIBrowserWindow::GetAcceleratorProvider() {
+@@ -864,9 +1053,10 @@ ui::AcceleratorProvider* WebUIBrowserWindow::GetAcceleratorProvider() {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
@@ -12891,7 +12892,7 @@ index 0a49a8e..5004cd4 100644
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -992,6 +1180,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -992,6 +1182,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -12904,7 +12905,7 @@ index 0a49a8e..5004cd4 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -1058,11 +1252,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -1058,11 +1254,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -12930,7 +12931,7 @@ index 0a49a8e..5004cd4 100644
    // TODO(webium): Handle shortcuts that are registered in the FocusManager.
    // We handle only browser window shortcuts here. Secondary UIs can
    // registered their own shortcuts (e.g. Ctrl+Enter closes the Find Bar) via
-@@ -1084,7 +1292,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -1084,7 +1294,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
  #if !BUILDFLAG(IS_MAC)
  bool WebUIBrowserWindow::HandleKeyboardEvent(
      const input::NativeWebKeyboardEvent& event) {
@@ -12948,7 +12949,7 @@ index 0a49a8e..5004cd4 100644
  }
  
  views::NativeWidget* WebUIBrowserWindow::CreateNativeWidget() {
-@@ -1247,6 +1464,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1247,6 +1466,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
      views::Widget::ClosedReason close_reason) {
    // TODO(webium): don't close a window during tab dragging.
  
@@ -12957,7 +12958,7 @@ index 0a49a8e..5004cd4 100644
    // Give beforeunload handlers, the user, or policy the chance to cancel the
    // close before we hide the window below.
    if (!UnloadController::From(browser_)->HandleBeforeClose()) {
-@@ -1258,7 +1477,7 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1258,7 +1479,7 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
    }
  
    UnloadController::From(browser_)->OnWindowClosing();
@@ -12966,7 +12967,7 @@ index 0a49a8e..5004cd4 100644
      // Tab strip isn't empty.  Hide the frame (so it appears to have closed
      // immediately) and close all the tabs, allowing the renderers to shut
      // down. When the tab strip is empty we'll be called back again.
-@@ -1283,6 +1502,18 @@ WebUIBrowserWindow::WidgetDelegate::WidgetDelegate(
+@@ -1283,6 +1504,18 @@ WebUIBrowserWindow::WidgetDelegate::WidgetDelegate(
    SetCanMinimize(true);
  }
  
@@ -12985,7 +12986,7 @@ index 0a49a8e..5004cd4 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldSaveWindowPlacement() const {
    // If IsFullscreen() is true, we've just changed into fullscreen mode, and
    // we're catching the going-into-fullscreen sizing and positioning calls,
-@@ -1295,8 +1526,13 @@ void WebUIBrowserWindow::WidgetDelegate::SaveWindowPlacement(
+@@ -1295,8 +1528,13 @@ void WebUIBrowserWindow::WidgetDelegate::SaveWindowPlacement(
      const gfx::Rect& bounds,
      ui::mojom::WindowShowState show_state) {
    CHECK(ShouldSaveWindowPlacement());
@@ -13001,7 +13002,7 @@ index 0a49a8e..5004cd4 100644
  }
  
  bool WebUIBrowserWindow::WidgetDelegate::GetSavedWindowPlacement(
-@@ -1321,6 +1557,21 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+@@ -1321,6 +1559,21 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
        ->GetWindowTitleForCurrentTab(true /* include_app_name */);
  }
  
@@ -13023,7 +13024,7 @@ index 0a49a8e..5004cd4 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
      gfx::NativeView child,
      const gfx::Point& location) {
-@@ -1357,6 +1608,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1357,6 +1610,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  

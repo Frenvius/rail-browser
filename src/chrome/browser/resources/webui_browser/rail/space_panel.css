@@ -21,26 +21,130 @@
   width: 250px;
 }
 
+#colorpicker,
+#colorpicker * {
+  box-sizing: border-box;
+}
+
 #colorpicker {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-bottom: 10px;
+  gap: 12px;
+  padding: 10px 10px 12px;
+}
+
+#field {
+  background-color: rgb(255 255 255 / 3%);
+  background-image: radial-gradient(circle,
+      rgb(255 255 255 / 16%) 0.8px, transparent 1.2px);
+  background-position: center;
+  background-size: 7px 7px;
+  border: 1px solid rgb(255 255 255 / 6%);
+  border-radius: 10px;
+  cursor: crosshair;
+  height: 190px;
+  position: relative;
+  touch-action: none;
+}
+
+.dot {
+  animation: dot-in 220ms cubic-bezier(0.2, 0, 0, 1.4);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 50%);
+  cursor: grab;
+  height: 18px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition: left 260ms cubic-bezier(0.2, 0, 0, 1),
+      top 260ms cubic-bezier(0.2, 0, 0, 1),
+      height 160ms ease, width 160ms ease, background-color 260ms ease;
+  width: 18px;
+  z-index: 1;
+}
+
+.dot[primary] {
+  border-width: 3px;
+  height: 30px;
+  width: 30px;
+  z-index: 2;
+}
+
+.dot[selected] {
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 22%), 0 1px 6px rgb(0 0 0 / 50%);
+}
+
+#field[dragging] {
+  cursor: grabbing;
+}
+
+#field[dragging] .dot {
+  cursor: grabbing;
+  transition: height 160ms ease, width 160ms ease;
+}
+
+@keyframes dot-in {
+  from {
+    transform: translate(-50%, -50%) scale(0);
+  }
+}
+
+#fieldbar {
+  align-items: center;
+  bottom: 8px;
+  display: flex;
+  gap: 4px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.count {
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--rail-text-dim);
+  cursor: pointer;
+  display: flex;
+  height: 22px;
+  justify-content: center;
+  padding: 0;
+  width: 22px;
+}
+
+.count svg {
+  fill: none;
+  height: 12px;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+  width: 12px;
+}
+
+.count:hover:not(:disabled) {
+  background: var(--rail-hover);
+  color: var(--rail-text);
+}
+
+.count:disabled {
+  cursor: default;
+  opacity: 0.3;
 }
 
 #colorname {
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 6px;
   color: var(--rail-text-label);
-  flex: 1;
   font-family: inherit;
   font-size: 11px;
   letter-spacing: 0.04em;
-  min-width: 0;
   outline: none;
-  padding: 3px 5px;
+  padding: 3px 0;
+  text-align: center;
   text-transform: uppercase;
+  width: 64px;
 }
 
 #colorname:hover {
@@ -48,96 +152,143 @@
 }
 
 #colorname:focus {
-  background: var(--rail-surface);
+  background: rgb(0 0 0 / 30%);
   border-color: var(--rail-border);
   color: var(--rail-text);
-}
-
-#colorpreview {
-  border: 1px solid var(--rail-border);
-  border-radius: 5px;
-  flex: 0 0 18px;
-  height: 18px;
-}
-
-#colorfield {
-  background:
-      radial-gradient(closest-side,
-          hsl(0 0% 18%), hsl(0 0% 18% / 0%) 50%,
-          hsl(0 0% 82% / 0%) 50%, hsl(0 0% 82%)),
-      conic-gradient(from 90deg,
-          hsl(0 70% 50%), hsl(60 70% 50%), hsl(120 70% 50%),
-          hsl(180 70% 50%), hsl(240 70% 50%), hsl(300 70% 50%),
-          hsl(360 70% 50%));
-  border-radius: 50%;
-  cursor: crosshair;
-  height: 200px;
-  margin: 0 auto;
-  position: relative;
-  touch-action: none;
-  width: 200px;
-}
-
-#colordot {
-  border: 2px solid #fff;
-  border-radius: 50%;
-  box-shadow: 0 0 4px rgb(0 0 0 / 60%);
-  height: 12px;
-  pointer-events: none;
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 12px;
-}
-
-#strength {
-  appearance: none;
-  background: var(--track-gradient);
-  border: 1px solid var(--rail-border);
-  border-radius: 7px;
-  cursor: pointer;
-  height: 14px;
-  margin: 0 10px;
-  outline: none;
-}
-
-#strength::-webkit-slider-thumb {
-  appearance: none;
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 0 4px rgb(0 0 0 / 60%);
-  height: 14px;
-  width: 14px;
 }
 
 #swatches {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(7, 26px);
+  grid-template-columns: repeat(7, 22px);
   justify-content: space-between;
-  padding: 0 14px;
+  padding: 0 6px;
 }
 
 .swatch {
   border: 2px solid rgb(255 255 255 / 12%);
   border-radius: 50%;
   cursor: pointer;
-  height: 26px;
+  height: 22px;
   padding: 0;
-  transition: border-color 120ms ease;
-  width: 26px;
+  transition: border-color 120ms ease, transform 120ms ease;
+  width: 22px;
 }
 
 .swatch:hover {
   border-color: rgb(255 255 255 / 45%);
+  transform: scale(1.1);
 }
 
-#backdrop {
-  border-top: 1px solid var(--rail-border);
+#controls {
+  align-items: center;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-  padding: 8px 10px 0;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+#strength {
+  flex: 1;
+  height: 30px;
+  position: relative;
+}
+
+#wave {
+  height: 100%;
+  inset: 0;
+  overflow: visible;
+  position: absolute;
+  width: 100%;
+}
+
+#wave path {
+  fill: none;
+  stroke: rgb(255 255 255 / 40%);
+  stroke-linecap: round;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+
+#strengthRange {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 100%;
+  inset: 0;
+  margin: 0;
+  outline: none;
+  position: absolute;
+  width: 100%;
+}
+
+#strengthRange::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 100%;
+}
+
+#strengthRange::-webkit-slider-thumb {
+  appearance: none;
+  background: #fff;
+  border-radius: 5px;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 50%);
+  height: 30px;
+  width: 10px;
+}
+
+#strengthRange:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--rail-accent);
+  outline-offset: 2px;
+}
+
+#dial {
+  border-radius: 50%;
+  cursor: grab;
+  flex: 0 0 56px;
+  height: 56px;
+  outline: none;
+  position: relative;
+  touch-action: none;
+}
+
+#dial:focus-visible {
+  box-shadow: 0 0 0 2px var(--rail-accent);
+}
+
+.tick {
+  background: rgb(255 255 255 / 22%);
+  border-radius: 50%;
+  height: 3px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition: background-color 120ms ease;
+  width: 3px;
+}
+
+.tick[lit] {
+  background: rgb(255 255 255 / 85%);
+}
+
+#knob {
+  background: radial-gradient(circle at 50% 35%, #3a3a3a, #1f1f1f);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 50%);
+  box-sizing: border-box;
+  height: 36px;
+  left: 10px;
+  position: absolute;
+  top: 10px;
+  width: 36px;
+}
+
+#indicator {
+  background: #fff;
+  border-radius: 1px;
+  height: 7px;
+  left: calc(50% - 1px);
+  position: absolute;
+  top: 4px;
+  width: 2px;
 }
 
 #materials {
@@ -167,6 +318,15 @@
   background: var(--rail-accent);
   border-color: var(--rail-accent);
   color: var(--rail-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot,
+  .swatch,
+  .tick {
+    animation: none;
+    transition: none;
+  }
 }
 
 .panelhead {

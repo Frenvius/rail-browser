@@ -23,6 +23,17 @@
   user-select: none;
 }
 
+:host::before {
+  background-image: var(--rail-grain-texture);
+  background-size: 180px;
+  content: '';
+  inset: 0;
+  opacity: calc(var(--rail-space-grain, 0) * var(--rail-grain-max-opacity));
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+
 #rootContainer {
   background: transparent;
   display: grid;

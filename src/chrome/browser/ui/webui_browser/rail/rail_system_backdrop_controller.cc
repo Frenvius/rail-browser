@@ -24,10 +24,10 @@
 #include <wrl/wrappers/corewrappers.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
-#include <iterator>
-#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -64,17 +64,13 @@ constexpr GUID kBlendEffectId = {
     0x13f8,
     0x4cdd,
     {0xad, 0x20, 0xc8, 0x90, 0x54, 0x7a, 0xc6, 0x5d}};
-constexpr GUID kFloodEffectId = {
-    0x61c23c20,
-    0xae69,
-    0x4d8e,
-    {0x94, 0xcf, 0x50, 0x07, 0x8d, 0xf6, 0x38, 0xf2}};
-
 constexpr wchar_t kBackdropSourceName[] = L"backdrop";
-constexpr wchar_t kTintName[] = L"Tint";
-constexpr wchar_t kLuminosityName[] = L"Luminosity";
-constexpr const wchar_t* kAnimatedColors[] = {L"Tint.Color",
-                                              L"Luminosity.Color"};
+constexpr wchar_t kTintSourceName[] = L"tint";
+constexpr wchar_t kLuminositySourceName[] = L"luminosity";
+constexpr size_t kTintStops = 3;
+constexpr ABI::Windows::Foundation::Numerics::Vector2 kTintStart = {0.0f,
+                                                                    0.0f};
+constexpr ABI::Windows::Foundation::Numerics::Vector2 kTintEnd = {0.25f, 1.0f};
 constexpr float kThinLuminosityScale = 0.5f;
 constexpr float kAltTintScale = 1.5f;
 constexpr base::TimeDelta kRecolorDuration = base::Milliseconds(300);
@@ -82,76 +78,6 @@ constexpr base::TimeDelta kActivationFadeDuration = base::Milliseconds(250);
 constexpr ABI::Windows::UI::Color kDarkNeutralColor = {255, 0x1a, 0x1a, 0x1a};
 constexpr ABI::Windows::UI::Color kLightNeutralColor = {255, 0xe6, 0xe6,
                                                         0xe6};
-
-class AnimatedColorCursor
-    : public RuntimeClass<
-          RuntimeClassFlags<WinRtClassicComMix>,
-          ABI::Windows::Foundation::Collections::IIterator<HSTRING>> {
- public:
-  HRESULT STDMETHODCALLTYPE get_Current(HSTRING* current) override {
-    if (!current) {
-      return E_POINTER;
-    }
-    if (index_ >= std::size(kAnimatedColors)) {
-      return E_BOUNDS;
-    }
-    return HStringReference(kAnimatedColors[index_]).CopyTo(current);
-  }
-  HRESULT STDMETHODCALLTYPE get_HasCurrent(boolean* has_current) override {
-    if (!has_current) {
-      return E_POINTER;
-    }
-    *has_current = index_ < std::size(kAnimatedColors);
-    return S_OK;
-  }
-  HRESULT STDMETHODCALLTYPE MoveNext(boolean* has_current) override {
-    if (index_ < std::size(kAnimatedColors)) {
-      ++index_;
-    }
-    return get_HasCurrent(has_current);
-  }
-  HRESULT STDMETHODCALLTYPE GetMany(unsigned capacity,
-                                    HSTRING* items,
-                                    unsigned* count) override {
-    if (!items || !count) {
-      return E_POINTER;
-    }
-    *count = 0;
-    while (*count < capacity && index_ < std::size(kAnimatedColors)) {
-      HRESULT hr =
-          HStringReference(kAnimatedColors[index_]).CopyTo(&items[*count]);
-      if (FAILED(hr)) {
-        return hr;
-      }
-      ++index_;
-      ++*count;
-    }
-    return S_OK;
-  }
-
- private:
-  size_t index_ = 0;
-};
-
-class AnimatedColors
-    : public RuntimeClass<
-          RuntimeClassFlags<WinRtClassicComMix>,
-          ABI::Windows::Foundation::Collections::IIterable<HSTRING>> {
- public:
-  HRESULT STDMETHODCALLTYPE
-  First(ABI::Windows::Foundation::Collections::IIterator<HSTRING>** first)
-      override {
-    if (!first) {
-      return E_POINTER;
-    }
-    auto cursor = Make<AnimatedColorCursor>();
-    if (!cursor) {
-      return E_OUTOFMEMORY;
-    }
-    *first = cursor.Detach();
-    return S_OK;
-  }
-};
 
 class Effect : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>,
                                    wgfx::IGraphicsEffect,
@@ -184,13 +110,7 @@ class Effect : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>,
     if (!name || !index || !mapping) {
       return E_POINTER;
     }
-    if (!IsEqualGUID(id_, kFloodEffectId) ||
-        std::wstring_view(name) != L"Color") {
-      return E_INVALIDARG;
-    }
-    *index = D2D1_FLOOD_PROP_COLOR;
-    *mapping = wgfx::GRAPHICS_EFFECT_PROPERTY_MAPPING_COLOR_TO_VECTOR4;
-    return S_OK;
+    return E_INVALIDARG;
   }
   HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) override {
     if (!count) {
@@ -240,19 +160,6 @@ class Effect : public RuntimeClass<RuntimeClassFlags<WinRtClassicComMix>,
     return true;
   }
 
-  bool SetColor(UINT index, const float (&value)[4]) {
-    if (!values_) {
-      return false;
-    }
-    ComPtr<IPropertyValue> property;
-    if (FAILED(values_->CreateSingleArray(4, const_cast<float*>(value),
-                                          &property))) {
-      return false;
-    }
-    properties_[index] = property;
-    return true;
-  }
-
  private:
   const CLSID id_;
   HString name_;
@@ -278,20 +185,29 @@ DWM_SYSTEMBACKDROP_TYPE ToDwmBackdrop(SystemBackdropMaterial material) {
   }
 }
 
-void FillChannels(SkColor color, float alpha, float (&out)[4]) {
-  out[0] = SkColorGetR(color) / 255.0f;
-  out[1] = SkColorGetG(color) / 255.0f;
-  out[2] = SkColorGetB(color) / 255.0f;
-  out[3] = std::clamp(alpha, 0.0f, 1.0f);
+ABI::Windows::UI::Color ToCompositionColor(SkColor color, float alpha) {
+  return {static_cast<BYTE>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255)),
+          static_cast<BYTE>(SkColorGetR(color)),
+          static_cast<BYTE>(SkColorGetG(color)),
+          static_cast<BYTE>(SkColorGetB(color))};
 }
 
-ABI::Windows::UI::Color ChannelsToColor(const float (&channels)[4]) {
-  const auto byte = [](float value) {
-    return static_cast<BYTE>(std::lround(value * 255.0f));
-  };
-  return {byte(channels[3]), byte(channels[0]), byte(channels[1]),
-          byte(channels[2])};
+SkColor Midpoint(SkColor a, SkColor b) {
+  return SkColorSetRGB((SkColorGetR(a) + SkColorGetR(b)) / 2,
+                       (SkColorGetG(a) + SkColorGetG(b)) / 2,
+                       (SkColorGetB(a) + SkColorGetB(b)) / 2);
 }
+
+struct GradientBrush {
+  ComPtr<wuc::ICompositionBrush> brush;
+  std::array<ComPtr<wuc::ICompositionColorGradientStop>, kTintStops> stops;
+};
+
+struct TintedBrush {
+  ComPtr<wuc::ICompositionBrush> brush;
+  GradientBrush tint;
+  GradientBrush luminosity;
+};
 
 }  // namespace
 
@@ -338,7 +254,8 @@ class SystemBackdropController::Impl {
   }
 
   void SetConfig(const SystemBackdropConfig& config) {
-    const bool recolor = composition_ && effect_brush_ && fallback_brush_ &&
+    const bool recolor = composition_ && effect_brush_.brush &&
+                         fallback_brush_.brush &&
                          config.material == config_.material &&
                          config.popup == config_.popup;
     const bool brush_changed =
@@ -348,8 +265,8 @@ class SystemBackdropController::Impl {
     if (recolor && AnimateColors()) {
       return;
     }
-    effect_brush_.Reset();
-    fallback_brush_.Reset();
+    effect_brush_ = {};
+    fallback_brush_ = {};
     if (!composition_) {
       ApplyDwmFallback();
       return;
@@ -374,11 +291,11 @@ class SystemBackdropController::Impl {
       FadeCover(1.0f);
       return;
     }
-    if (!effect_brush_) {
+    if (!effect_brush_.brush) {
       effect_brush_ = CreateBackdropEffectBrush();
     }
-    if (effect_brush_) {
-      sprite_->put_Brush(effect_brush_.Get());
+    if (effect_brush_.brush) {
+      sprite_->put_Brush(effect_brush_.brush.Get());
       FadeCover(0.0f);
     }
   }
@@ -831,86 +748,121 @@ class SystemBackdropController::Impl {
     return true;
   }
 
-  ComPtr<wuc::ICompositionBrush> CreateEffectBrush(
-      wuc::ICompositionBrush* source_brush) {
+  static ComPtr<wgfx::IGraphicsEffectSource> CreateSourceParameter(
+      const wchar_t* name) {
     ComPtr<wuc::ICompositionEffectSourceParameterFactory> parameters;
+    ComPtr<wuc::ICompositionEffectSourceParameter> parameter;
+    ComPtr<wgfx::IGraphicsEffectSource> source;
     if (FAILED(ABI::Windows::Foundation::GetActivationFactory(
             HStringReference(
                 RuntimeClass_Windows_UI_Composition_CompositionEffectSourceParameter)
                 .Get(),
-            &parameters))) {
-      return nullptr;
-    }
-    ComPtr<wuc::ICompositionEffectSourceParameter> parameter;
-    ComPtr<wgfx::IGraphicsEffectSource> source;
-    if (FAILED(parameters->Create(HStringReference(kBackdropSourceName).Get(),
-                                  &parameter)) ||
+            &parameters)) ||
+        FAILED(parameters->Create(HStringReference(name).Get(), &parameter)) ||
         FAILED(parameter.As(&source))) {
       return nullptr;
     }
+    return source;
+  }
 
-    float luminosity_channels[4];
-    float tint_channels[4];
-    FillTintChannels(luminosity_channels, tint_channels);
-
-    auto luminosity_color = Make<Effect>(kFloodEffectId);
+  TintedBrush CreateEffectBrush(wuc::ICompositionBrush* source_brush) {
+    ComPtr<wgfx::IGraphicsEffectSource> backdrop =
+        CreateSourceParameter(kBackdropSourceName);
+    ComPtr<wgfx::IGraphicsEffectSource> luminosity =
+        CreateSourceParameter(kLuminositySourceName);
+    ComPtr<wgfx::IGraphicsEffectSource> tint =
+        CreateSourceParameter(kTintSourceName);
     auto luminosity_blend = Make<Effect>(kBlendEffectId);
-    auto tint_color = Make<Effect>(kFloodEffectId);
     auto tint_blend = Make<Effect>(kBlendEffectId);
-    if (!luminosity_color || !luminosity_blend || !tint_color || !tint_blend) {
-      return nullptr;
-    }
-    if (FAILED(luminosity_color->put_Name(
-            HStringReference(kLuminosityName).Get())) ||
-        FAILED(tint_color->put_Name(HStringReference(kTintName).Get())) ||
-        !luminosity_color->SetColor(D2D1_FLOOD_PROP_COLOR,
-                                    luminosity_channels) ||
-        !tint_color->SetColor(D2D1_FLOOD_PROP_COLOR, tint_channels) ||
+    if (!backdrop || !luminosity || !tint || !luminosity_blend ||
+        !tint_blend ||
         !luminosity_blend->SetUInt32(D2D1_BLEND_PROP_MODE,
                                      D2D1_BLEND_MODE_LUMINOSITY) ||
         !tint_blend->SetUInt32(D2D1_BLEND_PROP_MODE,
                                D2D1_BLEND_MODE_COLOR)) {
-      return nullptr;
+      return {};
     }
-    luminosity_blend->SetSource(0, source.Get());
-    luminosity_blend->SetSource(1, luminosity_color.Get());
+    luminosity_blend->SetSource(0, backdrop.Get());
+    luminosity_blend->SetSource(1, luminosity.Get());
     tint_blend->SetSource(0, luminosity_blend.Get());
-    tint_blend->SetSource(1, tint_color.Get());
+    tint_blend->SetSource(1, tint.Get());
 
+    TintedBrush result;
+    result.luminosity = CreateGradient(LuminosityOpacity());
+    result.tint = CreateGradient(TintOpacity());
     ComPtr<wgfx::IGraphicsEffect> graph;
-    if (FAILED(tint_blend.As(&graph))) {
-      return nullptr;
-    }
     ComPtr<wuc::ICompositionEffectFactory> factory;
-    auto animated = Make<AnimatedColors>();
-    if ((!animated || FAILED(compositor_->CreateEffectFactoryWithProperties(
-                          graph.Get(), animated.Get(), &factory))) &&
-        FAILED(compositor_->CreateEffectFactory(graph.Get(), &factory))) {
-      return nullptr;
-    }
     ComPtr<wuc::ICompositionEffectBrush> effect;
-    if (!source_brush || FAILED(factory->CreateBrush(&effect)) ||
+    if (!source_brush || !result.luminosity.brush || !result.tint.brush ||
+        FAILED(tint_blend.As(&graph)) ||
+        FAILED(compositor_->CreateEffectFactory(graph.Get(), &factory)) ||
+        FAILED(factory->CreateBrush(&effect)) ||
         FAILED(effect->SetSourceParameter(
-            HStringReference(kBackdropSourceName).Get(), source_brush))) {
-      return nullptr;
+            HStringReference(kBackdropSourceName).Get(), source_brush)) ||
+        FAILED(effect->SetSourceParameter(
+            HStringReference(kLuminositySourceName).Get(),
+            result.luminosity.brush.Get())) ||
+        FAILED(effect->SetSourceParameter(
+            HStringReference(kTintSourceName).Get(),
+            result.tint.brush.Get())) ||
+        FAILED(effect.As(&result.brush))) {
+      return {};
     }
-    ComPtr<wuc::ICompositionBrush> brush;
-    if (FAILED(effect.As(&brush))) {
-      return nullptr;
-    }
-    return brush;
+    return result;
   }
 
-  void FillTintChannels(float (&luminosity)[4], float (&tint)[4]) const {
-    float luminosity_opacity = config_.luminosity_opacity;
-    float tint_opacity = config_.tint_opacity;
-    if (config_.material == SystemBackdropMaterial::kAcrylicThin) {
-      luminosity_opacity *= kThinLuminosityScale;
-    } else if (config_.material == SystemBackdropMaterial::kMicaAlt) {
-      tint_opacity *= kAltTintScale;
+  GradientBrush CreateGradient(float opacity) {
+    ComPtr<wuc::ICompositor4> compositor4;
+    ComPtr<wuc::ICompositionLinearGradientBrush> linear;
+    ComPtr<wuc::ICompositionGradientBrush> gradient;
+    ComPtr<wuc::ICompositionColorGradientStopCollection> collection;
+    ComPtr<ABI::Windows::Foundation::Collections::IVector<
+        wuc::CompositionColorGradientStop*>>
+        stops;
+    GradientBrush result;
+    if (FAILED(compositor_.As(&compositor4)) ||
+        FAILED(compositor4->CreateLinearGradientBrush(&linear)) ||
+        FAILED(linear->put_StartPoint(kTintStart)) ||
+        FAILED(linear->put_EndPoint(kTintEnd)) ||
+        FAILED(linear.As(&gradient)) ||
+        FAILED(gradient->get_ColorStops(&collection)) ||
+        FAILED(collection.As(&stops)) || FAILED(linear.As(&result.brush))) {
+      return {};
     }
-    FillChannels(config_.tint_color, luminosity_opacity, luminosity);
-    FillChannels(config_.tint_color, tint_opacity, tint);
+    const std::array<SkColor, kTintStops> colors = TintStops();
+    for (size_t i = 0; i < kTintStops; ++i) {
+      if (FAILED(compositor4->CreateColorGradientStopWithOffsetAndColor(
+              static_cast<float>(i) / (kTintStops - 1),
+              ToCompositionColor(colors[i], opacity), &result.stops[i])) ||
+          FAILED(stops->Append(result.stops[i].Get()))) {
+        return {};
+      }
+    }
+    return result;
+  }
+
+  std::array<SkColor, kTintStops> TintStops() const {
+    const SkColor primary = config_.tint_color;
+    const std::vector<SkColor>& gradient = config_.gradient_colors;
+    if (gradient.empty()) {
+      return {primary, primary, primary};
+    }
+    if (gradient.size() == 1) {
+      return {primary, Midpoint(primary, gradient[0]), gradient[0]};
+    }
+    return {primary, gradient[0], gradient[1]};
+  }
+
+  float TintOpacity() const {
+    return config_.material == SystemBackdropMaterial::kMicaAlt
+               ? config_.tint_opacity * kAltTintScale
+               : config_.tint_opacity;
+  }
+
+  float LuminosityOpacity() const {
+    return config_.material == SystemBackdropMaterial::kAcrylicThin
+               ? config_.luminosity_opacity * kThinLuminosityScale
+               : config_.luminosity_opacity;
   }
 
   ABI::Windows::UI::Color NeutralColor() const {
@@ -918,22 +870,25 @@ class SystemBackdropController::Impl {
   }
 
   bool AnimateColors() {
-    return AnimateTint(effect_brush_.Get()) &&
-           AnimateTint(fallback_brush_.Get());
+    return AnimateTint(effect_brush_) && AnimateTint(fallback_brush_);
   }
 
-  bool AnimateTint(wuc::ICompositionBrush* brush) {
-    ComPtr<wuc::ICompositionObject> effect;
-    if (!brush || FAILED(brush->QueryInterface(IID_PPV_ARGS(&effect)))) {
-      return false;
+  bool AnimateTint(const TintedBrush& brush) {
+    return AnimateGradient(brush.tint, TintOpacity()) &&
+           AnimateGradient(brush.luminosity, LuminosityOpacity());
+  }
+
+  bool AnimateGradient(const GradientBrush& gradient, float opacity) {
+    const std::array<SkColor, kTintStops> colors = TintStops();
+    for (size_t i = 0; i < kTintStops; ++i) {
+      ComPtr<wuc::ICompositionObject> stop;
+      if (!gradient.stops[i] || FAILED(gradient.stops[i].As(&stop)) ||
+          !StartColorAnimation(stop.Get(), L"Color",
+                               ToCompositionColor(colors[i], opacity))) {
+        return false;
+      }
     }
-    float luminosity[4];
-    float tint[4];
-    FillTintChannels(luminosity, tint);
-    return StartColorAnimation(effect.Get(), kAnimatedColors[0],
-                               ChannelsToColor(tint)) &&
-           StartColorAnimation(effect.Get(), kAnimatedColors[1],
-                               ChannelsToColor(luminosity));
+    return true;
   }
 
   ComPtr<wuc::ICompositionEasingFunction> CreateRecolorEasing() {
@@ -965,20 +920,20 @@ class SystemBackdropController::Impl {
                                             animation.Get()));
   }
 
-  ComPtr<wuc::ICompositionBrush> CreateFallbackBrush() {
+  TintedBrush CreateFallbackBrush() {
     ComPtr<wuc::ICompositionBrush> neutral;
     if (FAILED(compositor_->CreateColorBrushWithColor(NeutralColor(),
                                                       &neutral_brush_)) ||
         FAILED(neutral_brush_.As(&neutral))) {
-      return nullptr;
+      return {};
     }
     return CreateEffectBrush(neutral.Get());
   }
 
-  ComPtr<wuc::ICompositionBrush> CreateBackdropEffectBrush() {
+  TintedBrush CreateBackdropEffectBrush() {
     ComPtr<wuc::ICompositionBrush> backdrop;
     if (!backdrop_ || FAILED(backdrop_.As(&backdrop))) {
-      return nullptr;
+      return {};
     }
     return CreateEffectBrush(backdrop.Get());
   }
@@ -987,15 +942,15 @@ class SystemBackdropController::Impl {
     if (!sprite_ || !cover_) {
       return;
     }
-    if (!fallback_brush_) {
+    if (!fallback_brush_.brush) {
       fallback_brush_ = CreateFallbackBrush();
-      cover_->put_Brush(fallback_brush_.Get());
+      cover_->put_Brush(fallback_brush_.brush.Get());
     }
-    if (active_ && !effect_brush_) {
+    if (active_ && !effect_brush_.brush) {
       effect_brush_ = CreateBackdropEffectBrush();
     }
-    const bool show_backdrop = active_ && effect_brush_;
-    sprite_->put_Brush(show_backdrop ? effect_brush_.Get() : nullptr);
+    const bool show_backdrop = active_ && effect_brush_.brush;
+    sprite_->put_Brush(show_backdrop ? effect_brush_.brush.Get() : nullptr);
     SetCoverOpacity(show_backdrop ? 0.0f : 1.0f);
   }
 
@@ -1026,8 +981,8 @@ class SystemBackdropController::Impl {
   ComPtr<wuc::ICompositionScopedBatch> fade_batch_;
   EventRegistrationToken fade_token_ = {};
   ComPtr<wuc::ICompositionBackdropBrush> backdrop_;
-  ComPtr<wuc::ICompositionBrush> effect_brush_;
-  ComPtr<wuc::ICompositionBrush> fallback_brush_;
+  TintedBrush effect_brush_;
+  TintedBrush fallback_brush_;
   ComPtr<wuc::ICompositionColorBrush> neutral_brush_;
 };
 

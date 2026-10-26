@@ -81,16 +81,13 @@ void RailSpacePanelUI::Ready(int32_t height) {
   }
 }
 
-void RailSpacePanelUI::Restyle(
-    const std::string& color,
-    const std::string& icon,
-    webui_browser::mojom::SystemBackdropMaterial material) {
+void RailSpacePanelUI::Restyle(webui_browser::mojom::SpaceStylePtr style) {
   WebUIBrowserWindow* window = WindowFor(web_ui());
   if (!window) {
     return;
   }
   if (webui_browser::mojom::Page* page = window->GetWebUIBrowserUI()->page()) {
-    page->OnRailSpaceRestyle(space_id_, color, icon, material);
+    page->OnRailSpaceRestyle(space_id_, std::move(style));
   }
 }
 

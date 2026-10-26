@@ -1,6 +1,6 @@
 import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 
-import type {SystemBackdropSettings} from '../browser.mojom-webui.js';
+import type {SpaceStyle, SystemBackdropSettings} from '../browser.mojom-webui.js';
 import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 
 import type {Folders} from './folders.js';
@@ -125,6 +125,7 @@ export const INCOGNITO_ICON = '🔒';
 export const INCOGNITO_COLOR = withStrength('#3c3c43', 0.8);
 
 export const MIN_STRENGTH = 5;
+export const MAX_GRADIENT_COLORS = 2;
 export const DEFAULT_MATERIAL = SystemBackdropMaterial.kMicaAlt;
 
 const ACRYLIC_TINT_RANGE: readonly[number, number] = [0.06, 0.6];
@@ -147,7 +148,7 @@ export function isMicaMaterial(material: SystemBackdropMaterial): boolean {
 }
 
 export function backdropSettings(
-    hex: string, strength: number,
+    hex: string, gradient: readonly string[], strength: number,
     material: SystemBackdropMaterial): SystemBackdropSettings {
   const color = hexToArgb(spaceHex(hex));
   const t = (Math.max(MIN_STRENGTH, strength) - MIN_STRENGTH) /
@@ -156,6 +157,7 @@ export function backdropSettings(
   return {
     material,
     tintColor: color,
+    gradientColors: gradient.map(hexToArgb),
     tintOpacity: mix(mica ? MICA_TINT_RANGE : ACRYLIC_TINT_RANGE, t),
     luminosityOpacity:
         mix(mica ? MICA_LUMINOSITY_RANGE : ACRYLIC_LUMINOSITY_RANGE, t),
@@ -232,6 +234,8 @@ export interface Space {
   id: string;
   name: string;
   color: string;
+  gradient: string[];
+  grain: number;
   icon: string;
   profile: string;
   activeKey: string;
@@ -383,6 +387,8 @@ export class Spaces {
         name: stored.name,
         color: stored.color.length === 9 ? stored.color :
                                             withStrength(stored.color, 0),
+        gradient: (stored.gradient ?? []).slice(0, MAX_GRADIENT_COLORS),
+        grain: stored.grain ?? 0,
         icon: stored.icon ?? SPACE_ICONS[0]![0],
         profile: stored.profile ?? '',
         activeKey: '',
@@ -517,18 +523,18 @@ export class Spaces {
     this.onChange_();
   }
 
-  restyle(
-      id: string, color: string, icon: string,
-      material?: SystemBackdropMaterial) {
+  restyle(id: string, style: SpaceStyle) {
     const space = this.byId(id);
     if (INCOGNITO || !space) {
       return;
     }
-    space.color = color || space.color;
-    space.icon = icon === 'none' ? '' : (icon || space.icon);
-    if (material !== undefined) {
-      this.material_ = material;
+    if (style.color) {
+      space.color = style.color;
+      space.gradient = style.gradient.slice(0, MAX_GRADIENT_COLORS);
+      space.grain = Math.round(style.grain * 100) / 100;
     }
+    space.icon = style.icon === 'none' ? '' : (style.icon || space.icon);
+    this.material_ = style.material;
     this.onChange_();
   }
 
@@ -1233,6 +1239,8 @@ export class Spaces {
         id,
         name: INCOGNITO_NAME,
         color: INCOGNITO_COLOR,
+        gradient: [],
+        grain: 0,
         icon: INCOGNITO_ICON,
         profile: '',
         activeKey: '',
@@ -1242,6 +1250,8 @@ export class Spaces {
       id,
       name: `Space ${index + 1}`,
       color: withStrength('#192e50', 0.8),
+      gradient: [],
+      grain: 0,
       icon: '',
       profile: '',
       activeKey: '',
@@ -1273,6 +1283,8 @@ export function serializeSidebar(
     id: space.id,
     name: space.name,
     color: space.color,
+    gradient: space.gradient.length ? space.gradient : undefined,
+    grain: space.grain || undefined,
     icon: space.icon,
     profile: space.profile,
     activeUrl: spaces.activeUrlIn(space.id),

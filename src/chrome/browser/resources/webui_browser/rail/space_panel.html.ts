@@ -6,24 +6,32 @@ export function getHtml(this: RailSpacePanelElement) {
   return html`<!--_html_template_start_-->
 ${this.isColor_() ? html`
   <div id="colorpicker">
-    <div class="panelhead">
-      <input id="colorname" spellcheck="false" maxlength="7"
-        aria-label="Hex color" .value="${this.pickedHex_()}"
-        @input="${this.onHexInput_}">
-      <div id="colorpreview" style="background: ${this.pickedHex_()}"></div>
-      <button class="panelclose" title="Close" @click="${this.onCloseClick_}">
-        <cr-icon icon="cr:close"></cr-icon>
-      </button>
+    <div id="field" ?dragging="${this.dragging_ >= 0}"
+      @pointerdown="${this.onFieldPointerdown_}"
+      @pointermove="${this.onFieldPointermove_}"
+      @pointerup="${this.onFieldPointerup_}"
+      @pointercancel="${this.onFieldPointercancel_}">
+      ${this.colors_.map((hex, index) => html`
+        <div class="dot" data-index="${index}" ?primary="${index === 0}"
+          ?selected="${index === this.selected_}"
+          style="${this.dotStyle_(hex)}"></div>
+      `)}
+      <div id="fieldbar">
+        <button class="count" title="Remove color"
+          ?disabled="${!this.canRemoveColor_()}"
+          @click="${this.onRemoveColorClick_}">
+          <svg viewBox="0 0 12 12"><path d="M2 6h8"></path></svg>
+        </button>
+        <input id="colorname" spellcheck="false" maxlength="7"
+          aria-label="Hex color" .value="${this.selectedHex_()}"
+          @input="${this.onHexInput_}">
+        <button class="count" title="Add color"
+          ?disabled="${!this.canAddColor_()}"
+          @click="${this.onAddColorClick_}">
+          <svg viewBox="0 0 12 12"><path d="M2 6h8M6 2v8"></path></svg>
+        </button>
+      </div>
     </div>
-    <div id="colorfield" @pointerdown="${this.onFieldPointerdown_}"
-      @pointermove="${this.onFieldPointermove_}">
-      <div id="colordot"
-        style="left: ${this.dotLeft_()}; top: ${this.dotTop_()}"></div>
-    </div>
-    <input id="strength" type="range" min="${this.minStrength_()}" max="100"
-      style="--track-gradient: ${this.trackGradient_()}"
-      .value="${String(this.strength_)}"
-      @input="${this.onStrengthInput_}">
     <div id="swatches">
       ${this.swatches_().map(color => html`
         <button class="swatch" data-color="${color}" title="${color}"
@@ -31,14 +39,38 @@ ${this.isColor_() ? html`
           @click="${this.onSwatchClick_}"></button>
       `)}
     </div>
-    <div id="backdrop">
-      <div id="materials">
-        ${this.materials_().map(([value, label]) => html`
-          <button class="material" data-material="${value}"
-            ?selected="${value === this.material_}"
-            @click="${this.onMaterialClick_}">${label}</button>
-        `)}
+    <div id="controls">
+      <div id="strength">
+        <svg id="wave" viewBox="0 0 150 30" preserveAspectRatio="none"
+          aria-hidden="true">
+          <path d="${this.wavePath_()}"></path>
+        </svg>
+        <input id="strengthRange" type="range" min="${this.minStrength_()}"
+          max="100" aria-label="Tint strength"
+          .value="${String(this.strength_)}"
+          @input="${this.onStrengthInput_}">
       </div>
+      <div id="dial" role="slider" tabindex="0" aria-label="Grain"
+        aria-valuemin="0" aria-valuemax="100" aria-valuenow="${this.grain_}"
+        @pointerdown="${this.onDialPointerdown_}"
+        @pointermove="${this.onDialPointermove_}"
+        @keydown="${this.onDialKeydown_}"
+        @wheel="${this.onDialWheel_}">
+        ${this.dialTicks_().map(tick => html`
+          <div class="tick" ?lit="${tick.lit}"
+            style="left: ${tick.x}px; top: ${tick.y}px"></div>
+        `)}
+        <div id="knob" style="transform: rotate(${this.dialAngle_()}deg)">
+          <div id="indicator"></div>
+        </div>
+      </div>
+    </div>
+    <div id="materials">
+      ${this.materials_().map(([value, label]) => html`
+        <button class="material" data-material="${value}"
+          ?selected="${value === this.material_}"
+          @click="${this.onMaterialClick_}">${label}</button>
+      `)}
     </div>
   </div>
 ` : html`

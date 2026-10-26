@@ -12,6 +12,7 @@ const PANE = ['#spaceTitle', '#scrollArea'];
 const COLOR_MS = 300;
 const COLOR_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 const SPACE_COLORS = ['--rail-space-color', '--rail-space-tint'];
+const SPACE_GRAIN = '--rail-space-grain';
 
 function panes(root: ShadowRoot): HTMLElement[] {
   return PANE.map(selector => root.querySelector<HTMLElement>(selector))
@@ -62,10 +63,11 @@ function slideIn(root: ShadowRoot, direction: number) {
 
 let colorsRegistered = false;
 
-export function paintSpaceColors(color: string, tint: string) {
+export function paintSpaceColors(color: string, tint: string, grain: number) {
   const style = document.documentElement.style;
   style.setProperty('--rail-space-color', color);
   style.setProperty('--rail-space-tint', tint);
+  style.setProperty(SPACE_GRAIN, String(grain));
   if (colorsRegistered) {
     return;
   }
@@ -74,10 +76,12 @@ export function paintSpaceColors(color: string, tint: string) {
     CSS.registerProperty(
         {name, syntax: '<color>', inherits: true, initialValue: '#7c5cfc'});
   }
+  CSS.registerProperty(
+      {name: SPACE_GRAIN, syntax: '<number>', inherits: true, initialValue: '0'});
   requestAnimationFrame(() => {
-    style.transition =
-        SPACE_COLORS.map(name => `${name} ${COLOR_MS}ms ${COLOR_EASING}`)
-            .join(', ');
+    style.transition = [...SPACE_COLORS, SPACE_GRAIN]
+                           .map(name => `${name} ${COLOR_MS}ms ${COLOR_EASING}`)
+                           .join(', ');
   });
 }
 

@@ -2,6 +2,7 @@
 #define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SYSTEM_BACKDROP_CONTROLLER_H_
 
 #include <memory>
+#include <vector>
 
 #include "build/build_config.h"
 
@@ -30,6 +31,7 @@ enum class SystemBackdropMaterial {
 struct SystemBackdropConfig {
   SystemBackdropMaterial material = SystemBackdropMaterial::kAcrylic;
   SkColor tint_color = SkColorSetRGB(27, 33, 45);
+  std::vector<SkColor> gradient_colors;
   float tint_opacity = 0.2f;
   float luminosity_opacity = 0.9f;
   bool popup = false;

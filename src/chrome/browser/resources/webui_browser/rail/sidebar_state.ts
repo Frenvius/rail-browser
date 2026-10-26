@@ -47,6 +47,8 @@ export interface StoredSpace {
   id: string;
   name: string;
   color: string;
+  gradient?: string[];
+  grain?: number;
   icon: string;
   profile?: string;
   activeUrl: string;

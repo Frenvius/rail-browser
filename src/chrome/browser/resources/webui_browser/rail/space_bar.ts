@@ -24,7 +24,7 @@ import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_MATERIAL, spaceHex} from './spaces.js';
 
 export type SpaceCommand = 'create'|'export'|'library'|'move'|'newfolder'|
-    'newgroup'|'newprofile'|'newtab'|'remove'|'rename'|'restyle'|'select'|
+    'newgroup'|'newprofile'|'newtab'|'remove'|'rename'|'select'|
     'setprofile';
 
 export interface SpaceCommandDetail {
@@ -520,9 +520,13 @@ export class SpaceBarElement extends CrLitElement {
         {
           kind,
           spaceId: space.id,
-          color: space.color,
-          icon: space.icon,
-          material: this.material,
+          style: {
+            color: space.color,
+            gradient: space.gradient,
+            grain: space.grain,
+            icon: space.icon,
+            material: this.material,
+          },
         },
         {x: this.menuX_, y: this.menuY_});
   }
