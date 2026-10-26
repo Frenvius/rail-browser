@@ -30,7 +30,6 @@ enum class SystemBackdropMaterial {
 struct SystemBackdropConfig {
   SystemBackdropMaterial material = SystemBackdropMaterial::kAcrylic;
   SkColor tint_color = SkColorSetRGB(27, 33, 45);
-  SkColor fallback_color = SkColorSetRGB(27, 33, 45);
   float tint_opacity = 0.2f;
   float luminosity_opacity = 0.9f;
   bool popup = false;

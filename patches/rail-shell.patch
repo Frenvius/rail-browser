@@ -11001,7 +11001,7 @@ index ffbd17c..4097a2d 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..7dd698c 100644
+index 7e0800a..001f929 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,12 @@
@@ -11017,7 +11017,7 @@ index 7e0800a..7dd698c 100644
  import "url/mojom/url.mojom";
  
  // Used by the WebUI page to bootstrap communication to/from the browser
-@@ -26,13 +29,58 @@ enum FullscreenContext {
+@@ -26,13 +29,57 @@ enum FullscreenContext {
    kTab,
  };
  
@@ -11046,7 +11046,6 @@ index 7e0800a..7dd698c 100644
 +struct SystemBackdropSettings {
 +  SystemBackdropMaterial material;
 +  uint32 tint_color;
-+  uint32 fallback_color;
 +  float tint_opacity;
 +  float luminosity_opacity;
 +};
@@ -11081,7 +11080,7 @@ index 7e0800a..7dd698c 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +92,55 @@ interface Page {
+@@ -44,6 +91,55 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -11137,7 +11136,7 @@ index 7e0800a..7dd698c 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -58,7 +155,7 @@ interface PageHandler {
+@@ -58,7 +154,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -11146,7 +11145,7 @@ index 7e0800a..7dd698c 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +190,109 @@ interface PageHandler {
+@@ -93,6 +189,109 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -12539,7 +12538,7 @@ index d1169b1..a4d417e 100644
  
  void WebUIBrowserWebContentsDelegate::SetFocusToLocationBar() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_window.cc b/chrome/browser/ui/webui_browser/webui_browser_window.cc
-index 0a49a8e..5cf33bb 100644
+index 0a49a8e..5004cd4 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_window.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_window.cc
 @@ -8,6 +8,8 @@
@@ -12744,7 +12743,7 @@ index 0a49a8e..5cf33bb 100644
  #if BUILDFLAG(IS_CHROMEOS)
      if (is_captive_portal_signin_window) {
        int command = entry.command_id;
-@@ -735,10 +805,126 @@ bool WebUIBrowserWindow::AcceleratorPressed(
+@@ -735,10 +805,125 @@ bool WebUIBrowserWindow::AcceleratorPressed(
      return false;
    }
  
@@ -12853,7 +12852,6 @@ index 0a49a8e..5cf33bb 100644
 +      break;
 +  }
 +  config.tint_color = settings->tint_color;
-+  config.fallback_color = settings->fallback_color;
 +  config.tint_opacity = settings->tint_opacity;
 +  config.luminosity_opacity = settings->luminosity_opacity;
 +  backdrop_controller_->SetConfig(config);
@@ -12871,7 +12869,7 @@ index 0a49a8e..5cf33bb 100644
  bool WebUIBrowserWindow::CanHandleAccelerators() const {
    return true;
  }
-@@ -807,6 +993,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
+@@ -807,6 +992,8 @@ void WebUIBrowserWindow::OnActiveTabChanged(content::WebContents* old_contents,
      new_contents->UpdateWebContentsVisibility(content::Visibility::HIDDEN);
    }
  
@@ -12880,7 +12878,7 @@ index 0a49a8e..5cf33bb 100644
    // State of extensions depends on what's active --- e.g. some may be disabled
    // on some URLs.
    extensions_container_->NotifyOfAllActions();
-@@ -864,9 +1052,10 @@ ui::AcceleratorProvider* WebUIBrowserWindow::GetAcceleratorProvider() {
+@@ -864,9 +1051,10 @@ ui::AcceleratorProvider* WebUIBrowserWindow::GetAcceleratorProvider() {
  }
  
  void WebUIBrowserWindow::SetFocusToLocationBar(bool is_user_initiated) {
@@ -12893,7 +12891,7 @@ index 0a49a8e..5cf33bb 100644
  }
  
  void WebUIBrowserWindow::UpdateReloadStopState(bool is_loading, bool force) {
-@@ -992,6 +1181,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
+@@ -992,6 +1180,12 @@ void WebUIBrowserWindow::ConfirmBrowserCloseWithPendingDownloads(
  void WebUIBrowserWindow::UserChangedTheme(
      BrowserThemeChangeType theme_change_type) {
    NotifyColorProviderChanged();
@@ -12906,7 +12904,7 @@ index 0a49a8e..5cf33bb 100644
    extensions_container_->NotifyOfAllActions();  // Icons may need re-rendering.
  }
  
-@@ -1058,11 +1253,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -1058,11 +1252,25 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
      return content::KeyboardEventProcessingResult::NOT_HANDLED;
    }
  
@@ -12932,7 +12930,7 @@ index 0a49a8e..5cf33bb 100644
    // TODO(webium): Handle shortcuts that are registered in the FocusManager.
    // We handle only browser window shortcuts here. Secondary UIs can
    // registered their own shortcuts (e.g. Ctrl+Enter closes the Find Bar) via
-@@ -1084,7 +1293,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
+@@ -1084,7 +1292,16 @@ WebUIBrowserWindow::PreHandleKeyboardEvent(
  #if !BUILDFLAG(IS_MAC)
  bool WebUIBrowserWindow::HandleKeyboardEvent(
      const input::NativeWebKeyboardEvent& event) {
@@ -12950,7 +12948,7 @@ index 0a49a8e..5cf33bb 100644
  }
  
  views::NativeWidget* WebUIBrowserWindow::CreateNativeWidget() {
-@@ -1247,6 +1465,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1247,6 +1464,8 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
      views::Widget::ClosedReason close_reason) {
    // TODO(webium): don't close a window during tab dragging.
  
@@ -12959,7 +12957,7 @@ index 0a49a8e..5cf33bb 100644
    // Give beforeunload handlers, the user, or policy the chance to cancel the
    // close before we hide the window below.
    if (!UnloadController::From(browser_)->HandleBeforeClose()) {
-@@ -1258,7 +1478,7 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
+@@ -1258,7 +1477,7 @@ void WebUIBrowserWindow::OnWindowCloseRequested(
    }
  
    UnloadController::From(browser_)->OnWindowClosing();
@@ -12968,7 +12966,7 @@ index 0a49a8e..5cf33bb 100644
      // Tab strip isn't empty.  Hide the frame (so it appears to have closed
      // immediately) and close all the tabs, allowing the renderers to shut
      // down. When the tab strip is empty we'll be called back again.
-@@ -1283,6 +1503,18 @@ WebUIBrowserWindow::WidgetDelegate::WidgetDelegate(
+@@ -1283,6 +1502,18 @@ WebUIBrowserWindow::WidgetDelegate::WidgetDelegate(
    SetCanMinimize(true);
  }
  
@@ -12987,7 +12985,7 @@ index 0a49a8e..5cf33bb 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldSaveWindowPlacement() const {
    // If IsFullscreen() is true, we've just changed into fullscreen mode, and
    // we're catching the going-into-fullscreen sizing and positioning calls,
-@@ -1295,8 +1527,13 @@ void WebUIBrowserWindow::WidgetDelegate::SaveWindowPlacement(
+@@ -1295,8 +1526,13 @@ void WebUIBrowserWindow::WidgetDelegate::SaveWindowPlacement(
      const gfx::Rect& bounds,
      ui::mojom::WindowShowState show_state) {
    CHECK(ShouldSaveWindowPlacement());
@@ -13003,7 +13001,7 @@ index 0a49a8e..5cf33bb 100644
  }
  
  bool WebUIBrowserWindow::WidgetDelegate::GetSavedWindowPlacement(
-@@ -1321,6 +1558,21 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
+@@ -1321,6 +1557,21 @@ std::u16string WebUIBrowserWindow::WidgetDelegate::GetWindowTitle() const {
        ->GetWindowTitleForCurrentTab(true /* include_app_name */);
  }
  
@@ -13025,7 +13023,7 @@ index 0a49a8e..5cf33bb 100644
  bool WebUIBrowserWindow::WidgetDelegate::ShouldDescendIntoChildForEventHandling(
      gfx::NativeView child,
      const gfx::Point& location) {
-@@ -1357,6 +1609,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
+@@ -1357,6 +1608,16 @@ void WebUIBrowserWindow::CloseSidePanel() {
    GetWebUIBrowserUI()->CloseSidePanel();
  }
  

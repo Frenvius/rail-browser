@@ -125,7 +125,7 @@ export const INCOGNITO_ICON = '🔒';
 export const INCOGNITO_COLOR = withStrength('#3c3c43', 0.8);
 
 export const MIN_STRENGTH = 5;
-export const DEFAULT_MATERIAL = SystemBackdropMaterial.kAcrylic;
+export const DEFAULT_MATERIAL = SystemBackdropMaterial.kMicaAlt;
 
 const ACRYLIC_TINT_RANGE: readonly[number, number] = [0.06, 0.6];
 const ACRYLIC_LUMINOSITY_RANGE: readonly[number, number] = [0.95, 0.6];
@@ -156,7 +156,6 @@ export function backdropSettings(
   return {
     material,
     tintColor: color,
-    fallbackColor: color,
     tintOpacity: mix(mica ? MICA_TINT_RANGE : ACRYLIC_TINT_RANGE, t),
     luminosityOpacity:
         mix(mica ? MICA_LUMINOSITY_RANGE : ACRYLIC_LUMINOSITY_RANGE, t),
@@ -376,7 +375,8 @@ export class Spaces {
         keys.find(key => key && !used.has(key));
     this.rows_ = [];
     this.spaces_ = [];
-    this.material_ = state?.material ?? DEFAULT_MATERIAL;
+    this.material_ = state ? state.material ?? SystemBackdropMaterial.kAcrylic :
+                             DEFAULT_MATERIAL;
     for (const stored of state?.spaces ?? []) {
       const space: Space = {
         id: stored.id || crypto.randomUUID(),

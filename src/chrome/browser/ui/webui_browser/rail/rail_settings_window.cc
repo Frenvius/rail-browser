@@ -285,7 +285,6 @@ void RailSettingsWindow::CreateWidget() {
   SystemBackdropConfig config;
   config.material = SystemBackdropMaterial::kMicaAlt;
   config.tint_color = kTintColor;
-  config.fallback_color = kTintColor;
   config.tint_opacity = 0.6f;
   config.luminosity_opacity = 0.6f;
   backdrop_ = SystemBackdropController::Create(widget_.get(), config);

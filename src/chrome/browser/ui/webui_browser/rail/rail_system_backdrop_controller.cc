@@ -19,6 +19,7 @@
 #include <windows.ui.composition.h>
 #include <windows.ui.composition.interop.h>
 #include <wrl/client.h>
+#include <wrl/event.h>
 #include <wrl/implements.h>
 #include <wrl/wrappers/corewrappers.h>
 
@@ -46,6 +47,7 @@ namespace wdx = ABI::Windows::Graphics::DirectX;
 namespace wgfx = ABI::Windows::Graphics::Effects;
 namespace wuc = ABI::Windows::UI::Composition;
 
+using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
 using Microsoft::WRL::Make;
 using Microsoft::WRL::RuntimeClass;
@@ -76,6 +78,10 @@ constexpr const wchar_t* kAnimatedColors[] = {L"Tint.Color",
 constexpr float kThinLuminosityScale = 0.5f;
 constexpr float kAltTintScale = 1.5f;
 constexpr base::TimeDelta kRecolorDuration = base::Milliseconds(300);
+constexpr base::TimeDelta kActivationFadeDuration = base::Milliseconds(250);
+constexpr ABI::Windows::UI::Color kDarkNeutralColor = {255, 0x1a, 0x1a, 0x1a};
+constexpr ABI::Windows::UI::Color kLightNeutralColor = {255, 0xe6, 0xe6,
+                                                        0xe6};
 
 class AnimatedColorCursor
     : public RuntimeClass<
@@ -272,13 +278,6 @@ DWM_SYSTEMBACKDROP_TYPE ToDwmBackdrop(SystemBackdropMaterial material) {
   }
 }
 
-ABI::Windows::UI::Color ToCompositionColor(SkColor color) {
-  return {static_cast<BYTE>(SkColorGetA(color)),
-          static_cast<BYTE>(SkColorGetR(color)),
-          static_cast<BYTE>(SkColorGetG(color)),
-          static_cast<BYTE>(SkColorGetB(color))};
-}
-
 void FillChannels(SkColor color, float alpha, float (&out)[4]) {
   out[0] = SkColorGetR(color) / 255.0f;
   out[1] = SkColorGetG(color) / 255.0f;
@@ -302,6 +301,7 @@ class SystemBackdropController::Impl {
       : widget_(widget), hwnd_(views::HWNDForWidget(widget)), config_(config) {}
 
   ~Impl() {
+    ReleaseFadeBatch();
     if (!desktop_target_) {
       return;
     }
@@ -367,14 +367,30 @@ class SystemBackdropController::Impl {
       return;
     }
     active_ = active;
-    if (composition_) {
-      UpdateSpriteBrush();
+    if (!composition_ || !sprite_ || !cover_) {
+      return;
+    }
+    if (!active_) {
+      FadeCover(1.0f);
+      return;
+    }
+    if (!effect_brush_) {
+      effect_brush_ = CreateBackdropEffectBrush();
+    }
+    if (effect_brush_) {
+      sprite_->put_Brush(effect_brush_.Get());
+      FadeCover(0.0f);
     }
   }
 
   void SetDarkMode(bool dark_mode) {
     dark_mode_ = dark_mode;
     ApplyDwmDarkMode();
+    ComPtr<wuc::ICompositionObject> neutral;
+    if (composition_ && neutral_brush_ &&
+        SUCCEEDED(neutral_brush_.As(&neutral))) {
+      StartColorAnimation(neutral.Get(), L"Color", NeutralColor());
+    }
   }
 
   void UpdateClip() {
@@ -604,7 +620,8 @@ class SystemBackdropController::Impl {
     ComPtr<wuc::IVisual> visual;
     ComPtr<wuc::IVisual2> sizing;
     if (FAILED(sprite_.As(&visual)) || FAILED(visual.As(&sizing)) ||
-        FAILED(sizing->put_RelativeSizeAdjustment({1.0f, 1.0f}))) {
+        FAILED(sizing->put_RelativeSizeAdjustment({1.0f, 1.0f})) ||
+        !CreateCover()) {
       return false;
     }
     if (config_.popup) {
@@ -642,6 +659,80 @@ class SystemBackdropController::Impl {
     }
     UpdateSpriteBrush();
     return true;
+  }
+
+  bool CreateCover() {
+    ComPtr<wuc::IVisual> cover;
+    ComPtr<wuc::IVisual2> sizing;
+    ComPtr<wuc::IContainerVisual> container;
+    ComPtr<wuc::IVisualCollection> layers;
+    return SUCCEEDED(compositor_->CreateSpriteVisual(&cover_)) &&
+           SUCCEEDED(cover_.As(&cover)) && SUCCEEDED(cover.As(&sizing)) &&
+           SUCCEEDED(sizing->put_RelativeSizeAdjustment({1.0f, 1.0f})) &&
+           SUCCEEDED(sprite_.As(&container)) &&
+           SUCCEEDED(container->get_Children(&layers)) &&
+           SUCCEEDED(layers->InsertAtTop(cover.Get()));
+  }
+
+  void SetCoverOpacity(float opacity) {
+    ReleaseFadeBatch();
+    ComPtr<wuc::ICompositionObject> target;
+    ComPtr<wuc::IVisual> visual;
+    if (SUCCEEDED(cover_.As(&target)) && SUCCEEDED(cover_.As(&visual))) {
+      target->StopAnimation(HStringReference(L"Opacity").Get());
+      visual->put_Opacity(opacity);
+    }
+  }
+
+  void FadeCover(float opacity) {
+    ReleaseFadeBatch();
+    ComPtr<wuc::ICompositionObject> target;
+    ComPtr<wuc::IScalarKeyFrameAnimation> scalar;
+    ComPtr<wuc::IKeyFrameAnimation> frames;
+    ComPtr<wuc::ICompositionAnimation> animation;
+    ComPtr<wuc::ICompositionEasingFunction> easing = CreateRecolorEasing();
+    if (!easing || FAILED(cover_.As(&target)) ||
+        FAILED(compositor_->CreateScalarKeyFrameAnimation(&scalar)) ||
+        FAILED(scalar.As(&frames)) || FAILED(scalar.As(&animation))) {
+      SetCoverOpacity(opacity);
+      ReleaseBackdropWhenCovered();
+      return;
+    }
+    frames->put_Duration({kActivationFadeDuration.InMicroseconds() * 10});
+    scalar->InsertKeyFrameWithEasingFunction(1.0f, opacity, easing.Get());
+    const bool covering =
+        opacity >= 1.0f &&
+        SUCCEEDED(compositor_->CreateScopedBatch(
+            wuc::CompositionBatchTypes_Animation, &fade_batch_));
+    target->StartAnimation(HStringReference(L"Opacity").Get(),
+                           animation.Get());
+    if (!covering) {
+      return;
+    }
+    fade_batch_->End();
+    auto completed = Callback<ABI::Windows::Foundation::ITypedEventHandler<
+        IInspectable*, wuc::CompositionBatchCompletedEventArgs*>>(
+        [this](IInspectable*, wuc::ICompositionBatchCompletedEventArgs*) {
+          ReleaseBackdropWhenCovered();
+          return S_OK;
+        });
+    if (!completed ||
+        FAILED(fade_batch_->add_Completed(completed.Get(), &fade_token_))) {
+      fade_batch_.Reset();
+    }
+  }
+
+  void ReleaseBackdropWhenCovered() {
+    if (!active_ && sprite_) {
+      sprite_->put_Brush(nullptr);
+    }
+  }
+
+  void ReleaseFadeBatch() {
+    if (fade_batch_) {
+      fade_batch_->remove_Completed(fade_token_);
+      fade_batch_.Reset();
+    }
   }
 
   float DpiScale() const { return ::GetDpiForWindow(hwnd_) / 96.0f; }
@@ -740,7 +831,8 @@ class SystemBackdropController::Impl {
     return true;
   }
 
-  ComPtr<wuc::ICompositionBrush> CreateEffectBrush() {
+  ComPtr<wuc::ICompositionBrush> CreateEffectBrush(
+      wuc::ICompositionBrush* source_brush) {
     ComPtr<wuc::ICompositionEffectSourceParameterFactory> parameters;
     if (FAILED(ABI::Windows::Foundation::GetActivationFactory(
             HStringReference(
@@ -797,12 +889,9 @@ class SystemBackdropController::Impl {
       return nullptr;
     }
     ComPtr<wuc::ICompositionEffectBrush> effect;
-    ComPtr<wuc::ICompositionBrush> backdrop_brush;
-    if (FAILED(factory->CreateBrush(&effect)) ||
-        FAILED(backdrop_.As(&backdrop_brush)) ||
+    if (!source_brush || FAILED(factory->CreateBrush(&effect)) ||
         FAILED(effect->SetSourceParameter(
-            HStringReference(kBackdropSourceName).Get(),
-            backdrop_brush.Get()))) {
+            HStringReference(kBackdropSourceName).Get(), source_brush))) {
       return nullptr;
     }
     ComPtr<wuc::ICompositionBrush> brush;
@@ -824,11 +913,18 @@ class SystemBackdropController::Impl {
     FillChannels(config_.tint_color, tint_opacity, tint);
   }
 
+  ABI::Windows::UI::Color NeutralColor() const {
+    return dark_mode_ ? kDarkNeutralColor : kLightNeutralColor;
+  }
+
   bool AnimateColors() {
+    return AnimateTint(effect_brush_.Get()) &&
+           AnimateTint(fallback_brush_.Get());
+  }
+
+  bool AnimateTint(wuc::ICompositionBrush* brush) {
     ComPtr<wuc::ICompositionObject> effect;
-    ComPtr<wuc::ICompositionObject> fallback;
-    if (FAILED(effect_brush_.As(&effect)) ||
-        FAILED(fallback_brush_.As(&fallback))) {
+    if (!brush || FAILED(brush->QueryInterface(IID_PPV_ARGS(&effect)))) {
       return false;
     }
     float luminosity[4];
@@ -837,9 +933,18 @@ class SystemBackdropController::Impl {
     return StartColorAnimation(effect.Get(), kAnimatedColors[0],
                                ChannelsToColor(tint)) &&
            StartColorAnimation(effect.Get(), kAnimatedColors[1],
-                               ChannelsToColor(luminosity)) &&
-           StartColorAnimation(fallback.Get(), L"Color",
-                               ToCompositionColor(config_.fallback_color));
+                               ChannelsToColor(luminosity));
+  }
+
+  ComPtr<wuc::ICompositionEasingFunction> CreateRecolorEasing() {
+    ComPtr<wuc::ICubicBezierEasingFunction> bezier;
+    ComPtr<wuc::ICompositionEasingFunction> easing;
+    if (FAILED(compositor_->CreateCubicBezierEasingFunction(
+            {0.2f, 0.0f}, {0.0f, 1.0f}, &bezier)) ||
+        FAILED(bezier.As(&easing))) {
+      return nullptr;
+    }
+    return easing;
   }
 
   bool StartColorAnimation(wuc::ICompositionObject* target,
@@ -848,13 +953,9 @@ class SystemBackdropController::Impl {
     ComPtr<wuc::IColorKeyFrameAnimation> color;
     ComPtr<wuc::IKeyFrameAnimation> frames;
     ComPtr<wuc::ICompositionAnimation> animation;
-    ComPtr<wuc::ICubicBezierEasingFunction> bezier;
-    ComPtr<wuc::ICompositionEasingFunction> easing;
-    if (FAILED(compositor_->CreateColorKeyFrameAnimation(&color)) ||
-        FAILED(color.As(&frames)) || FAILED(color.As(&animation)) ||
-        FAILED(compositor_->CreateCubicBezierEasingFunction(
-            {0.2f, 0.0f}, {0.0f, 1.0f}, &bezier)) ||
-        FAILED(bezier.As(&easing))) {
+    ComPtr<wuc::ICompositionEasingFunction> easing = CreateRecolorEasing();
+    if (!easing || FAILED(compositor_->CreateColorKeyFrameAnimation(&color)) ||
+        FAILED(color.As(&frames)) || FAILED(color.As(&animation))) {
       return false;
     }
     frames->put_Duration({kRecolorDuration.InMicroseconds() * 10});
@@ -865,33 +966,37 @@ class SystemBackdropController::Impl {
   }
 
   ComPtr<wuc::ICompositionBrush> CreateFallbackBrush() {
-    ComPtr<wuc::ICompositionColorBrush> color;
-    if (FAILED(compositor_->CreateColorBrushWithColor(
-            ToCompositionColor(config_.fallback_color), &color))) {
+    ComPtr<wuc::ICompositionBrush> neutral;
+    if (FAILED(compositor_->CreateColorBrushWithColor(NeutralColor(),
+                                                      &neutral_brush_)) ||
+        FAILED(neutral_brush_.As(&neutral))) {
       return nullptr;
     }
-    ComPtr<wuc::ICompositionBrush> brush;
-    if (FAILED(color.As(&brush))) {
+    return CreateEffectBrush(neutral.Get());
+  }
+
+  ComPtr<wuc::ICompositionBrush> CreateBackdropEffectBrush() {
+    ComPtr<wuc::ICompositionBrush> backdrop;
+    if (!backdrop_ || FAILED(backdrop_.As(&backdrop))) {
       return nullptr;
     }
-    return brush;
+    return CreateEffectBrush(backdrop.Get());
   }
 
   void UpdateSpriteBrush() {
-    if (!sprite_) {
+    if (!sprite_ || !cover_) {
       return;
     }
     if (!fallback_brush_) {
       fallback_brush_ = CreateFallbackBrush();
+      cover_->put_Brush(fallback_brush_.Get());
     }
     if (active_ && !effect_brush_) {
-      effect_brush_ = CreateEffectBrush();
+      effect_brush_ = CreateBackdropEffectBrush();
     }
-    wuc::ICompositionBrush* brush =
-        active_ && effect_brush_ ? effect_brush_.Get() : fallback_brush_.Get();
-    if (brush) {
-      sprite_->put_Brush(brush);
-    }
+    const bool show_backdrop = active_ && effect_brush_;
+    sprite_->put_Brush(show_backdrop ? effect_brush_.Get() : nullptr);
+    SetCoverOpacity(show_backdrop ? 0.0f : 1.0f);
   }
 
   void ApplyDwmFallback() {
@@ -916,10 +1021,14 @@ class SystemBackdropController::Impl {
   ComPtr<wuc::Desktop::IDesktopWindowTarget> desktop_target_;
   ComPtr<wuc::IContainerVisual> root_;
   ComPtr<wuc::ISpriteVisual> sprite_;
+  ComPtr<wuc::ISpriteVisual> cover_;
   ComPtr<wuc::ISpriteVisual> content_;
+  ComPtr<wuc::ICompositionScopedBatch> fade_batch_;
+  EventRegistrationToken fade_token_ = {};
   ComPtr<wuc::ICompositionBackdropBrush> backdrop_;
   ComPtr<wuc::ICompositionBrush> effect_brush_;
   ComPtr<wuc::ICompositionBrush> fallback_brush_;
+  ComPtr<wuc::ICompositionColorBrush> neutral_brush_;
 };
 
 std::unique_ptr<SystemBackdropController> SystemBackdropController::Create(

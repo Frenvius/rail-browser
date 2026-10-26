@@ -76,7 +76,6 @@ SystemBackdropConfig PopupBackdropConfig() {
   SystemBackdropConfig config;
   config.material = SystemBackdropMaterial::kAcrylic;
   config.tint_color = SkColorSetRGB(0x1f, 0x1f, 0x1f);
-  config.fallback_color = SkColorSetRGB(0x1f, 0x1f, 0x1f);
   config.tint_opacity = 0.85f;
   config.luminosity_opacity = 0.85f;
   config.popup = true;
