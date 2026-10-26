@@ -25,8 +25,6 @@ class RailImportUI;
 
 inline constexpr char kRailImportHost[] = "rail-import";
 inline constexpr char kRailImportURL[] = "chrome://rail-import/";
-inline constexpr char kRailImportFirstRunURL[] =
-    "chrome://rail-import/?first_run=1";
 
 class RailImportUIConfig : public DefaultTopChromeWebUIConfig<RailImportUI> {
  public:
@@ -59,12 +57,6 @@ class RailImportUI : public TopChromeWebUIController,
       const std::string& source_id,
       const std::vector<std::string>& profile_dirs,
       mojo::PendingRemote<rail_import::mojom::ImportObserver> observer) override;
-  void IsDefaultBrowser(IsDefaultBrowserCallback callback) override;
-  void SetAsDefaultBrowser() override;
-  void CanPinToTaskbar(CanPinToTaskbarCallback callback) override;
-  void PinToTaskbar() override;
-  void IsRunAtLogin(IsRunAtLoginCallback callback) override;
-  void SetRunAtLogin(bool enabled) override;
   void Close() override;
 
   void OnImportSources(ListImportSourcesCallback callback,

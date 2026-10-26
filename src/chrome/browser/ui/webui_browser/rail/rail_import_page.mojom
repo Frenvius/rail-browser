@@ -14,18 +14,6 @@ interface PageHandler {
               array<string> profile_dirs,
               pending_remote<rail_import.mojom.ImportObserver> observer);
 
-  IsDefaultBrowser() => (bool is_default);
-
-  SetAsDefaultBrowser();
-
-  CanPinToTaskbar() => (bool can_pin);
-
-  PinToTaskbar();
-
-  IsRunAtLogin() => (bool enabled);
-
-  SetRunAtLogin(bool enabled);
-
   Close();
 };
 

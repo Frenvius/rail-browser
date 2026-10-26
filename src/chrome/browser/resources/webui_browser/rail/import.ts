@@ -9,7 +9,7 @@ import {getHtml} from './import.html.js';
 import type {StepIcon} from './import_steps.js';
 import {applicableSteps, hasData, lockedFor, STEP_INFO} from './import_steps.js';
 
-export type ImportScreen = 'pick'|'profiles'|'importing'|'done'|'final';
+export type ImportScreen = 'pick'|'profiles'|'importing'|'done';
 
 export interface StepRow {
   step: ImportStep;
@@ -29,19 +29,6 @@ interface Flow {
   summary: ImportSummary|null;
 }
 
-export interface SetupChoices {
-  defaultBrowser: boolean;
-  taskbar: boolean;
-  login: boolean;
-}
-
-interface Setup {
-  canPin: boolean;
-  isDefault: boolean;
-  loginEnabled: boolean;
-  choices: SetupChoices;
-}
-
 const EMPTY_FLOW: Flow = {
   screen: 'pick',
   sourceId: '',
@@ -49,13 +36,6 @@ const EMPTY_FLOW: Flow = {
   events: new Map(),
   profile: '',
   summary: null,
-};
-
-const EMPTY_SETUP: Setup = {
-  canPin: false,
-  isDefault: false,
-  loginEnabled: false,
-  choices: {defaultBrowser: true, taskbar: true, login: true},
 };
 
 export class RailImportElement extends CrLitElement {
@@ -74,16 +54,12 @@ export class RailImportElement extends CrLitElement {
   static override get properties() {
     return {
       flow_: {type: Object, state: true},
-      setup_: {type: Object, state: true},
       sources_: {type: Array, state: true},
     };
   }
 
   protected accessor flow_: Flow = EMPTY_FLOW;
-  protected accessor setup_: Setup = EMPTY_SETUP;
   protected accessor sources_: ImportSource[] = [];
-  protected readonly firstRun_ =
-      new URLSearchParams(location.search).has('first_run');
 
   override connectedCallback() {
     super.connectedCallback();
@@ -189,17 +165,6 @@ export class RailImportElement extends CrLitElement {
     this.flow_ = {...this.flow_, dirs};
   }
 
-  protected onSetupChange_(e: Event) {
-    const input = e.target as HTMLInputElement;
-    this.setup_ = {
-      ...this.setup_,
-      choices: {
-        ...this.setup_.choices,
-        [input.value as keyof SetupChoices]: input.checked,
-      },
-    };
-  }
-
   protected onKeydown_(e: KeyboardEvent) {
     if (e.key !== 'Enter' || (e.target as Element).closest('button')) {
       return;
@@ -216,10 +181,7 @@ export class RailImportElement extends CrLitElement {
         this.startSelected_();
         return;
       case 'done':
-        this.finishImport_();
-        return;
-      case 'final':
-        this.onGetStartedClick_();
+        this.onCloseClick_();
         return;
       default:
         return;
@@ -230,27 +192,8 @@ export class RailImportElement extends CrLitElement {
     this.flow_ = {...this.flow_, screen: 'pick', dirs: []};
   }
 
-  protected onSkipClick_() {
-    this.showFinalStep_();
-  }
-
   protected onCloseClick_() {
     browserProxyFactory.getInstance().handler.close();
-  }
-
-  protected onGetStartedClick_() {
-    const handler = browserProxyFactory.getInstance().handler;
-    const {choices, canPin, isDefault, loginEnabled} = this.setup_;
-    if (choices.defaultBrowser && !isDefault) {
-      handler.setAsDefaultBrowser();
-    }
-    if (choices.taskbar && canPin) {
-      handler.pinToTaskbar();
-    }
-    if (choices.login !== loginEnabled) {
-      handler.setRunAtLogin(choices.login);
-    }
-    handler.close();
   }
 
   private async loadSources_() {
@@ -315,29 +258,6 @@ export class RailImportElement extends CrLitElement {
 
   private onFinished_(summary: ImportSummary) {
     this.flow_ = {...this.flow_, screen: 'done', summary};
-  }
-
-  private finishImport_() {
-    if (this.firstRun_) {
-      this.showFinalStep_();
-      return;
-    }
-    browserProxyFactory.getInstance().handler.close();
-  }
-
-  private showFinalStep_() {
-    this.flow_ = {...this.flow_, screen: 'final'};
-    this.loadSetupState_();
-  }
-
-  private async loadSetupState_() {
-    const handler = browserProxyFactory.getInstance().handler;
-    const [{isDefault}, {canPin}, {enabled}] = await Promise.all([
-      handler.isDefaultBrowser(),
-      handler.canPinToTaskbar(),
-      handler.isRunAtLogin(),
-    ]);
-    this.setup_ = {...this.setup_, isDefault, canPin, loginEnabled: enabled};
   }
 }
 

@@ -4,16 +4,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
-#include "chrome/browser/ui/webui_browser/rail/rail_default_browser.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_import.h"
-#include "chrome/browser/ui/webui_browser/rail/rail_import_first_run.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_import_mojo.h"
-#include "chrome/browser/ui/webui_browser/rail/rail_os_integration.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_webui_browser.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
@@ -25,7 +21,6 @@
 #include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "ui/webui/webui_util.h"
-#include "url/gurl.h"
 
 namespace rail {
 
@@ -34,11 +29,6 @@ namespace {
 Profile* ProfileFor(content::WebUI* web_ui) {
   BrowserWindowInterface* browser = BrowserFor(web_ui);
   return browser ? browser->GetProfile() : nullptr;
-}
-
-base::FilePath ProfilePathFor(content::WebUI* web_ui) {
-  Profile* profile = ProfileFor(web_ui);
-  return profile ? profile->GetPath() : base::FilePath();
 }
 
 base::WeakPtr<Profile> WeakProfileOf(Profile* profile) {
@@ -116,10 +106,6 @@ void RailImportUI::CreatePageHandler(
   page_.Bind(std::move(page));
   page_handler_receiver_.reset();
   page_handler_receiver_.Bind(std::move(handler));
-  if (web_ui()->GetWebContents()->GetLastCommittedURL() ==
-      GURL(kRailImportFirstRunURL)) {
-    MarkImportFirstRunShown();
-  }
 }
 
 void RailImportUI::ListImportSources(ListImportSourcesCallback callback) {
@@ -149,30 +135,6 @@ void RailImportUI::StartImport(
                                      &OnImportFinished, WeakProfileOf(profile),
                                      remote),
                              });
-}
-
-void RailImportUI::IsDefaultBrowser(IsDefaultBrowserCallback callback) {
-  rail::CheckIsDefaultBrowser(std::move(callback));
-}
-
-void RailImportUI::SetAsDefaultBrowser() {
-  rail::SetAsDefaultBrowser();
-}
-
-void RailImportUI::CanPinToTaskbar(CanPinToTaskbarCallback callback) {
-  rail::CanPinToTaskbar(ProfilePathFor(web_ui()), std::move(callback));
-}
-
-void RailImportUI::PinToTaskbar() {
-  rail::PinToTaskbar(ProfilePathFor(web_ui()));
-}
-
-void RailImportUI::IsRunAtLogin(IsRunAtLoginCallback callback) {
-  rail::IsRunAtLogin(std::move(callback));
-}
-
-void RailImportUI::SetRunAtLogin(bool enabled) {
-  rail::SetRunAtLogin(enabled);
 }
 
 void RailImportUI::Close() {

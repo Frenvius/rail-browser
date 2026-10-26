@@ -41,7 +41,7 @@ export async function openLogoMenu(host: CommandBarHost) {
   const items = menuItems([
     !isDefault && {command: 'set-default', label: 'Set Rail as Default Browser'},
     updateItem(update.version, update.downloading),
-    browserCommand('import-settings', 'Import from Another Browser'),
+    {command: 'import-browser', label: 'Import from Another Browser'},
     separator(),
     {command: 'new-tab', label: 'New Tab', accelerator: 'Ctrl+T'},
     browserCommand('new-window', 'New Window', 'Ctrl+N'),

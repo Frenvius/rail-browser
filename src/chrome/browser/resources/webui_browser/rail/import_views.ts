@@ -4,7 +4,7 @@ import type {TemplateResult} from '//resources/lit/v3_0/lit.rollup.js';
 import type {ImportSource} from '../rail_import.mojom-webui.js';
 import {ImportState} from '../rail_import.mojom-webui.js';
 
-import type {RailImportElement, SetupChoices, StepRow} from './import.js';
+import type {RailImportElement, StepRow} from './import.js';
 import type {StepIcon} from './import_steps.js';
 import {describeCounts, hasData} from './import_steps.js';
 
@@ -113,8 +113,7 @@ function stepList(this: RailImportElement): TemplateResult {
 
 function pickScreen(this: RailImportElement): TemplateResult {
   return html`
-    <h1>${this.firstRun_ ? 'Bring your browsing with you' :
-                           'Import from another browser'}</h1>
+    <h1>Import from another browser</h1>
     <p class="lede">Your spaces, tabs, history, cookies, passwords and
       extensions come along. Nothing already in Rail is replaced.</p>
     <div class="list" role="radiogroup" aria-label="Browsers">
@@ -124,9 +123,6 @@ function pickScreen(this: RailImportElement): TemplateResult {
       <p class="empty">No supported browser was found on this computer.</p>
     ` : nothing}
     <footer class="actions">
-      ${this.firstRun_ ? html`
-        <button class="ghost" @click="${this.onSkipClick_}">Skip</button>
-      ` : nothing}
       <button class="primary" ?disabled="${!this.canContinuePick_()}"
         @click="${this.onPrimaryClick_}">
         Continue ${glyph('return')}
@@ -213,45 +209,7 @@ function doneScreen(this: RailImportElement): TemplateResult {
     ${this.flow_.events.size > 0 ? stepList.bind(this)() : nothing}
     ${this.lockedNotes_().map(note => html`<p class="note">${note}</p>`)}
     <footer class="actions">
-      <button class="primary" @click="${this.onPrimaryClick_}">
-        ${this.firstRun_ ? 'Continue' : 'Done'}
-      </button>
-    </footer>`;
-}
-
-function setupRow(this: RailImportElement, key: keyof SetupChoices, title: string, description: string): TemplateResult {
-  return html`
-    <label class="row choice">
-      <span class="row-text">
-        <span class="name">${title}</span>
-        <span class="hint">${description}</span>
-      </span>
-      <input type="checkbox" value="${key}"
-        .checked="${this.setup_.choices[key]}"
-        @change="${this.onSetupChange_}">
-    </label>`;
-}
-
-function finalScreen(this: RailImportElement): TemplateResult {
-  return html`
-    <h1>Finish setting up Rail</h1>
-    <p class="lede">Choose what Rail should do for you. You can change these
-      later in Settings.</p>
-    <div class="list">
-      ${setupRow.bind(this)(
-          'defaultBrowser', 'Set Rail as default browser',
-          this.setup_.isDefault ? 'Rail is already your default browser' :
-                                  'Open links and web pages in Rail by default')}
-      ${this.setup_.canPin ? setupRow.bind(this)(
-          'taskbar', 'Add Rail to taskbar',
-          'Quick access to Rail whenever you need it') : nothing}
-      ${setupRow.bind(this)(
-          'login', 'Open Rail at login',
-          'Automatically open Rail when you sign in')}
-    </div>
-    <footer class="actions">
-      <button class="primary" @click="${this.onPrimaryClick_}">Get started
-        ${glyph('return')}</button>
+      <button class="primary" @click="${this.onPrimaryClick_}">Done</button>
     </footer>`;
 }
 
@@ -265,8 +223,6 @@ export function screen(this: RailImportElement): TemplateResult {
       return importingScreen.bind(this)();
     case 'done':
       return doneScreen.bind(this)();
-    case 'final':
-      return finalScreen.bind(this)();
   }
 }
 

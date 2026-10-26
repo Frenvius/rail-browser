@@ -48,7 +48,6 @@ constexpr Binding kMiniBindings[] = {
 constexpr std::pair<std::string_view, int> kMenuBrowserCommands[] = {
     {"new-window", IDC_NEW_WINDOW},
     {"new-incognito-window", IDC_NEW_INCOGNITO_WINDOW},
-    {"import-settings", IDC_IMPORT_SETTINGS},
     {"history", IDC_SHOW_HISTORY},
     {"downloads", IDC_SHOW_DOWNLOADS},
     {"extensions", IDC_MANAGE_EXTENSIONS},
