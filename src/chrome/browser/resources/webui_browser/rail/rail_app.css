@@ -447,6 +447,8 @@ webui-browser-tab-strip {
   transform: translateX(-3px);
   width: 6px;
   z-index: 5;
+  --rail-resizer-ink: color-mix(in oklab, var(--rail-accent) 35%,
+      var(--rail-text));
 }
 
 #sidebarResizer::before {
@@ -464,8 +466,8 @@ webui-browser-tab-strip {
 #sidebarResizer::after {
   background: linear-gradient(to bottom,
       transparent 0,
-      var(--rail-accent) 14%,
-      var(--rail-accent) 86%,
+      var(--rail-resizer-ink) 14%,
+      var(--rail-resizer-ink) 86%,
       transparent 100%);
   border-radius: 1px;
   bottom: 0;
@@ -480,9 +482,13 @@ webui-browser-tab-strip {
 
 :host([sidebar-resizer-hover]) #sidebarResizer::after,
 :host([sidebar-resizing]) #sidebarResizer::after {
-  opacity: 1;
+  opacity: 0.6;
   transition-delay: 0ms;
   transition-duration: 140ms;
+}
+
+:host([sidebar-resizing]) #sidebarResizer::after {
+  opacity: 1;
 }
 
 :host([sidebar-resizing]) {
