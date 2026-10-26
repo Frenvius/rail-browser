@@ -164,7 +164,28 @@ export function backdropSettings(
   };
 }
 
-export const SPACE_ICONS: ReadonlyArray<readonly[string, string]> = [
+const BACKDROP_BASE_LUMA = 0.235;
+const LIGHT_BACKDROP_LUMA = 0.45;
+const MICA_LUMA_GAIN = 1.25;
+const ACRYLIC_LUMA_GAIN = 0.8;
+
+function luma(argb: number): number {
+  const channel = (shift: number) => ((argb >>> shift) & 0xff) / 255;
+  return 0.3 * channel(16) + 0.59 * channel(8) + 0.11 * channel(0);
+}
+
+export function isLightBackdrop(settings: SystemBackdropSettings): boolean {
+  const colors = [settings.tintColor, ...settings.gradientColors];
+  const tint =
+      colors.reduce((sum, color) => sum + luma(color), 0) / colors.length;
+  const weight = isMicaMaterial(settings.material) ?
+      Math.min(1, MICA_LUMA_GAIN * settings.luminosityOpacity) :
+      ACRYLIC_LUMA_GAIN * settings.tintOpacity;
+  const backdrop = BACKDROP_BASE_LUMA + (tint - BACKDROP_BASE_LUMA) * weight;
+  return backdrop > LIGHT_BACKDROP_LUMA;
+}
+
+export const SPACE_ICONS:ReadonlyArray<readonly[string, string]> = [
   ['🌐', 'globe web world internet'],
   ['👤', 'person personal profile user me'],
   ['👥', 'people team group shared'],

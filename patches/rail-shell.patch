@@ -6504,7 +6504,7 @@ index a15445b..3cd8ae6 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..3d4aa8a 100644
+index b7a5099..7040a36 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6553,11 +6553,11 @@ index b7a5099..3d4aa8a 100644
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
 +import type {BoardColumn} from '../rail/space_board.js';
 +import {spaceBoard} from '../rail/space_board.js';
-+import {paintSpaceColors, SpaceSlide} from '../rail/space_slide.js';
++import {paintSpaceColors, paintSpaceInk, SpaceSlide} from '../rail/space_slide.js';
 +import {recordSpaceVisit} from '../rail/space_visits.js';
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
-+import {backdropSettings, DEFAULT_MATERIAL, isNewTabUrl, serializeSidebar,
-+        spaceHex, Spaces, tintStrength} from '../rail/spaces.js';
++import {backdropSettings, DEFAULT_MATERIAL, isLightBackdrop, isNewTabUrl,
++        serializeSidebar, spaceHex, Spaces, tintStrength} from '../rail/spaces.js';
 +import type {DragHandOff, DragSlot, PinnedDragRows, RailDragHost} from '../rail/tab_drag.js';
 +import {mergeItemOrder, nativeTabMoves, TabDrag} from '../rail/tab_drag.js';
 +import type {FolderCommand, GroupCommand, TabCommand, TabCommandDetail, TabMenuTarget} from '../rail/tab_menu.js';
@@ -7048,7 +7048,7 @@ index b7a5099..3d4aa8a 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +578,2314 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +578,2315 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8925,6 +8925,7 @@ index b7a5099..3d4aa8a 100644
 +    const settings = backdropSettings(
 +        space.color, space.gradient,
 +        Math.round(tintStrength(space.color) * 100), this.spaces_.material);
++    paintSpaceInk(isLightBackdrop(settings));
 +    const key = JSON.stringify(settings);
 +    if (key === this.backdropKey_) {
 +      return;

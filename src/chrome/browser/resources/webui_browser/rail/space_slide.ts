@@ -13,6 +13,26 @@ const COLOR_MS = 300;
 const COLOR_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 const SPACE_COLORS = ['--rail-space-color', '--rail-space-tint'];
 const SPACE_GRAIN = '--rail-space-grain';
+const INK_ON_DARK: Readonly<Record<string, string>> = {
+  '--rail-space-text': '#f2f2f2',
+  '--rail-space-text-dim': '#b4b4b4',
+  '--rail-space-text-label': '#8a8a8a',
+  '--rail-space-text-muted': '#cfcfcf',
+  '--rail-space-border': 'rgb(255 255 255 / 10%)',
+  '--rail-space-elevated': 'rgb(255 255 255 / 6%)',
+  '--rail-space-hover': 'rgb(255 255 255 / 10%)',
+  '--rail-space-hover-strong': 'rgb(255 255 255 / 16%)',
+};
+const INK_ON_LIGHT: Readonly<Record<string, string>> = {
+  '--rail-space-text': 'rgb(0 0 0 / 88%)',
+  '--rail-space-text-dim': 'rgb(0 0 0 / 68%)',
+  '--rail-space-text-label': 'rgb(0 0 0 / 54%)',
+  '--rail-space-text-muted': 'rgb(0 0 0 / 76%)',
+  '--rail-space-border': 'rgb(0 0 0 / 12%)',
+  '--rail-space-elevated': 'rgb(0 0 0 / 5%)',
+  '--rail-space-hover': 'rgb(0 0 0 / 8%)',
+  '--rail-space-hover-strong': 'rgb(0 0 0 / 13%)',
+};
 
 function panes(root: ShadowRoot): HTMLElement[] {
   return PANE.map(selector => root.querySelector<HTMLElement>(selector))
@@ -63,11 +83,7 @@ function slideIn(root: ShadowRoot, direction: number) {
 
 let colorsRegistered = false;
 
-export function paintSpaceColors(color: string, tint: string, grain: number) {
-  const style = document.documentElement.style;
-  style.setProperty('--rail-space-color', color);
-  style.setProperty('--rail-space-tint', tint);
-  style.setProperty(SPACE_GRAIN, String(grain));
+function registerSpaceProperties(style: CSSStyleDeclaration) {
   if (colorsRegistered) {
     return;
   }
@@ -76,13 +92,34 @@ export function paintSpaceColors(color: string, tint: string, grain: number) {
     CSS.registerProperty(
         {name, syntax: '<color>', inherits: true, initialValue: '#7c5cfc'});
   }
+  for (const [name, initialValue] of Object.entries(INK_ON_DARK)) {
+    CSS.registerProperty({name, syntax: '<color>', inherits: true, initialValue});
+  }
   CSS.registerProperty(
       {name: SPACE_GRAIN, syntax: '<number>', inherits: true, initialValue: '0'});
+  const animated = [...SPACE_COLORS, ...Object.keys(INK_ON_DARK), SPACE_GRAIN];
   requestAnimationFrame(() => {
-    style.transition = [...SPACE_COLORS, SPACE_GRAIN]
+    style.transition = animated
                            .map(name => `${name} ${COLOR_MS}ms ${COLOR_EASING}`)
                            .join(', ');
   });
+}
+
+export function paintSpaceColors(color: string, tint: string, grain: number) {
+  const style = document.documentElement.style;
+  registerSpaceProperties(style);
+  style.setProperty('--rail-space-color', color);
+  style.setProperty('--rail-space-tint', tint);
+  style.setProperty(SPACE_GRAIN, String(grain));
+}
+
+export function paintSpaceInk(lightBackdrop: boolean) {
+  const style = document.documentElement.style;
+  registerSpaceProperties(style);
+  const ink = lightBackdrop ? INK_ON_LIGHT : INK_ON_DARK;
+  for (const [name, value] of Object.entries(ink)) {
+    style.setProperty(name, value);
+  }
 }
 
 export class SpaceSlide {

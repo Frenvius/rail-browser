@@ -680,7 +680,7 @@ webui-browser-tab-strip {
 content-region {
   background: var(--rail-surface);
   border-radius: 8px;
-  box-shadow: 0 0 8px rgb(0 0 0 / 50%);
+  box-shadow: var(--rail-content-shadow);
   overflow: hidden;
 }
 
@@ -692,7 +692,7 @@ content-region[hidden],
 content-region[showing-side-panel] ~ side-panel {
   background: var(--rail-surface);
   border-radius: 8px;
-  box-shadow: 0 0 8px rgb(0 0 0 / 50%);
+  box-shadow: var(--rail-content-shadow);
   display: block;
   flex: 0 0 var(--rail-side-panel-width, 360px);
   overflow: hidden;
@@ -718,7 +718,7 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   align-items: center;
   background: var(--rail-surface);
   border-radius: 8px;
-  box-shadow: 0 0 8px rgb(0 0 0 / 50%);
+  box-shadow: var(--rail-content-shadow);
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -776,7 +776,7 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
 :host([titlebar-themed]) .titlebarDiv::before {
   background: var(--rail-page-color, transparent);
   border-radius: 8px 8px 0 0;
-  box-shadow: 0 0 8px rgb(0 0 0 / 50%),
+  box-shadow: var(--rail-content-shadow),
       inset 0 -1px var(--rail-page-separator, transparent);
   clip-path: inset(-8px -8px 0 -8px);
   bottom: 0;
