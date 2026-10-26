@@ -4618,7 +4618,7 @@ index 6f872ee..aa86f39 100644
      FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
                                          discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index 8b36341..c41d852 100644
+index 8b36341..698ec14 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,18 @@ assert(!is_android)
@@ -4641,7 +4641,7 @@ index 8b36341..c41d852 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,57 @@ build_webui("build") {
+@@ -27,6 +38,58 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4693,13 +4693,14 @@ index 8b36341..c41d852 100644
 +    "rail/tidy_tabs.ts",
 +    "rail/toast.html.ts",
 +    "rail/toast.ts",
++    "rail/tracked_visibility.ts",
 +    "rail/update_badge.html.ts",
 +    "rail/update_badge.ts",
 +    "rail/window_controls.ts",
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -54,6 +116,21 @@ build_webui("build") {
+@@ -54,6 +117,21 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4721,7 +4722,7 @@ index 8b36341..c41d852 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -67,7 +144,14 @@ build_webui("build") {
+@@ -67,7 +145,14 @@ build_webui("build") {
      # reference import issue.
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
@@ -4736,7 +4737,7 @@ index 8b36341..c41d852 100644
      "$root_gen_dir/components/browser_apis/bookmarks/bookmarks_api.mojom-webui.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/node_id_converter.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/tab_strip_api_types.mojom-converters.ts",
-@@ -79,4 +163,5 @@ build_webui("build") {
+@@ -79,4 +164,5 @@ build_webui("build") {
    mojo_files_deps = [
 +    "//chrome/browser/ui/webui/downloads:mojo_bindings_ts__generator",
      "//chrome/browser/ui/webui_browser:browser_mojo_bindings_ts__generator",
@@ -5123,7 +5124,7 @@ index 5e48dff..1d88d6a 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..fa004b7 100644
+index 922ef29..414603e 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -5251,7 +5252,7 @@ index 922ef29..fa004b7 100644
          this.$.locationIconButton, 'kLocationIconElementId');
 +    this.trackedElementManager_.startTracking(
 +        this.shadowRoot.querySelector<HTMLElement>('#locationIcon')!,
-+        'kExtensionsMenuButtonElementId');
++        'kExtensionsMenuButtonElementId', {secondaryId: 'ext:'});
      this.trackedElementManager_.startTracking(
          this.$.contentRegion, 'kContentsContainerViewElementId');
      this.setUpLongPress_(this.$.backButton, /*isBack=*/ true);
@@ -5702,7 +5703,7 @@ index 8ad3ede..5e6cafd 100644
      this.requestUpdate();
    }
 diff --git a/chrome/browser/resources/webui_browser/extensions_bar.ts b/chrome/browser/resources/webui_browser/extensions_bar.ts
-index 7b64d40..ab31e36 100644
+index 7b64d40..e7a8642 100644
 --- a/chrome/browser/resources/webui_browser/extensions_bar.ts
 +++ b/chrome/browser/resources/webui_browser/extensions_bar.ts
 @@ -4,10 +4,7 @@
@@ -5716,7 +5717,15 @@ index 7b64d40..ab31e36 100644
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
  import type {MenuSourceType} from '//resources/mojo/ui/base/mojom/menu_source_type.mojom-webui.js';
  import {PageCallbackRouter, PageHandlerFactory, PageHandlerRemote} from '/shared/extensions_bar.mojom-webui.js';
-@@ -45,29 +42,9 @@ export class ExtensionsBarElement extends CrLitElement {
+@@ -17,6 +14,7 @@ import {IconTable} from '/shared/icon_table.js';
+
+ import {ExtensionElement} from './extension.js';
+ import {getCss} from './extensions_bar.css.js';
++import {whenReportedVisible} from './rail/tracked_visibility.js';
+
+ export class ExtensionsBarElement extends CrLitElement {
+   static get is() {
+@@ -45,29 +43,9 @@ export class ExtensionsBarElement extends CrLitElement {
  
    private buttons: Map<string, ExtensionElement> = new Map();
    private iconTable_: IconTable = IconTable.getInstance();
@@ -5746,7 +5755,7 @@ index 7b64d40..ab31e36 100644
      const factory = PageHandlerFactory.getRemote();
      factory.createPageHandler(
          this.callbackRouter.$.bindNewPipeAndPassRemote(),
-@@ -80,11 +57,6 @@ export class ExtensionsBarElement extends CrLitElement {
+@@ -80,11 +58,6 @@ export class ExtensionsBarElement extends CrLitElement {
          this.actionPoppedOut.bind(this));
    }
  
@@ -5758,7 +5767,7 @@ index 7b64d40..ab31e36 100644
    private actionsAddedOrUpdated(
        icons: IconUpdate[], updates: ExtensionActionInfo[]) {
      this.iconTable_.applyUpdates(icons);
-@@ -92,8 +64,7 @@ export class ExtensionsBarElement extends CrLitElement {
+@@ -92,8 +65,7 @@ export class ExtensionsBarElement extends CrLitElement {
        if (!this.buttons.has(update.id)) {
          const extensionButton = new ExtensionElement(update.id, this);
          this.buttons.set(update.id, extensionButton);
@@ -5768,7 +5777,22 @@ index 7b64d40..ab31e36 100644
        }
  
        const extensionButton = this.buttons.get(update.id);
-@@ -139,10 +110,6 @@ export class ExtensionsBarElement extends CrLitElement {
+@@ -117,9 +89,13 @@ export class ExtensionsBarElement extends CrLitElement {
+     this.updateVisibility();
+   }
+
+-  private actionPoppedOut() {
++  private async actionPoppedOut() {
+     // TODO(webium): If we have an animation (which we ought to); this should
+     // probably consider its timing.
++    await Promise.all(Array.from(this.buttons.values())
++                          .filter(button => button.visible)
++                          .map(button => whenReportedVisible(
++                                   button, 'kToolbarActionViewElementId')));
+     return {};
+   }
+
+@@ -139,10 +115,6 @@ export class ExtensionsBarElement extends CrLitElement {
      this.handler.showContextMenu(source, id);
    }
  
@@ -10479,7 +10503,7 @@ index d89f4e4..d00f72d 100644
    map.AddWebUIConfig(std::make_unique<WebuiGalleryUIConfig>());
    map.AddWebUIConfig(std::make_unique<WebUIJsErrorUIConfig>());
 diff --git a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
-index 22c2f97..1aa1aef 100644
+index 22c2f97..bbd4de8 100644
 --- a/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 +++ b/chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.cc
 @@ -14,6 +14,7 @@
@@ -10490,7 +10514,7 @@ index 22c2f97..1aa1aef 100644
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
  #include "chrome/browser/ui/extensions/extension_action_view_model.h"
-@@ -24,6 +25,7 @@
+@@ -24,12 +25,14 @@
  #include "chrome/browser/ui/views/extensions/extensions_menu_view.h"
  #include "chrome/browser/ui/webui/util/image_util.h"
  #include "chrome/browser/ui/webui/webui_toolbar/icon_table.h"
@@ -10498,7 +10522,14 @@ index 22c2f97..1aa1aef 100644
  #include "components/browser_apis/ui_controllers/toolbar/icon_handle.h"
  #include "content/public/browser/web_ui.h"
  #include "extensions/common/extension_features.h"
-@@ -125,14 +127,20 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
+ #include "mojo/public/cpp/bindings/clone_traits.h"
+ #include "ui/base/models/image_model_utils.h"
+ #include "ui/base/mojom/menu_source_type.mojom.h"
++#include "ui/display/screen.h"
+ #include "ui/views/controls/menu/menu_item_view.h"
+ #include "ui/views/controls/menu/menu_model_adapter.h"
+ #include "ui/views/controls/menu/menu_runner.h"
+@@ -125,14 +128,23 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
          views::MenuRunner::HAS_MNEMONICS | views::MenuRunner::CONTEXT_MENU;
  
      std::unique_ptr<views::MenuItemView> menu = menu_adapter_->CreateMenu();
@@ -10510,8 +10541,11 @@ index 22c2f97..1aa1aef 100644
  
 -    menu_runner_->RunMenuAt(main_widget, nullptr,
 -                            action_info_->GetAnchor()->GetScreenBounds(),
++    ui::TrackedElement* anchor = action_info_->GetAnchor();
 +    const gfx::Rect anchor_bounds =
-+        action_info_->GetAnchor()->GetScreenBounds();
++        anchor ? anchor->GetScreenBounds()
++               : gfx::Rect(display::Screen::Get()->GetCursorScreenPoint(),
++                           gfx::Size());
 +    skin_ = std::make_unique<rail::MenuSkin>(
 +        main_widget, menu_view, anchor_bounds.bottom_left(), false);
 +    skin_->Attach();
@@ -10521,7 +10555,7 @@ index 22c2f97..1aa1aef 100644
    }
  
    const std::string& action_id() const { return action_id_; }
-@@ -151,6 +159,7 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
+@@ -151,6 +163,7 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
    }
  
    void OnMenuClosed() {
@@ -10529,7 +10563,7 @@ index 22c2f97..1aa1aef 100644
      menu_runner_.reset();
      menu_adapter_.reset();
  
-@@ -163,6 +172,7 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
+@@ -163,6 +176,7 @@ class WebUIToolbarExtensionsContainer::ContextMenu {
    const raw_ref<WebUIToolbarExtensionsContainer> extensions_container_;
    std::unique_ptr<views::MenuModelAdapter> menu_adapter_;
    std::unique_ptr<views::MenuRunner> menu_runner_;
@@ -10537,7 +10571,7 @@ index 22c2f97..1aa1aef 100644
  
    base::WeakPtrFactory<ContextMenu> weak_ptr_factory_{this};
  };
-@@ -192,17 +202,48 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
+@@ -192,17 +206,48 @@ WebUIToolbarExtensionsContainer::WebUIToolbarExtensionsContainer(
        web_contents_(web_contents),
        push_icon_table_updates_(push_icon_table_updates),
        icon_table_(icon_table),
@@ -10588,7 +10622,7 @@ index 22c2f97..1aa1aef 100644
    for (const auto& [_, action] : actions_) {
      action->model()->UnregisterCommand();
    }
-@@ -683,7 +724,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
+@@ -683,7 +728,8 @@ void WebUIToolbarExtensionsContainer::CreateActionForId(
        ExtensionActionViewModel::Create(
            action_id, &browser_.get(),
            std::make_unique<ExtensionActionDelegateDesktop>(&browser_.get(),
