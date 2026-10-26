@@ -1,0 +1,70 @@
+module rail_import.mojom;
+
+enum ImportStep {
+  kPasswords,
+  kHistory,
+  kCookies,
+  kExtensions,
+  kFavorites,
+  kPinned,
+  kSpaces,
+  kBookmarks,
+};
+
+enum ImportState {
+  kPending,
+  kRunning,
+  kDone,
+  kSkipped,
+  kFailed,
+};
+
+struct ImportCounts {
+  int32 spaces;
+  int32 pins;
+  int32 favorites;
+  int32 bookmarks;
+  int32 history;
+  int32 cookies;
+  int32 passwords;
+  int32 extensions;
+};
+
+struct ImportLocked {
+  int32 cookies;
+  int32 passwords;
+};
+
+struct ImportProfile {
+  string dir;
+  string name;
+  ImportCounts counts;
+  ImportLocked locked;
+};
+
+struct ImportSource {
+  string id;
+  string name;
+  string icon_path;
+  string icon;
+  bool installed;
+  bool running;
+  array<ImportProfile> profiles;
+};
+
+struct ImportEvent {
+  ImportStep step;
+  ImportState state;
+  string profile;
+  string detail;
+};
+
+struct ImportSummary {
+  string sidebar;
+  string message;
+};
+
+interface ImportObserver {
+  OnStep(ImportEvent event);
+  OnFinished(ImportSummary summary);
+};

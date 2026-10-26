@@ -32,9 +32,9 @@ migrate from, so nothing depends on the two matching.
 
 `build.py` downloads the CRX into `build/download_cache`, verifies the SHA-256
 above, copies it to `<out>/default_apps/`, and writes the matching
-`<out>/default_apps/external_extensions.json` next to it. Chromium's
-`preinstalled_apps::Provider` reads that directory once per newly created
-profile and installs the CRX from disk. The same step leaves the upstream source
+`<out>/default_apps/external_extensions.json` next to it. `rail::EnsureBundledExtensions`
+installs the CRX from that directory into each new Rail profile; see ARCHITECTURE.md,
+Bundled extensions. The same step leaves the upstream source
 archive in `build/download_cache`, which obligation 2 below covers; it is not
 part of the build and nothing links against it.
 
@@ -56,9 +56,9 @@ adds `default_apps/*` to `chrome/tools/build/win/FILES.cfg` so the zip package
 carries them too.
 
 The extension is user-visible in `chrome://extensions` and the user can disable
-or remove it. It installs on profile creation only: on any later run
-`preinstalled_apps::Provider` clears the prefs before the external provider sees
-them, so removing it makes it stay removed.
+or remove it. It installs on profile creation only: `EnsureBundledExtensions`
+runs from `OnProfileCreated`, and no later run reinstalls it, so removing it
+makes it stay removed.
 
 ## Why the CRX runs at all
 

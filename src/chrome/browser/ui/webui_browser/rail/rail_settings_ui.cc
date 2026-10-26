@@ -24,6 +24,8 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_webui_browser.h"
+#include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 #include "chrome/grit/webui_browser_resources.h"
 #include "chrome/grit/webui_browser_resources_map.h"
@@ -36,19 +38,6 @@
 namespace rail {
 
 namespace {
-
-BrowserWindowInterface* BrowserFor(content::WebUI* web_ui) {
-  BrowserWindowInterface* window =
-      webui::GetBrowserWindowInterface(web_ui->GetWebContents());
-  WebUIBrowserWindow* browser_window =
-      window ? WebUIBrowserWindow::FromBrowser(window) : nullptr;
-  return browser_window ? browser_window->browser() : nullptr;
-}
-
-PrefService* PrefsFor(content::WebUI* web_ui) {
-  BrowserWindowInterface* browser = BrowserFor(web_ui);
-  return browser ? browser->GetProfile()->GetPrefs() : nullptr;
-}
 
 std::string ProfileName(Profile* profile) {
   ProfileManager* manager = g_browser_process->profile_manager();

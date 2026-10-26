@@ -78,6 +78,48 @@ export function withStrength(hex: string, strength: number): string {
   return spaceHex(hex) + alpha.toString(16).padStart(2, '0');
 }
 
+const IMPORTED_COLOR_STRENGTH = 0.8;
+const IMPORTED_FALLBACK_COLOR = '#192e50';
+
+function accentChroma(hex: string): [number, number] {
+  const linear = (offset: number) => {
+    const channel = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 :
+                                ((channel + 0.055) / 1.055) ** 2.4;
+  };
+  const red = linear(1);
+  const green = linear(3);
+  const blue = linear(5);
+  const long = Math.cbrt(
+      0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue);
+  const medium = Math.cbrt(
+      0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue);
+  const short = Math.cbrt(
+      0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue);
+  return [
+    1.9779984951 * long - 2.4285922050 * medium + 0.4505937099 * short,
+    0.0259040371 * long + 0.7827717662 * medium - 0.8086757660 * short,
+  ];
+}
+
+function importedSpaceColor(hex: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) {
+    return withStrength(IMPORTED_FALLBACK_COLOR, IMPORTED_COLOR_STRENGTH);
+  }
+  const [a, b] = accentChroma(hex);
+  const distance = (color: string) => {
+    const [x, y] = accentChroma(color);
+    return (x - a) ** 2 + (y - b) ** 2;
+  };
+  const nearest = SPACE_COLORS.reduce(
+      (best, color) => distance(color) < distance(best) ? color : best);
+  return withStrength(nearest, IMPORTED_COLOR_STRENGTH);
+}
+
+export function importedSpace(space: StoredSpace): StoredSpace {
+  return {...space, color: importedSpaceColor(space.color)};
+}
+
 export const INCOGNITO_NAME = 'Incognito';
 export const INCOGNITO_ICON = '🔒';
 export const INCOGNITO_COLOR = withStrength('#3c3c43', 0.8);

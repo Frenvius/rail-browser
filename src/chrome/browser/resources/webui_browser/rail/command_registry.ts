@@ -231,6 +231,13 @@ export const COMMANDS: Command[] = [
     run: () => browserProxyFactory.getInstance().handler.openRailSettings(),
   },
   {
+    id: 'import-browser',
+    label: 'Import from another browser',
+    hint: '',
+    keywords: 'arc chrome edge brave vivaldi opera migrate move bring spaces favorites passwords history profiles',
+    run: () => browserProxyFactory.getInstance().handler.openRailImport(),
+  },
+  {
     id: 'show-downloads',
     label: 'Downloads',
     hint: 'Ctrl+J',

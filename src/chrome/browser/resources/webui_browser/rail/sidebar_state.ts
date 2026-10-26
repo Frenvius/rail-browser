@@ -176,6 +176,73 @@ export function mergeState(
   return pick(base, mine, theirs);
 }
 
+type RowKey = {id?: string}|string;
+
+const rowKeyOf = (row: RowKey): string =>
+    typeof row === 'string' ? row : row.id ?? '';
+
+function addMissingRows<T extends RowKey>(rows: T[], incoming: T[]): T[] {
+  const held = new Set(rows.map(rowKeyOf));
+  return [...rows, ...incoming.filter(row => !held.has(rowKeyOf(row)))];
+}
+
+function mergeSpaceRows(
+    space: StoredSpace, incoming: StoredSpace|undefined): StoredSpace {
+  if (!incoming) {
+    return space;
+  }
+  const folders = addMissingRows(space.folders ?? [], incoming.folders ?? []);
+  const tidyGroups =
+      addMissingRows(space.tidyGroups ?? [], incoming.tidyGroups ?? []);
+  const folderIds = new Set(folders.map(folder => folder.id));
+  const groupIds = new Set(tidyGroups.map(group => group.id));
+  const pinned = incoming.pinned.map(
+      pin => ({
+        ...pin,
+        folder: folderIds.has(pin.folder ?? '') ? pin.folder : undefined,
+      }));
+  const tabs = incoming.tabs.map(
+      tab => typeof tab === 'string' ? tab : {
+        ...tab,
+        group: groupIds.has(tab.group ?? '') ? tab.group : undefined,
+      });
+  return {
+    ...space,
+    pinned: addMissingRows(space.pinned, pinned),
+    folders,
+    tidyGroups,
+    tabs: addMissingRows(space.tabs, tabs),
+  };
+}
+
+export function mergeImport(
+    current: SidebarState, imported: SidebarState,
+    knownSpaces: string[]): SidebarState {
+  const held = new Set(current.spaces.map(space => space.id));
+  const retired = new Set(knownSpaces);
+  const incoming = new Map(
+      imported.spaces.map(space => [space.id, space] as [string, StoredSpace]));
+  const favorites: Record<string, StoredPin[]> = {
+    ...current.favoritesByProfile,
+  };
+  for (const [profileId, pins] of Object.entries(
+           imported.favoritesByProfile ?? {})) {
+    const existing = favorites[profileId] ?? [];
+    const have = new Set(existing.map(pin => pin.id));
+    favorites[profileId] =
+        [...existing, ...pins.filter(pin => !have.has(pin.id))];
+  }
+  return {
+    ...current,
+    spaces: [
+      ...current.spaces.map(space => mergeSpaceRows(space, incoming.get(space.id))),
+      ...imported.spaces.filter(
+          space => !held.has(space.id) && !retired.has(space.id)),
+    ],
+    favoritesByProfile: favorites,
+  };
+}
+
 export class SidebarStore {
   private timer_ = 0;
   private latest_: string|null = null;

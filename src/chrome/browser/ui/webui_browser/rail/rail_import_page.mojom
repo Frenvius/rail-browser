@@ -1,0 +1,32 @@
+module rail_import_page.mojom;
+
+import "chrome/browser/ui/webui_browser/rail/rail_import.mojom";
+
+interface PageHandlerFactory {
+  CreatePageHandler(pending_remote<Page> page,
+                    pending_receiver<PageHandler> handler);
+};
+
+interface PageHandler {
+  ListImportSources() => (array<rail_import.mojom.ImportSource> sources);
+
+  StartImport(string source_id,
+              array<string> profile_dirs,
+              pending_remote<rail_import.mojom.ImportObserver> observer);
+
+  IsDefaultBrowser() => (bool is_default);
+
+  SetAsDefaultBrowser();
+
+  CanPinToTaskbar() => (bool can_pin);
+
+  PinToTaskbar();
+
+  IsRunAtLogin() => (bool enabled);
+
+  SetRunAtLogin(bool enabled);
+
+  Close();
+};
+
+interface Page {};

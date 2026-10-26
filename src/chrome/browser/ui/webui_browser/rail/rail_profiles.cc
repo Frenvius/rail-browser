@@ -26,6 +26,7 @@
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_bundled_extensions.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 #include "chrome/common/pref_names.h"
 #include "components/tabs/public/tab_interface.h"
@@ -157,6 +158,7 @@ void OnProfileCreated(ProfileCreatedCallback callback, Profile* profile) {
     if (PrefService* local_state = g_browser_process->local_state()) {
       local_state->SetBoolean(prefs::kBrowserShowProfilePickerOnStartup, false);
     }
+    EnsureBundledExtensions(profile);
   }
   std::move(callback).Run(EntryForProfile(profile));
 }
@@ -192,6 +194,15 @@ void CreateProfile(const std::string& name, ProfileCreatedCallback callback) {
       base::UTF8ToUTF16(name), profiles::GetPlaceholderAvatarIndex(),
       /*is_hidden=*/false,
       base::BindOnce(&OnProfileCreated, std::move(callback)));
+}
+
+bool ProfileExists(const std::string& profile_id) {
+  ProfileManager* manager = g_browser_process->profile_manager();
+  const base::FilePath path =
+      profile_id.empty() ? base::FilePath() : PathForId(profile_id);
+  return manager && !path.empty() &&
+         manager->GetProfileAttributesStorage().GetProfileAttributesWithPath(
+             path);
 }
 
 void DeleteProfile(const std::string& profile_id) {
