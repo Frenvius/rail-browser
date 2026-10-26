@@ -4,6 +4,7 @@
 
 #include "base/values.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_import.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_mini_window_restore.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -34,6 +35,8 @@ void RegisterSidebarStateProfilePrefs(
   registry->RegisterIntegerPref(kTabArchiveHoursPref, kDefaultTabArchiveHours);
   registry->RegisterDictionaryPref(kProfileTabArchiveHoursPref);
   registry->RegisterDictionaryPref(kImportPref);
+  registry->RegisterBooleanPref(kReopenMiniWindowsPref, false);
+  registry->RegisterListPref(kOpenMiniWindowsPref);
 }
 
 std::string GetSidebarState(PrefService* prefs) {

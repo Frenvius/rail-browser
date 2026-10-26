@@ -69,6 +69,10 @@ interface PageHandler {
 
   SetGroupOpenedLinks(bool grouped);
 
+  GetReopenMiniWindows() => (bool reopen);
+
+  SetReopenMiniWindows(bool reopen);
+
   GetTrailDepth() => (int32 depth);
 
   SetTrailDepth(int32 depth);

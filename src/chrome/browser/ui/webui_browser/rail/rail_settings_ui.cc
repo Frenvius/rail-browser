@@ -21,6 +21,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_buildflags.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_mini_window_restore.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
@@ -328,6 +329,15 @@ void RailSettingsUI::GetGroupOpenedLinks(
 
 void RailSettingsUI::SetGroupOpenedLinks(bool grouped) {
   rail::SetGroupOpenedLinks(PrefsFor(web_ui()), grouped);
+}
+
+void RailSettingsUI::GetReopenMiniWindows(
+    GetReopenMiniWindowsCallback callback) {
+  std::move(callback).Run(rail::GetReopenMiniWindows(PrefsFor(web_ui())));
+}
+
+void RailSettingsUI::SetReopenMiniWindows(bool reopen) {
+  rail::SetReopenMiniWindows(PrefsFor(web_ui()), reopen);
 }
 
 void RailSettingsUI::GetTrailDepth(GetTrailDepthCallback callback) {

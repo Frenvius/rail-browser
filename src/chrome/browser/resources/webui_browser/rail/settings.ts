@@ -69,6 +69,7 @@ export class RailSettingsElement extends CrLitElement {
       sidebarIconsOnly_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
       groupOpenedLinks_: {type: Boolean, state: true},
+      reopenMiniWindows_: {type: Boolean, state: true},
       trailDepth_: {type: Number, state: true},
       sleepMinutes_: {type: Number, state: true},
       sleepSites_: {type: Array, state: true},
@@ -102,6 +103,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor sidebarIconsOnly_ = false;
   protected accessor themedTitlebar_ = true;
   protected accessor groupOpenedLinks_ = true;
+  protected accessor reopenMiniWindows_ = false;
   protected accessor trailDepth_ = 1;
   protected accessor sleepMinutes_ = 30;
   protected accessor sleepSites_: string[] = [];
@@ -185,6 +187,7 @@ export class RailSettingsElement extends CrLitElement {
     this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
     this.groupOpenedLinks_ = (await handler.getGroupOpenedLinks()).grouped;
+    this.reopenMiniWindows_ = (await handler.getReopenMiniWindows()).reopen;
     this.trailDepth_ = (await handler.getTrailDepth()).depth;
     const sleep = await handler.getTabSleep();
     this.sleepMinutes_ = sleep.minutes;
@@ -283,6 +286,11 @@ export class RailSettingsElement extends CrLitElement {
   protected onGroupOpenedLinksChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setGroupOpenedLinks(e.detail);
     this.groupOpenedLinks_ = e.detail;
+  }
+
+  protected onReopenMiniWindowsChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setReopenMiniWindows(e.detail);
+    this.reopenMiniWindows_ = e.detail;
   }
 
   protected onTrailDepthChange_(e: Event) {

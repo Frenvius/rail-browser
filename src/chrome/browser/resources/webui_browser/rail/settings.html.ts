@@ -115,6 +115,19 @@ ${this.section_ === 'general' ? html`
         @change="${this.onThemedTitlebarChange_}"></cr-toggle>
     </div>
   </div>
+  <h2 class="section">Mini Windows</h2>
+  <div class="group">
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Reopen on startup</span>
+        <span class="cardhint">
+          Mini windows still open when you quit Rail come back the next time
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.reopenMiniWindows_}"
+        @change="${this.onReopenMiniWindowsChange_}"></cr-toggle>
+    </div>
+  </div>
 ` : nothing}
 ${this.section_ === 'profiles' && this.openRow_ ? html`
   <div id="crumbs">

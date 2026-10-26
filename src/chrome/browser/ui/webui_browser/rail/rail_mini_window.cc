@@ -93,6 +93,7 @@ BrowserWindowInterface* CreateMiniWindow(Profile* profile,
   params.initial_bounds =
       bounds.IsEmpty() ? gfx::Rect(0, 0, kMiniWindowWidth, kMiniWindowHeight)
                        : bounds;
+  params.omit_from_session_restore = true;
   return CreateBrowserWindow(std::move(params));
 }
 
