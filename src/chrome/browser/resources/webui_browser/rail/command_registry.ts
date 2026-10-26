@@ -4,6 +4,7 @@ import type {LibrarySection} from './library.js';
 import {adoptMiniWindow} from './mini_window.js';
 import {archivedTabs} from './tab_archive.js';
 import type {TabCommand, TabMenuTarget} from './tab_menu.js';
+import {isWebUrl} from './tab_menu.js';
 
 export interface CommandBarHost {
   activeTab(): TabMenuTarget|null;
@@ -108,6 +109,14 @@ export const COMMANDS: Command[] = [
     hint: 'Ctrl+O',
     keywords: 'adopt promote mini little restore',
     run: () => adoptMiniWindow(),
+  },
+  {
+    id: 'route-to-space',
+    label: 'Always Open Site in This Space',
+    hint: '',
+    keywords: 'air traffic control route links rule',
+    enabled: tab => tab !== null && isWebUrl(tab.url),
+    run: onActiveTab('route-to-space'),
   },
   {
     id: 'pin-tab',

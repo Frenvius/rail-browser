@@ -3,10 +3,14 @@ import '//resources/cr_elements/cr_toggle/cr_toggle.js';
 import '//resources/cr_elements/icons.html.js';
 
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 
-import type {ProfileDetail, SettingsProfile} from '../rail_settings.mojom-webui.js';
+import type {ProfileDetail, SettingsProfile, SiteRoute} from '../rail_settings.mojom-webui.js';
 import {browserProxyFactory, UpdateStatus} from '../rail_settings.mojom-webui.js';
 
+import {pageFavicon} from './format_url.js';
+import type {PlanSpace} from './route_plan.js';
+import {buildRoutePrompt, parseRoutePlan} from './route_plan.js';
 import {getCss} from './settings.css.js';
 import {getHtml} from './settings.html.js';
 import {DEFAULT_PROFILE_NAME} from './spaces.js';
@@ -20,20 +24,37 @@ export interface ProfileRow {
   spaces: string[];
 }
 
-interface StoredSpaceName {
+export interface SpaceChoice {
+  id: string;
   name: string;
-  profile?: string;
+  profile: string;
 }
 
-function spaceNamesByProfile(state: string): Map<string, string[]> {
-  const names = new Map<string, string[]>();
-  let spaces: StoredSpaceName[] = [];
+interface StoredSpaceRecord {
+  id: string;
+  name: string;
+  profile?: string;
+  pinned?: Array<{url?: string}>;
+  tabs?: Array<{url?: string}|string>;
+}
+
+function storedSpaces(state: string): StoredSpaceRecord[] {
   try {
     const parsed = JSON.parse(state || 'null');
-    spaces = Array.isArray(parsed?.spaces) ? parsed.spaces : [];
+    return Array.isArray(parsed?.spaces) ? parsed.spaces : [];
   } catch (e) {
-    return names;
+    return [];
   }
+}
+
+function storedTabUrls(space: StoredSpaceRecord): string[] {
+  return [...(space.pinned ?? []), ...(space.tabs ?? [])].flatMap(
+      tab => typeof tab === 'object' && tab?.url ? [tab.url] : []);
+}
+
+function spaceNamesByProfile(spaces: StoredSpaceRecord[]):
+    Map<string, string[]> {
+  const names = new Map<string, string[]>();
   for (const space of spaces) {
     const id = space.profile ?? '';
     const bucket = names.get(id) ?? [];
@@ -65,6 +86,8 @@ export class RailSettingsElement extends CrLitElement {
       renaming_: {type: Boolean, state: true},
       confirmingDelete_: {type: Boolean, state: true},
       hasKey_: {type: Boolean, state: true},
+      assistantEnabled_: {type: Boolean, state: true},
+      tidyEnabled_: {type: Boolean, state: true},
       model_: {type: String, state: true},
       sidebarIconsOnly_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
@@ -74,6 +97,12 @@ export class RailSettingsElement extends CrLitElement {
       sleepMinutes_: {type: Number, state: true},
       sleepSites_: {type: Array, state: true},
       archiveHours_: {type: Object, state: true},
+      spaces_: {type: Array, state: true},
+      routes_: {type: Array, state: true},
+      favicons_: {type: Object, state: true},
+      routeInvalid_: {type: Boolean, state: true},
+      planning_: {type: Boolean, state: true},
+      planNote_: {type: String, state: true},
       section_: {type: String, state: true},
       customModel_: {type: Boolean, state: true},
       editingKey_: {type: Boolean, state: true},
@@ -87,8 +116,9 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor section_ = 'general';
   protected readonly sections_ = [
     {id: 'general', label: 'General'},
+    {id: 'tabs', label: 'Tabs'},
     {id: 'profiles', label: 'Profiles'},
-    {id: 'organizer', label: 'Tab Organizer'},
+    {id: 'assistant', label: 'Assistant'},
     {id: 'about', label: 'About'},
   ];
 
@@ -99,6 +129,8 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor renaming_ = false;
   protected accessor confirmingDelete_ = false;
   protected accessor hasKey_ = false;
+  protected accessor assistantEnabled_ = true;
+  protected accessor tidyEnabled_ = true;
   protected accessor model_ = '';
   protected accessor sidebarIconsOnly_ = false;
   protected accessor themedTitlebar_ = true;
@@ -108,6 +140,13 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor sleepMinutes_ = 30;
   protected accessor sleepSites_: string[] = [];
   protected accessor archiveHours_: ArchiveHours = {};
+  protected accessor spaces_: SpaceChoice[] = [];
+  protected accessor routes_: SiteRoute[] = [];
+  protected accessor favicons_: {[key: string]: string} = {};
+  private requestedFavicons_ = new Set<string>();
+  protected accessor routeInvalid_ = false;
+  protected accessor planning_ = false;
+  protected accessor planNote_ = '';
   protected accessor customModel_ = false;
   protected accessor editingKey_ = false;
   protected accessor railVersion_ = '';
@@ -177,6 +216,17 @@ export class RailSettingsElement extends CrLitElement {
     this.load_();
   }
 
+  override updated(changedProperties: PropertyValues<this>) {
+    super.updated(changedProperties);
+    const changedPrivateProperties =
+        changedProperties as Map<PropertyKey, unknown>;
+    if (changedPrivateProperties.has('routes_') ||
+        changedPrivateProperties.has('sleepSites_') ||
+        changedPrivateProperties.has('spaces_')) {
+      this.loadFavicons_();
+    }
+  }
+
   private async load_() {
     const handler = browserProxyFactory.getInstance().handler;
     const [{profiles}, {value}] =
@@ -184,6 +234,8 @@ export class RailSettingsElement extends CrLitElement {
     const organize = await handler.getOrganizeSettings();
     this.hasKey_ = organize.hasKey;
     this.model_ = organize.model;
+    this.assistantEnabled_ = organize.assistantEnabled;
+    this.tidyEnabled_ = organize.tidyEnabled;
     this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
     this.groupOpenedLinks_ = (await handler.getGroupOpenedLinks()).grouped;
@@ -198,7 +250,11 @@ export class RailSettingsElement extends CrLitElement {
     this.chromiumVersion_ = versions.chromium;
     const update = await handler.getUpdateStatus();
     this.setUpdateStatus_(update.status, update.version);
-    const names = spaceNamesByProfile(value);
+    const spaces = storedSpaces(value);
+    this.spaces_ = spaces.map(
+        ({id, name, profile}) => ({id, name, profile: profile ?? ''}));
+    this.routes_ = (await handler.getSiteRoutes()).routes;
+    const names = spaceNamesByProfile(spaces);
     this.profiles_ = [
       {id: '', name: DEFAULT_PROFILE_NAME, spaces: names.get('') ?? []},
       ...profiles.map((profile: SettingsProfile) => ({
@@ -288,6 +344,16 @@ export class RailSettingsElement extends CrLitElement {
     this.groupOpenedLinks_ = e.detail;
   }
 
+  protected onAssistantEnabledChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setAssistantEnabled(e.detail);
+    this.assistantEnabled_ = e.detail;
+  }
+
+  protected onTidyEnabledChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setTidyEnabled(e.detail);
+    this.tidyEnabled_ = e.detail;
+  }
+
   protected onReopenMiniWindowsChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setReopenMiniWindows(e.detail);
     this.reopenMiniWindows_ = e.detail;
@@ -353,6 +419,158 @@ export class RailSettingsElement extends CrLitElement {
   private setSleepSites_(sites: string[]) {
     browserProxyFactory.getInstance().handler.setTabSleepExceptions(sites);
     this.sleepSites_ = sites;
+  }
+
+  protected onRouteSiteKeydown_(e: KeyboardEvent) {
+    this.routeInvalid_ = false;
+    if (e.key === 'Enter') {
+      this.onAddRouteClick_();
+    }
+  }
+
+  protected async onAddRouteClick_() {
+    const input = this.shadowRoot.querySelector<HTMLInputElement>('#routesite');
+    const space =
+        this.shadowRoot.querySelector<HTMLSelectElement>('#routespace');
+    if (!input || !space || !input.value.trim()) {
+      return;
+    }
+    const {routes} =
+        await browserProxyFactory.getInstance().handler.addSiteRoute(
+            input.value, space.value);
+    this.routeInvalid_ = routes === null;
+    if (routes) {
+      this.routes_ = routes;
+      input.value = '';
+    }
+  }
+
+  protected onRouteSpaceChange_(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    this.updateRoute_(target, {spaceId: target.value});
+  }
+
+  protected onRouteEnabledChange_(e: CustomEvent<boolean>) {
+    this.updateRoute_(e.target as HTMLElement, {enabled: e.detail});
+  }
+
+  protected onRemoveRouteClick_(e: Event) {
+    const index = this.routeIndex_(e.currentTarget as HTMLElement);
+    this.setRoutes_(this.routes_.filter((_, at) => at !== index));
+  }
+
+  protected routeLabel_(route: SiteRoute): string {
+    return route.domain + route.path;
+  }
+
+  protected routeFavicon_(route: SiteRoute): string {
+    return this.siteFavicon_(route.domain, this.spaceProfile_(route.spaceId));
+  }
+
+  protected siteFavicon_(site: string, profile = ''): string {
+    return this.favicons_[`${profile}/${site}`] ??
+        pageFavicon(`https://${site}`);
+  }
+
+  private spaceProfile_(spaceId: string): string {
+    return this.spaces_.find(space => space.id === spaceId)?.profile ?? '';
+  }
+
+  private loadFavicons_() {
+    const wanted = [
+      ...this.routes_.map(
+          route => ({site: route.domain,
+                     profile: this.spaceProfile_(route.spaceId)})),
+      ...this.sleepSites_.map(site => ({site, profile: ''})),
+    ];
+    const handler = browserProxyFactory.getInstance().handler;
+    for (const {site, profile} of wanted) {
+      const key = `${profile}/${site}`;
+      if (this.requestedFavicons_.has(key)) {
+        continue;
+      }
+      this.requestedFavicons_.add(key);
+      handler.getSiteFavicon(site, profile).then(({dataUrl}) => {
+        if (dataUrl) {
+          this.favicons_ = {...this.favicons_, [key]: dataUrl};
+        }
+      });
+    }
+  }
+
+  private routeIndex_(element: HTMLElement): number {
+    return Number(element.dataset['index'] ?? '-1');
+  }
+
+  private updateRoute_(element: HTMLElement, change: Partial<SiteRoute>) {
+    const index = this.routeIndex_(element);
+    this.setRoutes_(this.routes_.map(
+        (route, at) =>
+            at === index ? {...route, ...change, fromAi: false} : route));
+  }
+
+  protected hasAiRoutes_(): boolean {
+    return this.routes_.some(route => route.fromAi);
+  }
+
+  protected planHint_(): string {
+    if (this.planNote_) {
+      return this.planNote_;
+    }
+    return this.hasKey_ ?
+        'Based on the sites you visit in each Space' :
+        'Store an OpenRouter key in Assistant to use this';
+  }
+
+  protected async onPlanRoutesClick_() {
+    if (this.planning_ || !this.hasKey_ || !this.assistantEnabled_) {
+      return;
+    }
+    this.planning_ = true;
+    this.planNote_ = '';
+    this.planNote_ = await this.planRoutes_();
+    this.planning_ = false;
+  }
+
+  private async planRoutes_(): Promise<string> {
+    const handler = browserProxyFactory.getInstance().handler;
+    const [{value}, {visits}] = await Promise.all(
+        [handler.getSidebarState(), handler.getSpaceVisits()]);
+    const spaces = storedSpaces(value);
+    const plan: PlanSpace[] =
+        spaces.map(space => ({
+                     id: space.id,
+                     name: space.name,
+                     profile: this.profileName_(space.profile ?? ''),
+                     visits: visits[space.id] ?? {},
+                     tabUrls: storedTabUrls(space),
+                   }));
+    const {response} = await handler.planSiteRoutes(
+        buildRoutePrompt(plan, this.routes_.filter(route => !route.fromAi)));
+    if (!response) {
+      return 'Couldn\'t reach OpenRouter. Check the key and try again.';
+    }
+    const planned =
+        parseRoutePlan(response, new Set(spaces.map(space => space.id)));
+    const {routes} = planned.length ?
+        await handler.applyPlannedRoutes(planned) :
+        {routes: null};
+    if (!routes) {
+      return 'No routes came back. Try again, or pick another model in Assistant.';
+    }
+    this.routes_ = routes;
+    const count = routes.filter(route => route.fromAi).length;
+    return `Assistant set up ${count} ${count === 1 ? 'route' : 'routes'}`;
+  }
+
+  private profileName_(id: string): string {
+    return this.profiles_.find(row => row.id === id)?.name ??
+        DEFAULT_PROFILE_NAME;
+  }
+
+  private setRoutes_(routes: SiteRoute[]) {
+    browserProxyFactory.getInstance().handler.setSiteRoutes(routes);
+    this.routes_ = routes;
   }
 
   protected onSectionClick_(e: Event) {

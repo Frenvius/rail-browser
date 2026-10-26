@@ -158,6 +158,20 @@ select:focus-visible {
   font-size: 14px;
 }
 
+.site {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sitefavicon {
+  border-radius: 3px;
+  flex: none;
+  height: 16px;
+  width: 16px;
+}
+
 .cardhint {
   color: var(--rail-text-dim);
   font-size: 12px;
@@ -397,8 +411,13 @@ option::checkmark {
   max-width: 600px;
 }
 
+h2.section + .sectionhint {
+  margin: 0 0 10px 2px;
+}
+
 #apikey,
 #model,
+#routesite,
 #sleepsite {
   background: rgb(0 0 0 / 20%);
   border: 1px solid rgb(255 255 255 / 10%);
@@ -414,18 +433,21 @@ option::checkmark {
 
 #apikey:hover,
 #model:hover,
+#routesite:hover,
 #sleepsite:hover {
   border-color: rgb(255 255 255 / 18%);
 }
 
 #apikey:focus,
 #model:focus,
+#routesite:focus,
 #sleepsite:focus {
   border-color: var(--rail-accent);
   box-shadow: 0 0 0 2px var(--rail-accent-soft);
 }
 
 #apikey::placeholder,
+#routesite::placeholder,
 #sleepsite::placeholder {
   color: var(--rail-placeholder);
 }
@@ -561,6 +583,7 @@ option::checkmark {
 select,
 #apikey,
 #model,
+#routesite,
 #sleepsite,
 #clearkey,
 #savekey,

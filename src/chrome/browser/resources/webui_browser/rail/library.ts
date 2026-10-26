@@ -7,7 +7,7 @@ import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 import type {Download} from './downloads.js';
 import type {Folder} from './folders.js';
 import {downloadsProfile, downloadStatus, DownloadList, DownloadState, fileIconUrl, isMoving, needsReview, onDownloadsRebound} from './downloads.js';
-import {formatDisplayUrl} from './format_url.js';
+import {formatDisplayUrl, pageFavicon} from './format_url.js';
 import {getCss} from './library.css.js';
 import {getHtml} from './library.html.js';
 import type {LibraryIcon} from './library_icons.js';
@@ -132,9 +132,7 @@ function hostOf(url: string): string {
 }
 
 function faviconFor(favicon: string, url: string): string {
-  return favicon ||
-      `chrome://favicon2/?pageUrl=${
-             encodeURIComponent(url)}&size=16&scaleFactor=2x`;
+  return favicon || pageFavicon(url);
 }
 
 export class RailLibraryElement extends CrLitElement {

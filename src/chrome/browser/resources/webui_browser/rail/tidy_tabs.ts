@@ -63,17 +63,20 @@ function extractJson(text: string): unknown {
   }
 }
 
+export function readModelReply(response: string): unknown {
+  const envelope = extractJson(response) as
+          {choices?: Array<{message?: {content?: string}}>} |
+      null;
+  const content = envelope?.choices?.[0]?.message?.content;
+  return typeof content === 'string' ? extractJson(content) : null;
+}
+
 export function parsePlan(
     response: string, tabs: TidyTab[],
     groups: TidyExistingGroup[]): TidyGroupPlan[] {
-  const envelope = extractJson(response) as
-      {choices?: Array<{message?: {content?: string}}>} | null;
-  const content = envelope?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    return [];
-  }
-  const parsed = extractJson(content) as
-      {groups?: Array<{id?: string, name?: string, tabs?: number[]}>} | null;
+  const parsed = readModelReply(response) as
+          {groups?: Array<{id?: string, name?: string, tabs?: number[]}>} |
+      null;
   if (!parsed || !Array.isArray(parsed.groups)) {
     return [];
   }

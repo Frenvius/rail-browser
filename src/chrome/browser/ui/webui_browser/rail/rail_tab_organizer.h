@@ -26,8 +26,15 @@ class PrefRegistrySyncable;
 
 namespace rail {
 
+extern const char kAssistantEnabledPref[];
+extern const char kTidyEnabledPref[];
+
 void RegisterTabOrganizerProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
+
+bool IsAssistantEnabled(PrefService* prefs);
+
+bool IsTidyEnabled(PrefService* prefs);
 
 bool HasOpenRouterKey(PrefService* prefs);
 

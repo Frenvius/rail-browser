@@ -9,10 +9,13 @@
 #include "base/callback_list.h"
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/cancelable_task_tracker.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
 #include "chrome/browser/ui/webui/top_chrome/top_chrome_webui_config.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_settings.mojom.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
+#include "components/favicon_base/favicon_types.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -70,6 +73,8 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetSearchSuggestions(const std::string& id, bool enabled) override;
   void OpenSearchSettings(const std::string& id) override;
   void GetOrganizeSettings(GetOrganizeSettingsCallback callback) override;
+  void SetAssistantEnabled(bool enabled) override;
+  void SetTidyEnabled(bool enabled) override;
   void SetOpenRouterKey(const std::string& key) override;
   void SetOrganizeModel(const std::string& model) override;
   void GetSidebarIconsOnly(GetSidebarIconsOnlyCallback callback) override;
@@ -87,6 +92,21 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetTabSleepExceptions(
       const std::vector<std::string>& exceptions) override;
   void SetTabArchiveHours(const std::string& id, int32_t hours) override;
+  void GetSiteRoutes(GetSiteRoutesCallback callback) override;
+  void AddSiteRoute(const std::string& site,
+                    const std::string& space_id,
+                    AddSiteRouteCallback callback) override;
+  void SetSiteRoutes(
+      std::vector<rail_settings::mojom::SiteRoutePtr> routes) override;
+  void GetSpaceVisits(GetSpaceVisitsCallback callback) override;
+  void GetSiteFavicon(const std::string& site,
+                      const std::string& profile_id,
+                      GetSiteFaviconCallback callback) override;
+  void PlanSiteRoutes(const std::string& prompt,
+                      PlanSiteRoutesCallback callback) override;
+  void ApplyPlannedRoutes(
+      std::vector<rail_settings::mojom::PlannedRoutePtr> routes,
+      ApplyPlannedRoutesCallback callback) override;
   void GetVersions(GetVersionsCallback callback) override;
   void GetUpdateStatus(GetUpdateStatusCallback callback) override;
   void CheckForUpdates() override;
@@ -104,10 +124,22 @@ class RailSettingsUI : public TopChromeWebUIController,
   void OnProfileResolvedForRename(const std::string& name, Profile* profile);
   void OnProfileResolvedForEngine(const std::string& engine_id,
                                   Profile* profile);
+  void OnProfileResolvedForFavicon(std::vector<std::string> hosts,
+                                   GetSiteFaviconCallback callback,
+                                   Profile* profile);
+  void LoadSiteFavicon(std::vector<std::string> hosts,
+                       GetSiteFaviconCallback callback,
+                       base::WeakPtr<Profile> profile);
+  void OnSiteFaviconLoaded(std::vector<std::string> hosts,
+                           GetSiteFaviconCallback callback,
+                           base::WeakPtr<Profile> profile,
+                           const favicon_base::FaviconRawBitmapResult& result);
 
   std::vector<base::CallbackListSubscription> search_engine_subscriptions_;
+  base::CancelableTaskTracker favicon_tracker_;
   base::CallbackListSubscription update_subscription_;
   std::string pending_section_;
+  TabOrganizer route_planner_;
 
   mojo::Receiver<rail_settings::mojom::PageHandlerFactory>
       page_factory_receiver_{this};

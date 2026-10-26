@@ -10,6 +10,7 @@
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
 #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_site_routes.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
 #include "components/browser_apis/tab_strip/types/node_id.h"
@@ -137,7 +138,10 @@ BrowserWindowInterface* OpenExternalUrlsInMiniWindows(
   const gfx::Rect bounds = MiniWindowBoundsNear(shell);
   BrowserWindowInterface* last = nullptr;
   for (const GURL& url : urls) {
-    if (BrowserWindowInterface* mini = OpenMiniWindow(profile, url, bounds)) {
+    if (RouteToSpace(shell, url)) {
+      last = shell;
+    } else if (BrowserWindowInterface* mini =
+                   OpenMiniWindow(profile, url, bounds)) {
       last = mini;
     }
   }

@@ -20,6 +20,9 @@
 
 namespace rail {
 
+const char kAssistantEnabledPref[] = "rail.assistant_enabled";
+const char kTidyEnabledPref[] = "rail.tidy_enabled";
+
 namespace {
 
 constexpr char kKeyPref[] = "rail.openrouter_key";
@@ -64,6 +67,16 @@ void RegisterTabOrganizerProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterStringPref(kKeyPref, std::string());
   registry->RegisterStringPref(kModelPref, kDefaultModel);
+  registry->RegisterBooleanPref(kAssistantEnabledPref, true);
+  registry->RegisterBooleanPref(kTidyEnabledPref, true);
+}
+
+bool IsAssistantEnabled(PrefService* prefs) {
+  return prefs && prefs->GetBoolean(kAssistantEnabledPref);
+}
+
+bool IsTidyEnabled(PrefService* prefs) {
+  return IsAssistantEnabled(prefs) && prefs->GetBoolean(kTidyEnabledPref);
 }
 
 bool HasOpenRouterKey(PrefService* prefs) {
@@ -99,7 +112,8 @@ TabOrganizer::~TabOrganizer() = default;
 void TabOrganizer::Organize(Profile* profile,
                             const std::string& prompt,
                             OrganizeTabsCallback callback) {
-  if (!profile || !HasOpenRouterKey(profile->GetPrefs())) {
+  if (!profile || !IsAssistantEnabled(profile->GetPrefs()) ||
+      !HasOpenRouterKey(profile->GetPrefs())) {
     std::move(callback).Run(std::nullopt);
     return;
   }
@@ -133,12 +147,16 @@ void TabOrganizer::OnEncryptor(
           description:
             "Sends the titles and hostnames of the open tabs in the current "
             "space to the OpenRouter chat completions endpoint, which returns "
-            "a grouping of those tabs."
+            "a grouping of those tabs. Setting up Air Traffic Control sends "
+            "the space names and the hostnames visited and open in each "
+            "space, and the reply assigns sites to spaces."
           trigger:
-            "The user activates Tidy in the sidebar."
+            "The user activates Tidy in the sidebar, or sets up Air Traffic "
+            "Control routes with AI in settings."
           data:
-            "Tab titles and hostnames of the active space, and the model name "
-            "chosen in settings."
+            "Tab titles and hostnames of the active space, or space names and "
+            "the hostnames visited in each space, and the model name chosen "
+            "in settings."
           destination: OTHER
           destination_other: "OpenRouter"
         }

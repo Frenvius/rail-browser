@@ -15,6 +15,19 @@ struct SearchEngine {
   string name;
 };
 
+struct SiteRoute {
+  string domain;
+  string path;
+  string space_id;
+  bool enabled;
+  bool from_ai;
+};
+
+struct PlannedRoute {
+  string site;
+  string space_id;
+};
+
 struct ProfileDetail {
   string name;
   array<SearchEngine> search_engines;
@@ -51,7 +64,12 @@ interface PageHandler {
 
   OpenSearchSettings(string id);
 
-  GetOrganizeSettings() => (bool has_key, string model);
+  GetOrganizeSettings() => (bool has_key, string model, bool assistant_enabled,
+                            bool tidy_enabled);
+
+  SetAssistantEnabled(bool enabled);
+
+  SetTidyEnabled(bool enabled);
 
   SetOpenRouterKey(string key);
 
@@ -85,6 +103,20 @@ interface PageHandler {
   SetTabSleepExceptions(array<string> exceptions);
 
   SetTabArchiveHours(string id, int32 hours);
+
+  GetSiteRoutes() => (array<SiteRoute> routes);
+
+  AddSiteRoute(string site, string space_id) => (array<SiteRoute>? routes);
+
+  SetSiteRoutes(array<SiteRoute> routes);
+
+  GetSpaceVisits() => (map<string, map<string, int32>> visits);
+
+  GetSiteFavicon(string site, string profile_id) => (string? data_url);
+
+  PlanSiteRoutes(string prompt) => (string? response);
+
+  ApplyPlannedRoutes(array<PlannedRoute> routes) => (array<SiteRoute>? routes);
 
   GetVersions() => (string rail, string chromium);
 

@@ -3,17 +3,21 @@
 #include <utility>
 
 #include "base/functional/bind.h"
+#include "base/base64.h"
 #include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/version_info/version_info.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/common/pref_names.h"
+#include "components/favicon/core/favicon_service.h"
+#include "components/keyed_service/core/service_access_type.h"
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
@@ -23,6 +27,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_buildflags.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_mini_window_restore.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_site_routes.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_webui_browser.h"
@@ -34,6 +39,7 @@
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/common/url_constants.h"
+#include "ui/gfx/favicon_size.h"
 #include "ui/webui/webui_util.h"
 
 namespace rail {
@@ -76,6 +82,17 @@ rail_settings::mojom::UpdateStatus UpdateStatusOf(const Updater* updater) {
 
 std::optional<std::string> ReadyVersionOf(const Updater* updater) {
   return updater ? updater->ready_version() : std::nullopt;
+}
+
+std::vector<rail_settings::mojom::SiteRoutePtr> SiteRoutesFor(
+    PrefService* prefs) {
+  std::vector<rail_settings::mojom::SiteRoutePtr> routes;
+  for (const SiteRoute& route : GetSiteRoutes(prefs)) {
+    routes.push_back(rail_settings::mojom::SiteRoute::New(
+        route.domain, route.path, route.space_id, route.enabled,
+        route.from_ai));
+  }
+  return routes;
 }
 
 }
@@ -292,8 +309,22 @@ void RailSettingsUI::OpenSearchSettings(const std::string& id) {
 void RailSettingsUI::GetOrganizeSettings(
     GetOrganizeSettingsCallback callback) {
   PrefService* prefs = PrefsFor(web_ui());
-  std::move(callback).Run(rail::HasOpenRouterKey(prefs),
-                          rail::GetOrganizeModel(prefs));
+  std::move(callback).Run(
+      rail::HasOpenRouterKey(prefs), rail::GetOrganizeModel(prefs),
+      rail::IsAssistantEnabled(prefs),
+      prefs && prefs->GetBoolean(rail::kTidyEnabledPref));
+}
+
+void RailSettingsUI::SetAssistantEnabled(bool enabled) {
+  if (PrefService* prefs = PrefsFor(web_ui())) {
+    prefs->SetBoolean(rail::kAssistantEnabledPref, enabled);
+  }
+}
+
+void RailSettingsUI::SetTidyEnabled(bool enabled) {
+  if (PrefService* prefs = PrefsFor(web_ui())) {
+    prefs->SetBoolean(rail::kTidyEnabledPref, enabled);
+  }
 }
 
 void RailSettingsUI::SetOpenRouterKey(const std::string& key) {
@@ -367,6 +398,120 @@ void RailSettingsUI::SetTabSleepExceptions(
 void RailSettingsUI::SetTabArchiveHours(const std::string& id,
                                         int32_t hours) {
   rail::SetTabArchiveHours(PrefsFor(web_ui()), id, hours);
+}
+
+void RailSettingsUI::GetSiteRoutes(GetSiteRoutesCallback callback) {
+  PrefService* prefs = PrefsFor(web_ui());
+  rail::PruneDeletedSpaces(prefs);
+  std::move(callback).Run(SiteRoutesFor(prefs));
+}
+
+void RailSettingsUI::AddSiteRoute(const std::string& site,
+                                  const std::string& space_id,
+                                  AddSiteRouteCallback callback) {
+  PrefService* prefs = PrefsFor(web_ui());
+  const std::optional<SiteRoute> route = rail::ParseSiteRoute(site, space_id);
+  if (!route || !rail::AddSiteRoute(prefs, *route)) {
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+  std::move(callback).Run(SiteRoutesFor(prefs));
+}
+
+void RailSettingsUI::SetSiteRoutes(
+    std::vector<rail_settings::mojom::SiteRoutePtr> routes) {
+  std::vector<SiteRoute> stored;
+  stored.reserve(routes.size());
+  for (const rail_settings::mojom::SiteRoutePtr& route : routes) {
+    stored.push_back(SiteRoute{route->domain, route->path, route->space_id,
+                               route->enabled, route->from_ai});
+  }
+  rail::SetSiteRoutes(PrefsFor(web_ui()), stored);
+}
+
+void RailSettingsUI::GetSpaceVisits(GetSpaceVisitsCallback callback) {
+  std::move(callback).Run(rail::GetSpaceVisits(PrefsFor(web_ui())));
+}
+
+void RailSettingsUI::GetSiteFavicon(const std::string& site,
+                                    const std::string& profile_id,
+                                    GetSiteFaviconCallback callback) {
+  std::vector<std::string> hosts =
+      rail::SiteFaviconHosts(PrefsFor(web_ui()), site);
+  rail::ResolveProfile(
+      BrowserFor(web_ui()), profile_id,
+      base::BindOnce(&RailSettingsUI::OnProfileResolvedForFavicon,
+                     weak_factory_.GetWeakPtr(), std::move(hosts),
+                     std::move(callback)));
+}
+
+void RailSettingsUI::OnProfileResolvedForFavicon(
+    std::vector<std::string> hosts,
+    GetSiteFaviconCallback callback,
+    Profile* profile) {
+  LoadSiteFavicon(std::move(hosts), std::move(callback),
+                  profile ? profile->GetWeakPtr() : base::WeakPtr<Profile>());
+}
+
+void RailSettingsUI::LoadSiteFavicon(std::vector<std::string> hosts,
+                                     GetSiteFaviconCallback callback,
+                                     base::WeakPtr<Profile> profile) {
+  favicon::FaviconService* service =
+      profile ? FaviconServiceFactory::GetForProfile(
+                    profile.get(), ServiceAccessType::EXPLICIT_ACCESS)
+              : nullptr;
+  if (!service || hosts.empty()) {
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+  const GURL page("https://" + hosts.front() + "/");
+  hosts.erase(hosts.begin());
+  constexpr bool kFallbackToHost = true;
+  service->GetRawFaviconForPageURL(
+      page, {favicon_base::IconType::kFavicon}, 2 * gfx::kFaviconSize,
+      kFallbackToHost,
+      base::BindOnce(&RailSettingsUI::OnSiteFaviconLoaded,
+                     weak_factory_.GetWeakPtr(), std::move(hosts),
+                     std::move(callback), profile),
+      &favicon_tracker_);
+}
+
+void RailSettingsUI::OnSiteFaviconLoaded(
+    std::vector<std::string> hosts,
+    GetSiteFaviconCallback callback,
+    base::WeakPtr<Profile> profile,
+    const favicon_base::FaviconRawBitmapResult& result) {
+  if (result.is_valid()) {
+    std::move(callback).Run("data:image/png;base64," +
+                            base::Base64Encode(*result.bitmap_data));
+    return;
+  }
+  LoadSiteFavicon(std::move(hosts), std::move(callback), profile);
+}
+
+void RailSettingsUI::PlanSiteRoutes(const std::string& prompt,
+                                    PlanSiteRoutesCallback callback) {
+  BrowserWindowInterface* browser = BrowserFor(web_ui());
+  route_planner_.Organize(browser ? browser->GetProfile() : nullptr, prompt,
+                          std::move(callback));
+}
+
+void RailSettingsUI::ApplyPlannedRoutes(
+    std::vector<rail_settings::mojom::PlannedRoutePtr> routes,
+    ApplyPlannedRoutesCallback callback) {
+  std::vector<SiteRoute> planned;
+  for (const rail_settings::mojom::PlannedRoutePtr& route : routes) {
+    if (std::optional<SiteRoute> parsed =
+            rail::ParseSiteRoute(route->site, route->space_id)) {
+      planned.push_back(std::move(*parsed));
+    }
+  }
+  PrefService* prefs = PrefsFor(web_ui());
+  if (!rail::ApplyPlannedRoutes(prefs, planned)) {
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+  std::move(callback).Run(SiteRoutesFor(prefs));
 }
 
 void RailSettingsUI::GetVersions(GetVersionsCallback callback) {

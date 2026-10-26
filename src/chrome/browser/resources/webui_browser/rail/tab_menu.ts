@@ -20,7 +20,7 @@ export interface TabMenuTarget {
 export type TabCommand = 'add-to-folder'|'close'|'close-others'|'close-right'|
     'copy-link'|'duplicate'|'favorite'|'move-to-space'|'move-to-window'|'mute'|
     'mini-window'|'new-folder'|'new-tab-below'|'new-window'|'pin'|'reload'|
-    'remove-from-folder'|'replace-pinned-url'|'sleep'|'unpin';
+    'remove-from-folder'|'replace-pinned-url'|'route-to-space'|'sleep'|'unpin';
 
 export type FolderCommand = 'delete-folder'|'rename-folder';
 
@@ -46,6 +46,10 @@ export interface TabMenuContext {
   activeSpace: string;
   windows: WindowRow[];
   folders: Folder[];
+}
+
+export function isWebUrl(url: string): boolean {
+  return url.startsWith('https://') || url.startsWith('http://');
 }
 
 function noun(target: TabMenuTarget): string {
@@ -92,6 +96,8 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
     !target.dormant && {command: 'sleep', label: `Sleep ${noun(target)}`},
     destinations.length > 0 &&
         {command: 'move-to', label: 'Move to', children: destinations},
+    single && isWebUrl(target.url) &&
+        {command: 'route-to-space', label: 'Always Open in This Space'},
     separator(),
     {
       command: target.pinned ? 'unpin' : 'pin',

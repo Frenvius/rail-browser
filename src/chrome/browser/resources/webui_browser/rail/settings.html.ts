@@ -34,6 +34,37 @@ ${this.section_ === 'general' ? html`
         </option>
       </select>
     </div>
+  </div>
+  <h2 class="section">Top Bar</h2>
+  <div class="group">
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Match the site's color</span>
+        <span class="cardhint">
+          The top bar joins the page and takes the color of the site
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.themedTitlebar_}"
+        @change="${this.onThemedTitlebarChange_}"></cr-toggle>
+    </div>
+  </div>
+  <h2 class="section">Mini Windows</h2>
+  <div class="group">
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Reopen on startup</span>
+        <span class="cardhint">
+          Mini windows still open when you quit Rail come back the next time
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.reopenMiniWindows_}"
+        @change="${this.onReopenMiniWindowsChange_}"></cr-toggle>
+    </div>
+  </div>
+` : nothing}
+${this.section_ === 'tabs' ? html`
+  <h2 class="section">Tab Trails</h2>
+  <div class="group">
     <div class="item">
       <div class="rowtext">
         <span class="cardtitle">Tab trails</span>
@@ -96,37 +127,88 @@ ${this.section_ === 'general' ? html`
     </div>
     ${this.sleepSites_.map(site => html`
       <div class="item">
-        <span class="cardtitle">${site}</span>
+        <div class="site">
+          <img class="sitefavicon" alt="" src="${this.siteFavicon_(site)}">
+          <span class="cardtitle">${site}</span>
+        </div>
         <button class="sitebutton" data-site="${site}"
             @click="${this.onRemoveSleepSiteClick_}">Remove</button>
       </div>
     `)}
   </div>
-  <h2 class="section">Top Bar</h2>
+  <h2 class="section">Air Traffic Control</h2>
+  <p class="sectionhint">
+    A link opened from another app goes to the Space its route names, already
+    signed in with that Space's Profile. A route covers its site and
+    subdomains, and a path narrows it to one part of the site. Links no route
+    covers open in a mini window. Running the Assistant again rewrites only the
+    routes it set up; a route you add or change stays yours.
+  </p>
   <div class="group">
+    ${this.assistantEnabled_ ? html`
+      <div class="item">
+        <div class="rowtext">
+          <span class="cardtitle">Set up with Assistant</span>
+          <span class="cardhint">${this.planHint_()}</span>
+        </div>
+        <button class="sitebutton"
+            ?disabled="${!this.hasKey_ || this.planning_ ||
+                         !this.spaces_.length}"
+            @click="${this.onPlanRoutesClick_}">
+          ${this.planning_ ? 'Working...' :
+                             this.hasAiRoutes_() ? 'Redo' : 'Set Up'}
+        </button>
+      </div>
+    ` : nothing}
     <div class="item">
       <div class="rowtext">
-        <span class="cardtitle">Match the site's color</span>
+        <span class="cardtitle">Add a route</span>
         <span class="cardhint">
-          The top bar joins the page and takes the color of the site
+          ${this.routeInvalid_ ? 'Enter a site, like github.com' :
+                                 'A site, or a site and a path'}
         </span>
       </div>
-      <cr-toggle ?checked="${this.themedTitlebar_}"
-        @change="${this.onThemedTitlebarChange_}"></cr-toggle>
-    </div>
-  </div>
-  <h2 class="section">Mini Windows</h2>
-  <div class="group">
-    <div class="item">
-      <div class="rowtext">
-        <span class="cardtitle">Reopen on startup</span>
-        <span class="cardhint">
-          Mini windows still open when you quit Rail come back the next time
-        </span>
+      <div class="control">
+        <input id="routesite" placeholder="github.com/rail"
+            @keydown="${this.onRouteSiteKeydown_}">
+        <select id="routespace">
+          ${this.spaces_.map(space => html`
+            <option value="${space.id}">${space.name}</option>
+          `)}
+        </select>
+        <button class="sitebutton" @click="${this.onAddRouteClick_}">
+          Add
+        </button>
       </div>
-      <cr-toggle ?checked="${this.reopenMiniWindows_}"
-        @change="${this.onReopenMiniWindowsChange_}"></cr-toggle>
     </div>
+    ${this.routes_.map((route, index) => html`
+      <div class="item">
+        <div class="site">
+          <img class="sitefavicon" alt=""
+              src="${this.routeFavicon_(route)}">
+          <div class="rowtext">
+            <span class="cardtitle">${this.routeLabel_(route)}</span>
+            ${route.fromAi ? html`
+              <span class="cardhint">Assistant</span>
+            ` : nothing}
+          </div>
+        </div>
+        <div class="control">
+          <select data-index="${index}" aria-label="Space"
+              @change="${this.onRouteSpaceChange_}">
+            ${this.spaces_.map(space => html`
+              <option value="${space.id}"
+                ?selected="${space.id === route.spaceId}">${space.name}</option>
+            `)}
+          </select>
+          <cr-toggle data-index="${index}" ?checked="${route.enabled}"
+            aria-label="Route on" @change="${this.onRouteEnabledChange_}">
+          </cr-toggle>
+          <button class="sitebutton" data-index="${index}"
+              @click="${this.onRemoveRouteClick_}">Remove</button>
+        </div>
+      </div>
+    `)}
   </div>
 ` : nothing}
 ${this.section_ === 'profiles' && this.openRow_ ? html`
@@ -221,13 +303,37 @@ ${this.section_ === 'profiles' && !this.openRow_ ? html`
     `)}
   </div>
 ` : nothing}
-${this.section_ === 'organizer' ? html`
+${this.section_ === 'assistant' ? html`
   <p class="sectionhint">
-    Tidy sends the titles and hostnames of the open tabs in a Space to
-    OpenRouter and groups them from the reply. Nothing is sent until a key is
-    stored, and the key never leaves this device except as the request
-    authorization.
+    The Assistant sends data to OpenRouter only when you use it. Tidy sends the
+    titles and hostnames of the open tabs in a Space. Setting up Air Traffic
+    Control sends your Space names and the sites visited and open in each one.
+    Nothing is sent until a key is stored, and the key never leaves this device
+    except as the request authorization.
   </p>
+  <div class="group">
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Assistant</span>
+        <span class="cardhint">
+          Off turns off every Assistant feature and stops counting visits
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.assistantEnabled_}"
+        @change="${this.onAssistantEnabledChange_}"></cr-toggle>
+    </div>
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Tidy</span>
+        <span class="cardhint">
+          Groups the open tabs of a Space. Off hides the button
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.tidyEnabled_}"
+        ?disabled="${!this.assistantEnabled_}"
+        @change="${this.onTidyEnabledChange_}"></cr-toggle>
+    </div>
+  </div>
   <div class="group">
     <div class="item">
       <div class="rowtext">
@@ -235,7 +341,9 @@ ${this.section_ === 'organizer' ? html`
         ${this.hasKey_ ? html`
           <span class="cardhint keystored">Encrypted on this device</span>
         ` : html`
-          <span class="cardhint">Tidy stays off until a key is stored</span>
+          <span class="cardhint">
+            Tidy and route setup stay off until a key is stored
+          </span>
         `}
       </div>
       ${this.hasKey_ && !this.editingKey_ ? html`
