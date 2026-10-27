@@ -8,7 +8,16 @@ export const INCOGNITO = loadTimeData.isInitialized() &&
 
 export const MINI = new URLSearchParams(location.search).has('mini');
 
-export const WINDOW_ID = crypto.randomUUID();
+const RUN_ID = loadTimeData.isInitialized() &&
+        loadTimeData.valueExists('railRunId') ?
+    loadTimeData.getString('railRunId') :
+    '';
+
+export const WINDOW_ID = `${RUN_ID}.${crypto.randomUUID()}`;
+
+export function isEarlierRun(owner?: string): boolean {
+  return !!owner && !owner.startsWith(`${RUN_ID}.`);
+}
 
 const SAVE_DELAY_MS = 0;
 const HISTORY_LIMIT = 16;
@@ -159,6 +168,14 @@ function mergeList(
           others.get(id) ?? ours.get(id)));
 }
 
+const BINDING_KEYS = ['owner', 'tab'];
+
+function bindingOf(record: Record<string, unknown>): unknown[]|undefined {
+  return BINDING_KEYS.some(key => record[key] !== undefined) ?
+      BINDING_KEYS.map(key => record[key] ?? null) :
+      undefined;
+}
+
 export function mergeState(
     base: unknown, mine: unknown, theirs: unknown): unknown {
   if (Array.isArray(mine) && Array.isArray(theirs)) {
@@ -168,11 +185,22 @@ export function mergeState(
     const old = isRecord(base) ? base : {};
     const merged: Record<string, unknown> = {};
     for (const key of new Set([...Object.keys(theirs), ...Object.keys(mine)])) {
+      if (BINDING_KEYS.includes(key)) {
+        continue;
+      }
       const value = mergeState(old[key], mine[key], theirs[key]);
       if (value !== undefined) {
         merged[key] = value;
       }
     }
+    const binding =
+        pick(bindingOf(old), bindingOf(mine), bindingOf(theirs)) as
+        unknown[] | undefined;
+    BINDING_KEYS.forEach((key, index) => {
+      if (binding && binding[index] !== null) {
+        merged[key] = binding[index];
+      }
+    });
     return merged;
   }
   return pick(base, mine, theirs);

@@ -1,19 +1,26 @@
 import {test, expect} from 'bun:test';
 import {readFileSync} from 'node:fs';
 
-const load = (file: string, name: string, mini = false,
-    deps: Record<string, unknown> = {}) => {
+const compile = (file: string) => {
   const source = readFileSync(new URL(
       `../src/chrome/browser/resources/webui_browser/rail/${file}.ts`,
       import.meta.url), 'utf8').replace(/^import[\s\S]*?;\r?\n/gm, '')
       .replace(/^export /gm, '');
-  const compiled = new Bun.Transpiler({loader: 'ts'}).transformSync(source);
+  return new Bun.Transpiler({loader: 'ts'}).transformSync(source);
+};
+
+const load = (file: string, name: string, mini = false,
+    deps: Record<string, unknown> = {}) => {
+  const compiled = compile(file);
   return new Function('SystemBackdropMaterial', 'INCOGNITO', 'MINI',
       'WINDOW_ID', ...Object.keys(deps), `${compiled}\nreturn ${name};`)(
       {kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false, mini, 'test-window',
       ...Object.values(deps));
 };
 
+const mergeState = new Function('loadTimeData', 'location',
+    `${compile('sidebar_state')}\nreturn mergeState;`)(
+    {isInitialized: () => false}, {search: ''});
 const Spaces = load('spaces', 'Spaces');
 const PinnedTabs = load('pinned_tabs', 'PinnedTabs');
 const ReopenHistory = load('pinned_tabs', 'ReopenHistory');
@@ -232,6 +239,42 @@ test('sidebar refresh keeps an open tab in its own space', () => {
   expect(spaces.rowsIn('first')[0].tabId).toBe('');
 });
 
+test('a startup beside another window matches an earlier run by URL', () => {
+  const spaces = new Spaces(() => {});
+  const ids = ['a', 'b', 'c'];
+  const url = (id: string) => `https://${id}.test/`;
+  const saved = {activeSpace: 'a', spaces: ids.map(space => ({
+    ...state.spaces[0], id: space, name: space, activeUrl: '',
+    tabs: [0, 1].map(index => ({id: `${space}${index}`,
+      url: url(`${space}${index}`), title: '', favicon: '', owner: 'old.w',
+      tab: `old-${space}${index}`})),
+  }))};
+  saved.spaces[0]!.tabs[1]!.tab = 'b0';
+  const tabs = ids.flatMap(space => [0, 1].map(index =>
+      ({...tab(`${space}${index}`), url: url(`${space}${index}`)})));
+  spaces.restore(saved, tabs, new Set(),
+      (owner?: string) => !!owner && owner.startsWith('old.'));
+  for (const space of ids) {
+    expect(spaces.rowsIn(space).map((row: {tabId: string}) => row.tabId))
+        .toEqual([`${space}0`, `${space}1`]);
+  }
+  expect(spaces.remotes()).toEqual([]);
+});
+
+test('a window binding a row keeps its tab when the id repeats a run', () => {
+  const row = {id: 'r', url: 'https://example.test/'};
+  const base = {tabs: [{...row, owner: 'old.w', tab: '10:2'}]};
+  const mine = {tabs: [{...row, owner: 'new.a', tab: '10:2'}]};
+  const theirs = {tabs: [row]};
+  for (const merged of [mergeState(base, mine, theirs),
+           mergeState(base, theirs, mine)]) {
+    expect(merged.tabs[0]).toEqual({...row, owner: 'new.a', tab: '10:2'});
+  }
+  const moved = {tabs: [{...row, owner: 'old.w', tab: '11:2'}]};
+  expect(mergeState(base, moved, base).tabs[0].tab).toBe('11:2');
+  expect(mergeState(base, base, theirs).tabs[0]).toEqual(row);
+});
+
 test('a row already waking is not woken twice', () => {
   const spaces = new Spaces(() => {});
   const saved = {activeSpace: 's', spaces: [{...state.spaces[0],
@@ -336,6 +379,19 @@ test('the first restore reattaches pins to open tabs by URL', () => {
   pins.restore(saved, [tab('open')], new Set());
   expect(pins.entries[0].tabId).toBe('open');
   expect(pins.entries[0].key).toBe('pinned-a');
+});
+
+test('a pin from an earlier run never binds a tab by its old id', () => {
+  const pins = new PinnedTabs(() => {});
+  const pin = {id: 'pinned-a', home: 'https://example.test/',
+    url: 'https://example.test/', title: '', favicon: '', owner: 'old.w',
+    tab: 'other'};
+  const saved = {...state, spaces: [{...state.spaces[0], pinned: [pin]}]};
+  pins.restore(saved,
+      [{...tab('other'), url: 'https://other.test/'}, tab('open')], new Set(),
+      (owner?: string) => !!owner && owner.startsWith('old.'));
+  expect(pins.entries[0].tabId).toBe('open');
+  expect(pins.entries[0].remote).toBe('');
 });
 
 test('pin keys are unique and legacy duplicates get distinct keys', () => {

@@ -62,7 +62,7 @@ export class PinnedTabs {
 
   restore(
       state: SidebarState|null, tabs: Tab[], claimed: Set<string>,
-      byUrl: boolean) {
+      stale: (owner?: string) => boolean = () => false) {
     const previous = new Map(this.entries_.map(entry => [entry.key, entry]));
     this.entries_ = [];
     const groups: Array<[string, StoredPin[]]> =
@@ -83,7 +83,7 @@ export class PinnedTabs {
         if (existing) {
           previous.delete(existing.key);
         }
-        const remote = byUrl ? '' : pin.tab ?? '';
+        const remote = stale(pin.owner) ? '' : pin.tab ?? '';
         const unclaimed = tabs.filter(candidate => !claimed.has(candidate.id));
         const byUrlMatch = !existing && !this.restored_;
         const tab =

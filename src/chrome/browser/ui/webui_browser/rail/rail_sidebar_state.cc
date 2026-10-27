@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "base/no_destructor.h"
+#include "base/token.h"
 #include "base/values.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_import.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_mini_window_restore.h"
@@ -23,6 +25,12 @@ const char kTabArchiveHoursPref[] = "rail.tab_archive_hours";
 const char kProfileTabArchiveHoursPref[] = "rail.profile_tab_archive_hours";
 
 constexpr int kDefaultTabArchiveHours = 12;
+
+const std::string& BrowserRunId() {
+  static const base::NoDestructor<std::string> run_id(
+      base::Token::CreateRandom().ToString());
+  return *run_id;
+}
 
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {

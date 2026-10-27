@@ -6504,7 +6504,7 @@ index a15445b..3cd8ae6 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..7040a36 100644
+index b7a5099..1398d22 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6549,7 +6549,7 @@ index b7a5099..7040a36 100644
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow, TidySection} from '../rail/sections.js';
 +import {anchorDroppedGroups, reanchorEmptyGroups, splitSections} from '../rail/sections.js';
 +import type {SidebarState} from '../rail/sidebar_state.js';
-+import {INCOGNITO, MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
++import {INCOGNITO, isEarlierRun, MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
 +import type {BoardColumn} from '../rail/space_board.js';
 +import {spaceBoard} from '../rail/space_board.js';
@@ -6816,7 +6816,7 @@ index b7a5099..7040a36 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +343,102 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +343,103 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6853,17 +6853,18 @@ index b7a5099..7040a36 100644
 +    const primary = !MINI && !windows.length;
 +    this.store_.seed(state);
 +    this.spaces_.setProfiles(profiles);
-+    this.restoreSidebarState_(state, tabs, primary);
++    this.restoreSidebarState_(state, tabs, primary ? () => true : isEarlierRun);
 +    return primary;
 +  }
 +
 +  private restoreSidebarState_(
-+      state: SidebarState|null, tabs: Tab[], byUrl = false) {
++      state: SidebarState|null, tabs: Tab[],
++      stale: (owner?: string) => boolean = () => false) {
 +    const claimed = new Set<string>();
 +    this.folders_.clear();
 +    this.tidyGroups_.clear();
-+    this.pinnedTabs_.restore(state, tabs, claimed, byUrl);
-+    this.spaces_.restore(state, tabs, claimed, byUrl);
++    this.pinnedTabs_.restore(state, tabs, claimed, stale);
++    this.spaces_.restore(state, tabs, claimed, stale);
 +    this.folders_.restore(state);
 +    this.tidyGroups_.restore(state, space => space.tidyGroups);
 +    for (const entry of this.pinnedTabs_.entries) {
@@ -6919,7 +6920,7 @@ index b7a5099..7040a36 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -175,18 +460,8 @@ export class TabStripElement extends CrLitElement implements
+@@ -175,18 +461,8 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6940,7 +6941,7 @@ index b7a5099..7040a36 100644
    }
  
  
-@@ -194,14 +469,39 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +470,39 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -6981,7 +6982,7 @@ index b7a5099..7040a36 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -209,6 +509,12 @@ export class TabStripElement extends CrLitElement implements
+@@ -209,6 +510,12 @@ export class TabStripElement extends CrLitElement implements
      this.dragDelegate_.onUpdate();
    }
 
@@ -6994,7 +6995,7 @@ index b7a5099..7040a36 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
 
-@@ -217,48 +523,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +524,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7048,7 +7049,7 @@ index b7a5099..7040a36 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +578,2315 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +579,2315 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -12314,7 +12315,7 @@ index 2843563..ecf5cb3 100644
  content::WebContents* WebUIBrowserSidePanelUI::GetWebContentsForTest(
      SidePanelEntryId id) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_ui.cc b/chrome/browser/ui/webui_browser/webui_browser_ui.cc
-index 2dc243e..e6ba1fc 100644
+index 2dc243e..22907f3 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_ui.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_ui.cc
 @@ -10,6 +10,7 @@
@@ -12325,16 +12326,17 @@ index 2dc243e..e6ba1fc 100644
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/browser/ui/bookmarks/bookmark_bar_controller.h"
  #include "chrome/browser/ui/bookmarks/bookmarks_service_feature.h"
-@@ -27,6 +28,8 @@
+@@ -27,6 +28,9 @@
  #include "chrome/browser/ui/webui/searchbox/realbox_handler.h"
  #include "chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.h"
  #include "chrome/browser/ui/webui_browser/bookmark_bar_page_handler.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_side_panel.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
  #include "chrome/browser/ui/webui_browser/webui_browser.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_page_handler.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
-@@ -34,6 +37,7 @@
+@@ -34,6 +38,7 @@
  #include "chrome/common/webui_url_constants.h"
  #include "chrome/grit/branded_strings.h"
  #include "chrome/grit/generated_resources.h"
@@ -12342,7 +12344,7 @@ index 2dc243e..e6ba1fc 100644
  #include "chrome/grit/tab_strip_api_resources_map.h"
  #include "chrome/grit/webui_browser_resources.h"
  #include "chrome/grit/webui_browser_resources_map.h"
-@@ -42,6 +46,7 @@
+@@ -42,6 +47,7 @@
  #include "components/contextual_search/contextual_search_service.h"
  #include "components/contextual_search/contextual_search_session_handle.h"
  #include "components/favicon_base/favicon_url_parser.h"
@@ -12350,17 +12352,18 @@ index 2dc243e..e6ba1fc 100644
  #include "components/guest_contents/browser/guest_contents_host_impl.h"
  #include "components/surface_embed/common/features.h"
  #include "content/public/browser/browser_context.h"
-@@ -133,6 +138,9 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
+@@ -133,6 +139,10 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
    source->AddInteger("tabStripInset",
                       WebUIBrowserPageHandler::GetTabStripInsetWidth());
- 
+
 +  source->AddBoolean("incognito", profile->IsOffTheRecord());
++  source->AddString("railRunId", rail::BrowserRunId());
 +
 +
    source->AddBoolean(
        "enableSurfaceEmbed",
        base::FeatureList::IsEnabled(surface_embed::features::kSurfaceEmbed));
-@@ -151,9 +159,10 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
+@@ -151,9 +161,10 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
    //     "resultChangedToPaintMetricName",
    //     "Omnibox.Popup.WebUI.ResultChangedToRepaintLatency.ToPaint");
  
@@ -12374,7 +12377,7 @@ index 2dc243e..e6ba1fc 100644
  
    if (browser_) {
      // This use of unretained is safe because the
-@@ -170,7 +179,9 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
+@@ -170,7 +181,9 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
    }
  }
  
@@ -12385,7 +12388,7 @@ index 2dc243e..e6ba1fc 100644
  
  void WebUIBrowserUI::BindInterface(
      mojo::PendingReceiver<webui_browser::mojom::PageHandlerFactory> receiver) {
-@@ -205,11 +216,26 @@ void WebUIBrowserUI::CreatePageHandler(
+@@ -205,11 +218,26 @@ void WebUIBrowserUI::CreatePageHandler(
    // WebUIOmniboxHandler.
    realbox_handler_ = std::make_unique<RealboxHandler>(
        std::move(pending_page_handler), std::move(page),
@@ -12413,7 +12416,7 @@ index 2dc243e..e6ba1fc 100644
  void WebUIBrowserUI::BindInterface(
      mojo::PendingReceiver<bookmarks_api::mojom::BookmarksService> receiver) {
    WebUIBrowserWindow* window =
-@@ -322,18 +348,46 @@ void WebUIBrowserUI::ShowSidePanel(SidePanelEntryKey side_panel_entry_key) {
+@@ -322,18 +350,46 @@ void WebUIBrowserUI::ShowSidePanel(SidePanelEntryKey side_panel_entry_key) {
        side_panel_ui->GetWebContentsForId(side_panel_entry_key.id());
    web_contents->SetColorProviderSource(browser_window());
    CHECK(web_contents);

@@ -24,6 +24,8 @@ extern const char kTabSleepExceptionsPref[];
 extern const char kTabArchiveHoursPref[];
 extern const char kProfileTabArchiveHoursPref[];
 
+const std::string& BrowserRunId();
+
 void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry);
 

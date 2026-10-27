@@ -378,7 +378,7 @@ export class Spaces {
 
   restore(
       state: SidebarState|null, tabs: Tab[], claimed: Set<string>,
-      byUrl: boolean) {
+      stale: (owner?: string) => boolean = () => false) {
     const previous = this.rows_;
     const activeKeys =
         new Map(this.spaces_.map(space => [space.id, space.activeKey]));
@@ -417,6 +417,7 @@ export class Spaces {
       this.spaces_.push(space);
       for (const entry of stored.tabs ?? []) {
         const {id, url, title, favicon, group, ...origin} = storedTab(entry);
+        const byUrl = stale(origin.owner);
         const owner = byUrl ? '' : origin.owner ?? '';
         const remote = byUrl ? '' : origin.tab ?? '';
         const tab = MINI ? undefined : tabs.find(
