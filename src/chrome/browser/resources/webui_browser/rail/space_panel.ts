@@ -108,6 +108,7 @@ export class RailSpacePanelElement extends CrLitElement {
       grain_: {type: Number, state: true},
       material_: {type: Number, state: true},
       iconQuery_: {type: String, state: true},
+      profileName_: {type: String, state: true},
     };
   }
 
@@ -121,6 +122,7 @@ export class RailSpacePanelElement extends CrLitElement {
   protected accessor material_: SystemBackdropMaterial =
       SystemBackdropMaterial.kAcrylic;
   protected accessor iconQuery_ = '';
+  protected accessor profileName_ = '';
   private backdropFrame_ = 0;
   private spread_: Array<readonly[number, number]> = [];
 
@@ -146,11 +148,13 @@ export class RailSpacePanelElement extends CrLitElement {
     this.material_ = style.material;
     this.icon_ = style.icon;
     this.iconQuery_ = '';
+    this.profileName_ = '';
     this.kind_ = request.kind;
     document.documentElement.style.setProperty(
         '--rail-space-color', this.colors_[0]!);
     await this.updateComplete;
-    this.shadowRoot.querySelector<HTMLInputElement>('#iconSearch')?.focus();
+    this.shadowRoot.querySelector<HTMLInputElement>('#iconSearch, #profileName')
+        ?.focus();
     browserProxyFactory.getInstance().handler.ready(
         Math.ceil(document.body.getBoundingClientRect().height));
   }
@@ -164,6 +168,10 @@ export class RailSpacePanelElement extends CrLitElement {
 
   protected isColor_(): boolean {
     return this.kind_ === 'color';
+  }
+
+  protected isProfile_(): boolean {
+    return this.kind_ === 'profile';
   }
 
   protected swatches_(): readonly string[] {
@@ -447,6 +455,30 @@ export class RailSpacePanelElement extends CrLitElement {
 
   protected onCloseClick_() {
     browserProxyFactory.getInstance().handler.close();
+  }
+
+  protected canCreateProfile_(): boolean {
+    return this.profileName_.trim() !== '';
+  }
+
+  protected onProfileNameInput_(e: Event) {
+    this.profileName_ = (e.target as HTMLInputElement).value;
+  }
+
+  protected onProfileNameKeydown_(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      this.onCreateProfileClick_();
+    }
+  }
+
+  protected onCreateProfileClick_() {
+    if (!this.canCreateProfile_()) {
+      return;
+    }
+    const {handler} = browserProxyFactory.getInstance();
+    handler.createProfile(this.profileName_.trim());
+    handler.close();
   }
 }
 

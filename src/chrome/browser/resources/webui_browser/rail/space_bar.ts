@@ -1,10 +1,7 @@
-import '//resources/cr_elements/cr_button/cr_button.js';
-import '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import '//resources/cr_elements/cr_icon/cr_icon.js';
 import '//resources/cr_elements/icons.html.js';
 import './update_badge.js';
 
-import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
 
@@ -24,8 +21,7 @@ import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_MATERIAL, spaceHex} from './spaces.js';
 
 export type SpaceCommand = 'create'|'export'|'library'|'move'|'newfolder'|
-    'newgroup'|'newprofile'|'newtab'|'remove'|'rename'|'select'|
-    'setprofile';
+    'newgroup'|'newtab'|'remove'|'rename'|'select'|'setprofile';
 
 export interface SpaceCommandDetail {
   command: SpaceCommand;
@@ -36,12 +32,6 @@ export interface SpaceCommandDetail {
   delta: number;
   destination: string;
   profile: string;
-}
-
-export interface SpaceBarElement {
-  $: {
-    profileDialog: CrDialogElement,
-  };
 }
 
 interface DotDrag {
@@ -96,7 +86,6 @@ export class SpaceBarElement extends CrLitElement {
       compact_: {type: Boolean, state: true},
       visibleCount_: {type: Number, state: true},
       editing_: {type: Boolean, state: true},
-      profileName_: {type: String, state: true},
       menuTarget_: {type: String, state: true},
       recent_: {type: Array, state: true},
       progress_: {type: Number, state: true},
@@ -116,7 +105,6 @@ export class SpaceBarElement extends CrLitElement {
   protected accessor editing_ = false;
   private readonly resizeObserver_ = new ResizeObserver(() =>
     this.updateSpaceLayout_());
-  protected accessor profileName_ = '';
   protected accessor menuTarget_ = '';
   private menuX_ = 0;
   private menuY_ = 0;
@@ -496,7 +484,7 @@ export class SpaceBarElement extends CrLitElement {
         this.fire_('setprofile', this.menuTarget_, {profile: detail.profile});
         return;
       case 'new-profile':
-        void this.openProfileDialog_();
+        this.openPicker_('profile');
         return;
       case 'move':
         this.fire_('move', this.menuTarget_, {delta: detail.delta});
@@ -511,7 +499,7 @@ export class SpaceBarElement extends CrLitElement {
     }
   }
 
-  private openPicker_(kind: 'color'|'icon') {
+  private openPicker_(kind: 'color'|'icon'|'profile') {
     const space = this.targetSpace_();
     if (!space) {
       return;
@@ -548,38 +536,6 @@ export class SpaceBarElement extends CrLitElement {
             this.fire_('remove', this.menuTarget_);
           }
         });
-  }
-
-  private async openProfileDialog_() {
-    this.profileName_ = '';
-    this.$.profileDialog.showModal();
-    await this.updateComplete;
-    this.shadowRoot.querySelector<HTMLInputElement>('#profileNameInput')
-        ?.focus();
-  }
-
-  protected onProfileNameInput_(e: Event) {
-    this.profileName_ = (e.target as HTMLInputElement).value;
-  }
-
-  protected onProfileNameKeydown_(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      this.onCreateProfileClick_();
-    }
-    e.stopPropagation();
-  }
-
-  protected onCreateProfileClick_() {
-    const name = this.profileName_.trim();
-    if (!name) {
-      return;
-    }
-    this.$.profileDialog.close();
-    this.fire_('newprofile', this.menuTarget_, {name});
-  }
-
-  protected onCancelProfileClick_() {
-    this.$.profileDialog.close();
   }
 
   protected canMove_(delta: number): boolean {

@@ -33,6 +33,7 @@ namespace rail {
 namespace {
 
 constexpr int kPanelWidth = 252;
+constexpr int kProfilePanelWidth = 480;
 constexpr int kPanelMinHeight = 48;
 constexpr int kPanelMargin = 8;
 constexpr int kPanelSlideDistance = 12;
@@ -126,6 +127,8 @@ RailSpacePanelUI* RailSpacePanel::controller() {
 void RailSpacePanel::Show(webui_browser::mojom::SpacePanelRequestPtr request,
                           const gfx::Point& anchor) {
   anchor_ = anchor;
+  centered_ = request->kind == "profile";
+  width_ = centered_ ? kProfilePanelWidth : kPanelWidth;
   EnsureContents();
   CreateWidget();
   if (!widget_) {
@@ -197,7 +200,7 @@ void RailSpacePanel::CreateWidget() {
   params.shadow_type = views::Widget::InitParams::ShadowType::kNone;
   params.activatable = views::Widget::InitParams::Activatable::kYes;
   params.parent = parent->GetNativeView();
-  params.bounds = gfx::Rect(gfx::Size(kPanelWidth, kPanelMinHeight));
+  params.bounds = gfx::Rect(gfx::Size(width_, kPanelMinHeight));
 
   widget_ = std::make_unique<views::Widget>();
   widget_->Init(std::move(params));
@@ -225,11 +228,14 @@ void RailSpacePanel::PositionWidget(const gfx::Size& contents_size) {
   const gfx::Rect area = window_->widget()->GetClientAreaBoundsInScreen();
   const int height = contents_size.height() > 0 ? contents_size.height()
                                                 : kPanelMinHeight;
-  gfx::Rect bounds(area.x() + anchor_.x(), area.y() + anchor_.y(),
-                   kPanelWidth, height);
+  const gfx::Point origin =
+      centered_ ? gfx::Point(area.CenterPoint().x() - width_ / 2,
+                             area.CenterPoint().y() - height / 2)
+                : gfx::Point(area.x() + anchor_.x(), area.y() + anchor_.y());
+  gfx::Rect bounds(origin, gfx::Size(width_, height));
   bounds.set_x(std::clamp(bounds.x(), area.x() + kPanelMargin,
                           std::max(area.x() + kPanelMargin,
-                                   area.right() - kPanelWidth - kPanelMargin)));
+                                   area.right() - width_ - kPanelMargin)));
   bounds.set_y(std::clamp(bounds.y(), area.y() + kPanelMargin,
                           std::max(area.y() + kPanelMargin,
                                    area.bottom() - height - kPanelMargin)));

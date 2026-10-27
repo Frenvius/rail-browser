@@ -24,6 +24,11 @@ WebUIBrowserWindow* WindowFor(content::WebUI* web_ui) {
   return browser ? WebUIBrowserWindow::FromBrowser(browser) : nullptr;
 }
 
+webui_browser::mojom::Page* ShellPageFor(content::WebUI* web_ui) {
+  WebUIBrowserWindow* window = WindowFor(web_ui);
+  return window ? window->GetWebUIBrowserUI()->page() : nullptr;
+}
+
 }
 
 RailSpacePanelUIConfig::RailSpacePanelUIConfig()
@@ -82,12 +87,14 @@ void RailSpacePanelUI::Ready(int32_t height) {
 }
 
 void RailSpacePanelUI::Restyle(webui_browser::mojom::SpaceStylePtr style) {
-  WebUIBrowserWindow* window = WindowFor(web_ui());
-  if (!window) {
-    return;
-  }
-  if (webui_browser::mojom::Page* page = window->GetWebUIBrowserUI()->page()) {
+  if (webui_browser::mojom::Page* page = ShellPageFor(web_ui())) {
     page->OnRailSpaceRestyle(space_id_, std::move(style));
+  }
+}
+
+void RailSpacePanelUI::CreateProfile(const std::string& name) {
+  if (webui_browser::mojom::Page* page = ShellPageFor(web_ui())) {
+    page->OnRailSpaceCreateProfile(space_id_, name);
   }
 }
 

@@ -120,34 +120,6 @@ ${this.variant === 'title' ? html`
     `}
   </div>
 `}
-<cr-dialog id="profileDialog">
-  <div slot="title">
-    <div id="profileMark">
-      <cr-icon icon="cr:person"></cr-icon>
-    </div>
-    Create a new Profile
-  </div>
-  <div slot="body">
-    <p id="profileBlurb">
-      A profile keeps a space's browsing to itself: its own cookies, logins and
-      site data, so the same site can stay signed in as two different accounts.
-    </p>
-    <label id="profileLabel" for="profileNameInput">
-      What do you want to call this Profile?
-    </label>
-    <input id="profileNameInput" placeholder="Profile name" spellcheck="false"
-      .value="${this.profileName_}" @input="${this.onProfileNameInput_}"
-      @keydown="${this.onProfileNameKeydown_}">
-  </div>
-  <div slot="button-container">
-    <cr-button @click="${this.onCancelProfileClick_}">Cancel</cr-button>
-    <cr-button class="action-button"
-      ?disabled="${!this.profileName_.trim()}"
-      @click="${this.onCreateProfileClick_}">
-      Create
-    </cr-button>
-  </div>
-</cr-dialog>
 <!--_html_template_end_-->`;
   // clang-format on
 }

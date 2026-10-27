@@ -72,6 +72,8 @@ class RailSpacePanel : public WebUIContentsWrapper::Host,
   std::unique_ptr<views::Widget> shadow_;
   raw_ptr<views::WebView> web_view_ = nullptr;
   gfx::Point anchor_;
+  int width_ = 0;
+  bool centered_ = false;
   bool showing_ = false;
   bool waiting_ready_ = false;
   bool waiting_first_frame_ = false;

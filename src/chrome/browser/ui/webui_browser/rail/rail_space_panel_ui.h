@@ -64,6 +64,7 @@ class RailSpacePanelUI : public TopChromeWebUIController,
   void Restyle(webui_browser::mojom::SpaceStylePtr style) override;
   void SetSystemBackdrop(
       webui_browser::mojom::SystemBackdropSettingsPtr settings) override;
+  void CreateProfile(const std::string& name) override;
   void Close() override;
 
   std::string space_id_;

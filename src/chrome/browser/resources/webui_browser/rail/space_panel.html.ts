@@ -4,7 +4,34 @@ import type {RailSpacePanelElement} from './space_panel.js';
 
 export function getHtml(this: RailSpacePanelElement) {
   return html`<!--_html_template_start_-->
-${this.isColor_() ? html`
+${this.isProfile_() ? html`
+  <div id="profile" role="dialog" aria-labelledby="profileTitle">
+    <div id="profileBody">
+      <div id="profileAvatar">
+        <cr-icon icon="cr:person"></cr-icon>
+        <span id="profileBadge"><cr-icon icon="cr:add"></cr-icon></span>
+      </div>
+      <h1 id="profileTitle">Create a new Profile</h1>
+      <p id="profileBlurb">
+        A profile keeps a space's browsing to itself: its own cookies, logins,
+        history and site data, so the same site can stay signed in as two
+        different accounts.
+      </p>
+      <label id="profileLabel" for="profileName">
+        What do you want to call this Profile?
+      </label>
+      <input id="profileName" placeholder="Profile name" spellcheck="false"
+        .value="${this.profileName_}" @input="${this.onProfileNameInput_}"
+        @keydown="${this.onProfileNameKeydown_}">
+      <p id="profileNote">Profiles are not synced between computers.</p>
+    </div>
+    <div id="profileActions">
+      <button class="action" primary ?disabled="${!this.canCreateProfile_()}"
+        @click="${this.onCreateProfileClick_}">Create</button>
+      <button class="action" @click="${this.onCloseClick_}">Cancel</button>
+    </div>
+  </div>
+` : this.isColor_() ? html`
   <div id="colorpicker">
     <div id="field" ?dragging="${this.dragging_ >= 0}"
       @pointerdown="${this.onFieldPointerdown_}"

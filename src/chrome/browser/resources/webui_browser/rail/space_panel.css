@@ -429,6 +429,149 @@
   width: 100%;
 }
 
+#profile,
+#profile * {
+  box-sizing: border-box;
+}
+
+#profile {
+  width: 478px;
+}
+
+#profileBody {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 24px 20px;
+}
+
+#profileAvatar {
+  align-items: center;
+  background: color-mix(in srgb, var(--rail-accent) 30%, transparent);
+  border: 2px solid color-mix(in srgb, var(--rail-accent) 70%, #fff);
+  border-radius: 50%;
+  color: var(--rail-text);
+  display: flex;
+  height: 64px;
+  justify-content: center;
+  margin-bottom: 18px;
+  position: relative;
+  width: 64px;
+  --iron-icon-width: 36px;
+  --iron-icon-height: 36px;
+  --iron-icon-fill-color: currentcolor;
+}
+
+#profileBadge {
+  align-items: center;
+  background: #2ea043;
+  border: 2px solid #1f1f1f;
+  border-radius: 50%;
+  bottom: -4px;
+  color: #fff;
+  display: flex;
+  height: 22px;
+  justify-content: center;
+  position: absolute;
+  right: -4px;
+  width: 22px;
+  --iron-icon-width: 16px;
+  --iron-icon-height: 16px;
+}
+
+#profileTitle {
+  color: var(--rail-text);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+#profileBlurb {
+  color: var(--rail-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 22px;
+}
+
+#profileLabel {
+  color: var(--rail-text);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+#profileName {
+  background: var(--rail-elevated, #282840);
+  border: 1px solid var(--rail-border);
+  border-radius: 6px;
+  color: var(--rail-text, #f0f0ff);
+  font: inherit;
+  font-size: 14px;
+  height: 36px;
+  outline: none;
+  padding: 0 12px;
+  width: 100%;
+}
+
+#profileName:focus {
+  border-color: var(--rail-accent, #7c5cfc);
+}
+
+#profileName::placeholder {
+  color: var(--rail-placeholder);
+}
+
+#profileNote {
+  color: var(--rail-text-label);
+  font-size: 11px;
+  margin: 10px 0 0;
+}
+
+#profileActions {
+  background: rgb(0 0 0 / 22%);
+  border-top: 1px solid var(--rail-border);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  padding: 20px 24px;
+}
+
+.action {
+  background: var(--rail-elevated);
+  border: 1px solid var(--rail-border);
+  border-radius: 6px;
+  color: var(--rail-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  height: 32px;
+  padding: 0 12px;
+}
+
+.action:hover:not(:disabled) {
+  background: var(--rail-hover);
+  color: var(--rail-text);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--rail-accent);
+  outline-offset: 1px;
+}
+
+.action[primary] {
+  background: var(--rail-accent);
+  border-color: var(--rail-accent);
+  color: var(--rail-text);
+}
+
+.action[primary]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--rail-accent) 85%, #fff);
+}
+
+.action:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 .glyph[selected] {
   background: var(--rail-hover-strong, #3d3d5c);
   color: var(--rail-text, #f0f0ff);

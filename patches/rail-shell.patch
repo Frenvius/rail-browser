@@ -5126,7 +5126,7 @@ index 5e48dff..1d88d6a 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..9f2b423 100644
+index 922ef29..41ffb71 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -5472,7 +5472,7 @@ index 922ef29..9f2b423 100644
        this.forwardButtonDisabled_ = !canGoForward;
      } else {
        this.backButtonDisabled_ = true;
-@@ -327,32 +455,100 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -327,32 +455,104 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -5502,6 +5502,10 @@ index 922ef29..9f2b423 100644
 +        .callbackRouter.onRailSpaceRestyle.addListener(
 +            (id: string, style: SpaceStyle) =>
 +                this.$.tabstrip.restyleSpace(id, style));
++    browserProxyFactory.getInstance()
++        .callbackRouter.onRailSpaceCreateProfile.addListener(
++            (id: string, name: string) =>
++                void this.$.tabstrip.createSpaceProfile(id, name));
 +    browserProxyFactory.getInstance().callbackRouter.onRailAdoptTab.addListener(
 +        (id: string, spaceId: string) =>
 +            this.$.tabstrip.adoptTab(id, spaceId));
@@ -5591,7 +5595,7 @@ index 922ef29..9f2b423 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -371,6 +567,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -371,6 +571,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5608,7 +5612,7 @@ index 922ef29..9f2b423 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -400,9 +606,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -400,9 +610,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -6504,7 +6508,7 @@ index a15445b..3cd8ae6 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..1398d22 100644
+index b7a5099..752dc5f 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -7049,7 +7053,7 @@ index b7a5099..1398d22 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +579,2315 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +579,2312 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8358,9 +8362,6 @@ index b7a5099..1398d22 100644
 +        this.spaces_.move(id, delta);
 +        this.refreshSections_();
 +        break;
-+      case 'newprofile':
-+        this.createProfile_(id, name);
-+        break;
 +      case 'setprofile':
 +        this.applyProfile_(id, profile);
 +        break;
@@ -8370,7 +8371,7 @@ index b7a5099..1398d22 100644
 +    }
 +  }
 +
-+  private async createProfile_(spaceId: string, name: string) {
++  async createSpaceProfile(spaceId: string, name: string) {
 +    const {profile} =
 +        await browserProxyFactory.getInstance().handler.createProfile(name);
 +    if (!profile) {
@@ -10996,7 +10997,7 @@ index ffbd17c..4097a2d 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..0b35656 100644
+index 7e0800a..2ae8aff 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,12 @@
@@ -11082,7 +11083,7 @@ index 7e0800a..0b35656 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +98,54 @@ interface Page {
+@@ -44,6 +98,56 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -11103,6 +11104,8 @@ index 7e0800a..0b35656 100644
 +  OnRailMenuClosed();
 +
 +  OnRailSpaceRestyle(string space_id, SpaceStyle style);
++
++  OnRailSpaceCreateProfile(string space_id, string name);
 +
 +  OnRailAdoptTab(tabs_api.mojom.NodeId id, string space_id);
 +
@@ -11137,7 +11140,7 @@ index 7e0800a..0b35656 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -58,7 +160,7 @@ interface PageHandler {
+@@ -58,7 +162,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -11146,7 +11149,7 @@ index 7e0800a..0b35656 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +195,109 @@ interface PageHandler {
+@@ -93,6 +197,109 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
