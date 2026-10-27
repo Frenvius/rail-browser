@@ -98,6 +98,9 @@ class RailSettingsUI : public TopChromeWebUIController,
                     AddSiteRouteCallback callback) override;
   void SetSiteRoutes(
       std::vector<rail_settings::mojom::SiteRoutePtr> routes) override;
+  void EditSiteRoute(uint32_t index,
+                     const std::string& site,
+                     EditSiteRouteCallback callback) override;
   void GetSpaceVisits(GetSpaceVisitsCallback callback) override;
   void GetSiteFavicon(const std::string& site,
                       const std::string& profile_id,

@@ -89,7 +89,7 @@ std::vector<rail_settings::mojom::SiteRoutePtr> SiteRoutesFor(
   std::vector<rail_settings::mojom::SiteRoutePtr> routes;
   for (const SiteRoute& route : GetSiteRoutes(prefs)) {
     routes.push_back(rail_settings::mojom::SiteRoute::New(
-        route.domain, route.path, route.space_id, route.enabled,
+        route.domain, route.path, route.query, route.space_id, route.enabled,
         route.from_ai));
   }
   return routes;
@@ -423,10 +423,22 @@ void RailSettingsUI::SetSiteRoutes(
   std::vector<SiteRoute> stored;
   stored.reserve(routes.size());
   for (const rail_settings::mojom::SiteRoutePtr& route : routes) {
-    stored.push_back(SiteRoute{route->domain, route->path, route->space_id,
-                               route->enabled, route->from_ai});
+    stored.push_back(SiteRoute{route->domain, route->path, route->query,
+                               route->space_id, route->enabled,
+                               route->from_ai});
   }
   rail::SetSiteRoutes(PrefsFor(web_ui()), stored);
+}
+
+void RailSettingsUI::EditSiteRoute(uint32_t index,
+                                   const std::string& site,
+                                   EditSiteRouteCallback callback) {
+  PrefService* prefs = PrefsFor(web_ui());
+  if (!rail::EditSiteRoute(prefs, index, site)) {
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+  std::move(callback).Run(SiteRoutesFor(prefs));
 }
 
 void RailSettingsUI::GetSpaceVisits(GetSpaceVisitsCallback callback) {

@@ -18,6 +18,7 @@ struct SearchEngine {
 struct SiteRoute {
   string domain;
   string path;
+  string query;
   string space_id;
   bool enabled;
   bool from_ai;
@@ -109,6 +110,8 @@ interface PageHandler {
   AddSiteRoute(string site, string space_id) => (array<SiteRoute>? routes);
 
   SetSiteRoutes(array<SiteRoute> routes);
+
+  EditSiteRoute(uint32 index, string site) => (array<SiteRoute>? routes);
 
   GetSpaceVisits() => (map<string, map<string, int32>> visits);
 

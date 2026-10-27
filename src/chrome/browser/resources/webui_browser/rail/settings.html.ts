@@ -140,8 +140,10 @@ ${this.section_ === 'tabs' ? html`
   <p class="sectionhint">
     A link opened from another app goes to the Space its route names, already
     signed in with that Space's Profile. A route covers its site and
-    subdomains, and a path narrows it to one part of the site. Links no route
-    covers open in a mini window. Running the Assistant again rewrites only the
+    subdomains, and a path narrows it to one part of the site. Query
+    parameters narrow it further: a link must carry every one the route names,
+    and a parameter without a value matches any value. Links no route covers
+    open in a mini window. Running the Assistant again rewrites only the
     routes it set up; a route you add or change stays yours.
   </p>
   <div class="group">
@@ -165,7 +167,7 @@ ${this.section_ === 'tabs' ? html`
         <span class="cardtitle">Add a route</span>
         <span class="cardhint">
           ${this.routeInvalid_ ? 'Enter a site, like github.com' :
-                                 'A site, or a site and a path'}
+                                 'A site, plus a path or query if needed'}
         </span>
       </div>
       <div class="control">
@@ -187,13 +189,28 @@ ${this.section_ === 'tabs' ? html`
           <img class="sitefavicon" alt=""
               src="${this.routeFavicon_(route)}">
           <div class="rowtext">
-            <span class="cardtitle">${this.routeLabel_(route)}</span>
-            ${route.fromAi ? html`
+            <span class="routetitle">
+              <span class="cardtitle"
+                  ?data-editing="${this.editingRoute_ === index}">
+                ${this.routeLabel_(route)}
+              </span>
+              ${this.editingRoute_ === index ? html`
+                <input id="routeedit" aria-label="Route"
+                    .value="${this.routeLabel_(route)}"
+                    @keydown="${this.onRouteEditKeydown_}"
+                    @blur="${this.onRouteEditBlur_}">
+              ` : nothing}
+            </span>
+            ${this.editingRoute_ === index && this.routeEditInvalid_ ? html`
+              <span class="cardhint">Enter a site, like github.com</span>
+            ` : route.fromAi ? html`
               <span class="cardhint">Assistant</span>
             ` : nothing}
           </div>
         </div>
         <div class="control">
+          <button class="sitebutton" data-index="${index}"
+              @click="${this.onEditRouteClick_}">Edit</button>
           <select data-index="${index}" aria-label="Space"
               @change="${this.onRouteSpaceChange_}">
             ${this.spaces_.map(space => html`

@@ -10,7 +10,7 @@ import {browserProxyFactory, UpdateStatus} from '../rail_settings.mojom-webui.js
 
 import {pageFavicon} from './format_url.js';
 import type {PlanSpace} from './route_plan.js';
-import {buildRoutePrompt, parseRoutePlan} from './route_plan.js';
+import {buildRoutePrompt, parseRoutePlan, routeSite} from './route_plan.js';
 import {getCss} from './settings.css.js';
 import {getHtml} from './settings.html.js';
 import {DEFAULT_PROFILE_NAME} from './spaces.js';
@@ -101,6 +101,8 @@ export class RailSettingsElement extends CrLitElement {
       routes_: {type: Array, state: true},
       favicons_: {type: Object, state: true},
       routeInvalid_: {type: Boolean, state: true},
+      editingRoute_: {type: Number, state: true},
+      routeEditInvalid_: {type: Boolean, state: true},
       planning_: {type: Boolean, state: true},
       planNote_: {type: String, state: true},
       section_: {type: String, state: true},
@@ -145,6 +147,8 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor favicons_: {[key: string]: string} = {};
   private requestedFavicons_ = new Set<string>();
   protected accessor routeInvalid_ = false;
+  protected accessor editingRoute_ = -1;
+  protected accessor routeEditInvalid_ = false;
   protected accessor planning_ = false;
   protected accessor planNote_ = '';
   protected accessor customModel_ = false;
@@ -460,7 +464,58 @@ export class RailSettingsElement extends CrLitElement {
   }
 
   protected routeLabel_(route: SiteRoute): string {
-    return route.domain + route.path;
+    return routeSite(route);
+  }
+
+  protected onEditRouteClick_(e: Event) {
+    this.editingRoute_ = this.routeIndex_(e.currentTarget as HTMLElement);
+    this.routeEditInvalid_ = false;
+    this.updateComplete.then(() => {
+      this.shadowRoot.querySelector<HTMLInputElement>('#routeedit')?.select();
+    });
+  }
+
+  protected onRouteEditKeydown_(e: KeyboardEvent) {
+    this.routeEditInvalid_ = false;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      this.editingRoute_ = -1;
+      return;
+    }
+    if (e.key === 'Enter') {
+      this.commitRouteEdit_(e.target as HTMLInputElement);
+    }
+  }
+
+  protected onRouteEditBlur_(e: Event) {
+    if (this.routeEditInvalid_) {
+      this.editingRoute_ = -1;
+      this.routeEditInvalid_ = false;
+      return;
+    }
+    this.commitRouteEdit_(e.target as HTMLInputElement);
+  }
+
+  private async commitRouteEdit_(input: HTMLInputElement) {
+    const index = this.editingRoute_;
+    const route = this.routes_[index];
+    if (!route || this.routeEditInvalid_) {
+      return;
+    }
+    const site = input.value.trim();
+    if (!site || site === routeSite(route)) {
+      this.editingRoute_ = -1;
+      return;
+    }
+    const {routes} =
+        await browserProxyFactory.getInstance().handler.editSiteRoute(
+            index, site);
+    if (!routes) {
+      this.routeEditInvalid_ = true;
+      return;
+    }
+    this.routes_ = routes;
+    this.editingRoute_ = -1;
   }
 
   protected routeFavicon_(route: SiteRoute): string {

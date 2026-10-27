@@ -1,6 +1,7 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SITE_ROUTES_H_
 #define CHROME_BROWSER_UI_WEBUI_BROWSER_RAIL_RAIL_SITE_ROUTES_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -20,6 +21,7 @@ extern const char kSpaceVisitsPref[];
 struct SiteRoute {
   std::string domain;
   std::string path;
+  std::string query;
   std::string space_id;
   bool enabled = true;
   bool from_ai = false;
@@ -40,6 +42,8 @@ bool AddSiteRoute(PrefService* prefs, const SiteRoute& route);
 std::string AddSiteRouteForSite(PrefService* prefs,
                                 const std::string& url,
                                 const std::string& space_id);
+
+bool EditSiteRoute(PrefService* prefs, size_t index, const std::string& site);
 
 bool ApplyPlannedRoutes(PrefService* prefs,
                         const std::vector<SiteRoute>& planned);

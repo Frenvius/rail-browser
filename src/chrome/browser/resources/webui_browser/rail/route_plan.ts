@@ -27,6 +27,10 @@ function openSites(urls: string[]): string {
       .join(', ');
 }
 
+export function routeSite(route: SiteRoute): string {
+  return route.domain + route.path + (route.query ? `?${route.query}` : '');
+}
+
 export function buildRoutePrompt(
     spaces: PlanSpace[], kept: SiteRoute[]): string {
   const lines = [
@@ -43,7 +47,7 @@ export function buildRoutePrompt(
   if (kept.length) {
     lines.push('', 'The user already routed these sites. Never route them:');
     for (const route of kept) {
-      lines.push(route.domain + route.path);
+      lines.push(routeSite(route));
     }
   }
   lines.push('', 'Spaces:');

@@ -2,10 +2,13 @@
 
 #include <algorithm>
 #include <string_view>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 #include "base/containers/flat_set.h"
 #include "base/json/json_reader.h"
+#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
@@ -26,6 +29,7 @@ namespace {
 
 constexpr char kDomainKey[] = "domain";
 constexpr char kPathKey[] = "path";
+constexpr char kQueryKey[] = "query";
 constexpr char kSpaceKey[] = "space";
 constexpr char kEnabledKey[] = "enabled";
 constexpr char kFromAiKey[] = "ai";
@@ -50,20 +54,52 @@ std::optional<base::flat_set<std::string>> SpaceIds(PrefService* prefs) {
   return ids;
 }
 
-bool Covers(const SiteRoute& route,
-            std::string_view host,
-            std::string_view path) {
+std::vector<std::string_view> QueryParams(std::string_view query) {
+  return base::SplitStringPiece(query, "&", base::TRIM_WHITESPACE,
+                                base::SPLIT_WANT_NONEMPTY);
+}
+
+std::string CanonicalQuery(std::string_view query) {
+  std::vector<std::string_view> params = QueryParams(query);
+  std::ranges::sort(params);
+  const auto [first, last] = std::ranges::unique(params);
+  params.erase(first, last);
+  return base::JoinString(params, "&");
+}
+
+bool HasParam(const std::vector<std::string_view>& params,
+              std::string_view wanted) {
+  return std::ranges::any_of(params, [&](std::string_view param) {
+    return param == wanted ||
+           (wanted.find('=') == std::string_view::npos &&
+            param.starts_with(wanted) && param.size() > wanted.size() &&
+            param[wanted.size()] == '=');
+  });
+}
+
+bool Covers(const SiteRoute& route, const GURL& url) {
+  const std::string_view host = url.host();
   if (!route.enabled ||
       (host != route.domain && !base::EndsWith(host, "." + route.domain))) {
     return false;
   }
-  return route.path.empty() || path == route.path ||
-         base::StartsWith(path, route.path + "/");
+  const std::string_view path = url.path();
+  if (!route.path.empty() && path != route.path &&
+      !base::StartsWith(path, route.path + "/")) {
+    return false;
+  }
+  const std::vector<std::string_view> params = QueryParams(url.query());
+  return std::ranges::all_of(QueryParams(route.query),
+                             [&](std::string_view wanted) {
+                               return HasParam(params, wanted);
+                             });
 }
 
 bool MoreSpecific(const SiteRoute& route, const SiteRoute& than) {
-  return std::pair(route.domain.size(), route.path.size()) >
-         std::pair(than.domain.size(), than.path.size());
+  return std::tuple(route.domain.size(), route.path.size(),
+                    QueryParams(route.query).size()) >
+         std::tuple(than.domain.size(), than.path.size(),
+                    QueryParams(than.query).size());
 }
 
 bool IsHostName(std::string_view host) {
@@ -74,7 +110,7 @@ bool IsHostName(std::string_view host) {
 }
 
 bool SameSite(const SiteRoute& a, const SiteRoute& b) {
-  return a.domain == b.domain && a.path == b.path;
+  return a.domain == b.domain && a.path == b.path && a.query == b.query;
 }
 
 std::string SiteHost(const GURL& url) {
@@ -116,7 +152,8 @@ std::optional<SiteRoute> ParseSiteRoute(const std::string& site,
   while (!path.empty() && path.back() == '/') {
     path.pop_back();
   }
-  return SiteRoute{SiteHost(url), std::move(path), space_id};
+  return SiteRoute{SiteHost(url), std::move(path), CanonicalQuery(url.query()),
+                   space_id};
 }
 
 std::vector<SiteRoute> GetSiteRoutes(PrefService* prefs) {
@@ -132,7 +169,9 @@ std::vector<SiteRoute> GetSiteRoutes(PrefService* prefs) {
       continue;
     }
     const std::string* path = dict->FindString(kPathKey);
-    routes.push_back(SiteRoute{*domain, path ? *path : std::string(), *space,
+    const std::string* query = dict->FindString(kQueryKey);
+    routes.push_back(SiteRoute{*domain, path ? *path : std::string(),
+                               query ? *query : std::string(), *space,
                                dict->FindBool(kEnabledKey).value_or(true),
                                dict->FindBool(kFromAiKey).value_or(false)});
   }
@@ -151,6 +190,7 @@ void SetSiteRoutes(PrefService* prefs, const std::vector<SiteRoute>& routes) {
     list.Append(base::DictValue()
                     .Set(kDomainKey, route.domain)
                     .Set(kPathKey, route.path)
+                    .Set(kQueryKey, route.query)
                     .Set(kSpaceKey, route.space_id)
                     .Set(kEnabledKey, route.enabled)
                     .Set(kFromAiKey, route.from_ai));
@@ -178,7 +218,27 @@ std::string AddSiteRouteForSite(PrefService* prefs,
     return std::string();
   }
   route->path.clear();
+  route->query.clear();
   return AddSiteRoute(prefs, *route) ? route->domain : std::string();
+}
+
+bool EditSiteRoute(PrefService* prefs, size_t index, const std::string& site) {
+  std::vector<SiteRoute> routes = GetSiteRoutes(prefs);
+  if (index >= routes.size()) {
+    return false;
+  }
+  std::optional<SiteRoute> edited = ParseSiteRoute(site, routes[index].space_id);
+  if (!edited) {
+    return false;
+  }
+  edited->enabled = routes[index].enabled;
+  routes[index] = *edited;
+  size_t at = 0;
+  std::erase_if(routes, [&](const SiteRoute& other) {
+    return at++ != index && SameSite(other, *edited);
+  });
+  SetSiteRoutes(prefs, routes);
+  return true;
 }
 
 bool ApplyPlannedRoutes(PrefService* prefs,
@@ -202,7 +262,8 @@ bool ApplyPlannedRoutes(PrefService* prefs,
       continue;
     }
     routes.push_back(
-        SiteRoute{route.domain, route.path, route.space_id, true, true});
+        SiteRoute{route.domain, route.path, route.query, route.space_id, true,
+                  true});
     ++added;
   }
   SetSiteRoutes(prefs, routes);
@@ -316,7 +377,7 @@ bool RouteToSpace(BrowserWindowInterface* shell, const GURL& url) {
   std::optional<SiteRoute> best;
   for (const SiteRoute& route : GetSiteRoutes(prefs)) {
     if (spaces->contains(route.space_id) &&
-        Covers(route, url.host(), url.path()) &&
+        Covers(route, url) &&
         (!best || MoreSpecific(route, *best))) {
       best = route;
     }

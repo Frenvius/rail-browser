@@ -156,6 +156,22 @@ select:focus-visible {
 
 .cardtitle {
   font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.routetitle {
+  position: relative;
+}
+
+.routetitle .cardtitle[data-editing] {
+  visibility: hidden;
+}
+
+#routeedit {
+  left: -9px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .site {
@@ -418,6 +434,7 @@ h2.section + .sectionhint {
 #apikey,
 #model,
 #routesite,
+#routeedit,
 #sleepsite {
   background: rgb(0 0 0 / 20%);
   border: 1px solid rgb(255 255 255 / 10%);
@@ -434,6 +451,7 @@ h2.section + .sectionhint {
 #apikey:hover,
 #model:hover,
 #routesite:hover,
+#routeedit:hover,
 #sleepsite:hover {
   border-color: rgb(255 255 255 / 18%);
 }
@@ -441,6 +459,7 @@ h2.section + .sectionhint {
 #apikey:focus,
 #model:focus,
 #routesite:focus,
+#routeedit:focus,
 #sleepsite:focus {
   border-color: var(--rail-accent);
   box-shadow: 0 0 0 2px var(--rail-accent-soft);
@@ -584,6 +603,7 @@ select,
 #apikey,
 #model,
 #routesite,
+#routeedit,
 #sleepsite,
 #clearkey,
 #savekey,
