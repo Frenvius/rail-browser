@@ -6820,7 +6820,7 @@ index b7a5099..752dc5f 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +343,103 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +343,109 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6836,6 +6836,12 @@ index b7a5099..752dc5f 100644
 +
 +    if (primary) {
 +      this.openStartupTab_(restoredRow);
++    }
++    if (INCOGNITO && !MINI &&
++        items.every(
++            item => item.type !== 'tab' || isNewTabUrl(item.tabData.url))) {
++      browserProxyFactory.getInstance().handler.openRailCommandBar(
++          true, false);
 +    }
 +    this.pruneRemotes_();
 +    this.syncSleepingTabs_();
