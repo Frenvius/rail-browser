@@ -136,7 +136,7 @@ export class NativeGroupLinks {
         changed = true;
       }
       for (const row of rows) {
-        if (row.group !== folder.id) {
+        if (row.group !== folder.id && row.space === folder.space) {
           spaces.setGroup(row.key, folder.id);
           changed = true;
         }

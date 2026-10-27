@@ -142,3 +142,115 @@ test.skipIf(!live)('a removed pin and a closed tab reopen newest first',
   state = await until<State>(STATE, s => !!s.pins[0]?.tabId);
   expect(state.pins[0]!.key).toBe(key);
 }, 30000);
+
+const ROUTED = 'https://example.net/';
+const ROUTED_HERE = 'https://www.example.net/';
+
+type Routing = {
+  routed: {space: string, group: string}|null,
+  here: {space: string, group: string}|null,
+  homeGroup: string[],
+  sleeperGroup: string,
+  openTabs: string[],
+};
+
+const ROUTING = `
+  const {away, homeGroup, sleeper} = window.routing;
+  const find = url => ts.spaces_.rowsIn(away).find(row => row.url === url &&
+      row.tabId);
+  const shape = row => row ? {space: row.space, group: row.group} : null;
+  return {
+    routed: shape(find('${ROUTED}')),
+    here: shape(find('${ROUTED_HERE}')),
+    homeGroup: ts.spaces_.keysInGroup(homeGroup),
+    sleeperGroup: ts.spaces_.rowFor(sleeper)?.group ?? '',
+    openTabs: ts.openTabs.map(tab => tab.id),
+  };`;
+
+test.skipIf(!live)('a routed link stays out of groups and spaces it skipped',
+    async () => {
+  await shell(`
+    const home = ts.spaces_.activeId;
+    const away = ts.spaces_.create().id;
+    await ts.createSpaceProfile(away, 'Routed');
+    const homeGroup = ts.tidyGroups_.create(home, 'Home').id;
+    const homeTab = await ts.createTab_('${HOME}', home);
+    ts.spaces_.setGroup(homeTab, homeGroup);
+    const sleeper = ts.spaces_.addDormant(home,
+        {url: '${AWAY}', title: 'Asleep', favicon: ''}).key;
+    ts.spaces_.setGroup(sleeper, homeGroup);
+    ts.activateTab(homeTab);
+    window.routing = {home, away, homeGroup, sleeper, homeTab};
+    ts.refreshSections_();
+    return homeTab;`);
+  const ids = await shell<Record<string, string>>('return window.routing;');
+  await until<string>('return ts.activeTab_;', id => id === ids.homeTab);
+  await shell(`await ts.openInSpace('${ROUTED}', '${ids.away}');`);
+  let state = await until<Routing>(ROUTING, s => !!s.routed);
+  expect(state.routed).toEqual({space: ids.away, group: ''});
+  expect(state.sleeperGroup).toBe(ids.homeGroup);
+  expect(state.homeGroup).toHaveLength(2);
+
+  const awayTab = await shell<string>(`
+    const awayGroup = ts.tidyGroups_.create('${ids.away}', 'Away').id;
+    const awayTab = ts.spaces_.rowsIn('${ids.away}')
+        .find(row => row.url === '${ROUTED}').tabId;
+    ts.spaces_.setGroup(awayTab, awayGroup);
+    ts.activateTab(awayTab);
+    window.routing.awayGroup = awayGroup;
+    return awayTab;`);
+  await until<string>('return ts.activeTab_;', id => id === awayTab);
+  await shell(`await ts.openInSpace('${ROUTED_HERE}', '${ids.away}');`);
+  state = await until<Routing>(ROUTING, s => !!s.here);
+  expect(state.here!.group).toBe('');
+
+  await shell('ts.closeGroup_(window.routing.awayGroup);');
+  state = await until<Routing>(ROUTING, s => !s.routed);
+  expect(state.routed).toBeNull();
+  expect(state.here).not.toBeNull();
+  expect(state.homeGroup).toHaveLength(2);
+  expect(state.sleeperGroup).toBe(ids.homeGroup);
+  expect(state.openTabs).toContain(ids.homeTab);
+}, 60000);
+
+type Moved = {
+  first: {space: string, group: string},
+  second: {space: string, group: string},
+  groupSpace: string,
+};
+
+test.skipIf(!live)('a moved tab leaves its group and a moved group keeps it',
+    async () => {
+  const ids = await shell<Record<string, string>>(`
+    const home = ts.spaces_.activeId;
+    const target = ts.spaces_.create().id;
+    const group = ts.tidyGroups_.create(home, 'Moving').id;
+    const first = await ts.createTab_('${HOME}', home);
+    const second = await ts.createTab_('${AWAY}', home);
+    ts.spaces_.setGroup(first, group);
+    ts.spaces_.setGroup(second, group);
+    window.moving = {home, target, group, first, second,
+      firstKey: ts.spaces_.byTab(first).key,
+      secondKey: ts.spaces_.byTab(second).key};
+    return window.moving;`);
+  const MOVED = `
+    const {group, firstKey: first, secondKey: second} = window.moving;
+    const shape = key => {
+      const row = ts.spaces_.rowFor(key);
+      return {space: row?.space ?? '', group: row?.group ?? ''};
+    };
+    return {first: shape(first), second: shape(second),
+            groupSpace: ts.tidyGroups_.byId(group)?.space ?? ''};`;
+  await until<Moved>(MOVED, s => !!s.first.space && !!s.second.space);
+
+  await shell(`ts.moveTabToSpace('${ids.first}', '${ids.target}');`);
+  let state = await until<Moved>(MOVED, s => s.first.space === ids.target);
+  expect(state.first).toEqual({space: ids.target, group: ''});
+  expect(state.second).toEqual({space: ids.home, group: ids.group});
+
+  await shell(`ts.moveGroupToSpace_('${ids.group}', '${ids.target}');`);
+  state = await until<Moved>(MOVED, s => s.second.space === ids.target);
+  expect(state.second).toEqual({space: ids.target, group: ids.group});
+  expect(state.groupSpace).toBe(ids.target);
+  expect(state.first.group).toBe('');
+}, 30000);

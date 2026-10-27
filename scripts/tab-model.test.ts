@@ -1,13 +1,18 @@
 import {test, expect} from 'bun:test';
 import {readFileSync} from 'node:fs';
 
-const compile = (file: string) => {
-  const source = readFileSync(new URL(
-      `../src/chrome/browser/resources/webui_browser/rail/${file}.ts`,
-      import.meta.url), 'utf8').replace(/^import[\s\S]*?;\r?\n/gm, '')
-      .replace(/^export /gm, '');
+const transpile = (url: URL) => {
+  const source = readFileSync(url, 'utf8')
+      .replace(/^import[\s\S]*?;\r?\n/gm, '')
+      .replace(/^export type \{[^}]*\};\r?\n/gm, '')
+      .replace(/^export /gm, '')
+      .replace(/\baccessor /g, '');
   return new Bun.Transpiler({loader: 'ts'}).transformSync(source);
 };
+
+const compile = (file: string) => transpile(new URL(
+    `../src/chrome/browser/resources/webui_browser/rail/${file}.ts`,
+    import.meta.url));
 
 const load = (file: string, name: string, mini = false,
     deps: Record<string, unknown> = {}) => {
@@ -210,6 +215,89 @@ test('a reopened tab rejoins its group and a live trail parent', () => {
   spaces.rejoin('b', '', 'gone');
   expect(spaces.byTab('b').group).toBe('');
   expect(spaces.trailParent('b')).toBeUndefined();
+});
+
+const twoSpaces = {activeSpace: 's', spaces: [
+  {...state.spaces[0], id: 'other', name: 'Other',
+    tabs: [{id: 'asleep', url: 'https://asleep.test/', title: 'Asleep',
+      favicon: '', group: 'other-group'}]},
+  state.spaces[0],
+]};
+
+test('an empty id never resolves to a sleeping row', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(twoSpaces, [], new Set());
+  expect(spaces.rowsIn('other')[0].tabId).toBe('');
+  expect(spaces.rowFor('')).toBeUndefined();
+});
+
+test('a tab without an opener never joins a group in another space', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(twoSpaces, [], new Set());
+  spaces.adopt('routed', 'https://routed.test/');
+  const created: string[] = [];
+  spaces.groupWithOpener('routed', (spaceId: string) => {
+    created.push(spaceId);
+    return 'new-group';
+  });
+  expect(created).toEqual([]);
+  expect(spaces.byTab('routed').group).toBe('');
+  expect(spaces.rowsIn('other')[0].group).toBe('other-group');
+  expect(spaces.keysInGroup('other-group'))
+      .toEqual([spaces.rowsIn('other')[0].key]);
+});
+
+test('a link only groups with an opener in its own space', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(twoSpaces, [tab('opener'), tab('routed')], new Set());
+  spaces.assign('opener', 'other', 'https://example.test/');
+  spaces.setGroup('opener', 'other-group');
+  spaces.byTab('routed').opener = spaces.byTab('opener').key;
+  spaces.groupWithOpener('routed', () => 'new-group');
+  expect(spaces.byTab('routed').group).toBe('');
+});
+
+test('a row filed under another space\'s group leaves it on restore', () => {
+  const spaces = new Spaces(() => {});
+  const saved = {activeSpace: 's', spaces: [twoSpaces.spaces[0], {
+    ...state.spaces[0], tabs: [{id: 'stray', url: 'https://stray.test/',
+      title: '', favicon: '', group: 'other-group'}],
+  }]};
+  spaces.restore(saved, [], new Set());
+  spaces.dropForeignGroups(
+      (id: string) => id === 'other-group' ? 'other' : undefined);
+  expect(spaces.rowsIn('s')[0].group).toBe('');
+  expect(spaces.rowsIn('other')[0].group).toBe('other-group');
+});
+
+test('a tab moved to another space leaves its group behind', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(twoSpaces, [tab('a'), tab('b')], new Set());
+  spaces.setGroup('a', 'home-group');
+  spaces.setGroup('b', 'home-group');
+  spaces.assign('a', 's', 'https://example.test/');
+  expect(spaces.byTab('a').group).toBe('home-group');
+  spaces.assign('a', 'other', 'https://example.test/');
+  expect(spaces.byTab('a').group).toBe('');
+  expect(spaces.keysInGroup('home-group')).toEqual(['b']);
+  const sleeper = spaces.rowsIn('other')[0];
+  spaces.moveDormant(sleeper.key, 's');
+  expect(spaces.rowFor(sleeper.key).group).toBe('');
+});
+
+test('a native group never files a tab from another space', () => {
+  const NativeGroupLinks = load('native_groups', 'NativeGroupLinks');
+  const Folders = load('folders', 'Folders');
+  const spaces = new Spaces(() => {});
+  const tidy = new Folders(() => {});
+  spaces.restore(twoSpaces, [tab('a'), tab('b')], new Set());
+  spaces.assign('b', 'other', 'https://example.test/');
+  const links = new NativeGroupLinks();
+  links.reconcile([{id: 'native', visual: {title: 'Work', isCollapsed: false},
+    tabs: ['a', 'b'], exit: {}}], spaces, tidy);
+  const folder = tidy.in('s')[0];
+  expect(spaces.byTab('a').group).toBe(folder.id);
+  expect(spaces.byTab('b').group).toBe('');
 });
 
 test('a link lands after its opener\'s whole trail', () => {
@@ -773,4 +861,487 @@ test('an empty group keeps its place and new tabs open below it', () => {
   expect(layout(['a', 'c', 'd'])).toEqual(['a', '[G]', '[Legacy]', 'c', 'd']);
   spaces.forget('a');
   expect(layout(['c', 'd'])).toEqual(['[G]', '[Legacy]', 'c', 'd']);
+});
+
+const spacesWith = (ids: string[], saved: object = state) => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(saved, ids.map(tab), new Set());
+  return spaces;
+};
+const URL_OF = 'https://example.test/';
+
+test('closing a lone tab picks the next row, then the previous one', () => {
+  const spaces = spacesWith(['a', 'b', 'c']);
+  expect(spaces.successorOf('b').tabId).toBe('c');
+  expect(spaces.successorOf('c').tabId).toBe('b');
+  expect(spaces.successorOf('gone')).toBeUndefined();
+});
+
+test('closing a child goes back to its opener once no sibling is left', () => {
+  const spaces = spacesWith(['a', 'x', 'b']);
+  spaces.setOpener('b', 'a');
+  expect(spaces.successorOf('b').tabId).toBe('a');
+  spaces.forget('a');
+  expect(spaces.successorOf('b').tabId).toBe('x');
+});
+
+test('closing an opener prefers its child over a nearer sibling', () => {
+  const spaces = spacesWith(['a', 'b', 'd', 'c']);
+  spaces.setOpener('b', 'a');
+  spaces.setOpener('d', 'a');
+  spaces.setOpener('c', 'b');
+  expect(spaces.successorOf('b').tabId).toBe('c');
+});
+
+test('closing several tabs never picks one that closes with them', () => {
+  const spaces = spacesWith(['a', 'b', 'c', 'd']);
+  expect(spaces.successorOf('b', new Set(['b', 'c'])).tabId).toBe('d');
+  expect(spaces.successorOf('b', new Set(['b', 'c', 'd'])).tabId).toBe('a');
+  spaces.setOpener('c', 'b');
+  expect(spaces.successorOf('b', new Set(['b', 'c'])).tabId).toBe('d');
+});
+
+test('closing stays inside the space and may land on a sleeping row', () => {
+  const spaces = spacesWith(['a', 'b'], twoSpaces);
+  spaces.assign('b', 'other', URL_OF);
+  expect(spaces.successorOf('a')).toBeUndefined();
+  expect(spaces.successorOf('b').key).toBe(spaces.rowsIn('other')[0].key);
+});
+
+test('closing never lands on a tab another window holds', () => {
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0], tabs: [
+    {id: 'far', url: 'https://far.test/', title: '', favicon: '',
+      owner: 'other.w', tab: 'r1'}]}]};
+  const spaces = spacesWith(['a'], saved);
+  expect(spaces.rowsIn('s').map((row: any) => row.remote)).toEqual(['r1', '']);
+  expect(spaces.successorOf('a')).toBeUndefined();
+});
+
+test('an opener from another space is never recorded', () => {
+  const spaces = spacesWith(['a', 'b'], twoSpaces);
+  spaces.assign('b', 'other', URL_OF);
+  spaces.setOpener('a', 'b');
+  expect(spaces.byTab('a').opener).toBe('');
+  expect(spaces.hasOpeners()).toBe(false);
+});
+
+test('openers survive only while the native strip still reports them', () => {
+  const spaces = spacesWith(['a', 'b', 'c']);
+  spaces.setOpener('b', 'a');
+  spaces.setOpener('c', 'a');
+  expect(spaces.retainOpeners(new Map([['b', 'a'], ['c', 'b']]))).toBe(true);
+  expect(spaces.byTab('b').opener).toBe(spaces.byTab('a').key);
+  expect(spaces.byTab('c').opener).toBe('');
+  expect(spaces.retainOpeners(new Map([['b', 'a']]))).toBe(false);
+});
+
+test('tabs opened from one page count as related', () => {
+  const spaces = spacesWith(['a', 'b', 'c', 'd']);
+  spaces.setOpener('b', 'a');
+  spaces.setOpener('c', 'a');
+  expect(spaces.relatedRows('a', 'b')).toBe(true);
+  expect(spaces.relatedRows('c', 'a')).toBe(true);
+  expect(spaces.relatedRows('b', 'c')).toBe(true);
+  expect(spaces.relatedRows('a', 'd')).toBe(false);
+  expect(spaces.relatedRows('d', 'gone')).toBe(true);
+});
+
+test('forgetting openers stays inside one space', () => {
+  const spaces = spacesWith(['a', 'b', 'c', 'd'], twoSpaces);
+  spaces.assign('c', 'other', URL_OF);
+  spaces.assign('d', 'other', URL_OF);
+  spaces.setOpener('b', 'a');
+  spaces.setOpener('d', 'c');
+  spaces.forgetOpeners('s');
+  expect(spaces.byTab('b').opener).toBe('');
+  expect(spaces.byTab('d').opener).toBe(spaces.byTab('c').key);
+  spaces.clearOpener('d');
+  expect(spaces.hasOpeners()).toBe(false);
+});
+
+test('each space remembers the tab it was left on', () => {
+  const spaces = spacesWith(['a', 'b', 'c'], twoSpaces);
+  spaces.assign('c', 'other', URL_OF);
+  spaces.noteActive('b');
+  spaces.noteActive('c');
+  expect(spaces.activeId).toBe('other');
+  expect(spaces.lastActiveIn('s')).toBe('b');
+  expect(spaces.lastActiveIn('other')).toBe('c');
+  spaces.restore(twoSpaces, [tab('a'), tab('b'), tab('c')], new Set());
+  expect(spaces.lastActiveIn('s')).toBe('b');
+  expect(spaces.lastActiveIn('other')).toBe('c');
+});
+
+test('a space falls back to its last live tab when its active row sleeps', () => {
+  const spaces = spacesWith(['a', 'c'], twoSpaces);
+  spaces.assign('c', 'other', URL_OF);
+  expect(spaces.activeRow('other').tabId).toBe('');
+  expect(spaces.lastActiveIn('other')).toBe('c');
+  spaces.noteActive('c');
+  spaces.forget('c');
+  expect(spaces.lastActiveIn('other')).toBe('');
+});
+
+test('entering an empty space wakes the row it was left on, once', () => {
+  const spaces = spacesWith(['a'], twoSpaces);
+  expect(spaces.wakeActive('s')).toBeUndefined();
+  const row = spaces.wakeActive('other');
+  expect(row.url).toBe('https://asleep.test/');
+  expect(row.pending).toBe(true);
+  expect(spaces.wakeActive('other')).toBeUndefined();
+});
+
+test('a saved active page picks the active row on restore', () => {
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0],
+    activeUrl: 'https://two.test/',
+    tabs: ['https://one.test/', 'https://two.test/']}]};
+  const spaces = spacesWith([], saved);
+  expect(spaces.activeUrlIn('s')).toBe('https://two.test/');
+});
+
+test('a tab moved onto its sleeping twin inherits the active row', () => {
+  const saved = {...twoSpaces, spaces: [
+    {...twoSpaces.spaces[0], activeUrl: 'https://asleep.test/'},
+    state.spaces[0]]};
+  const spaces = spacesWith([], saved);
+  spaces.adopt('live', 'https://asleep.test/');
+  spaces.assign('live', 'other', 'https://asleep.test/');
+  expect(spaces.rowsIn('other')).toHaveLength(1);
+  expect(spaces.activeRow('other').tabId).toBe('live');
+});
+
+test('a tab sleeps once and stirs back', () => {
+  const spaces = spacesWith(['a']);
+  expect(spaces.sleep('a')).toBe(true);
+  expect(spaces.sleep('a')).toBe(false);
+  expect(spaces.isAsleep('a')).toBe(true);
+  spaces.stir('a');
+  expect(spaces.isAsleep('a')).toBe(false);
+  expect(spaces.sleep('gone')).toBe(false);
+  expect(spaces.isAsleep('gone')).toBe(false);
+});
+
+test('a detached tab keeps its row for the tab that rebuilds it', () => {
+  const spaces = spacesWith(['a', 'b']);
+  spaces.sleep('a');
+  const key = spaces.byTab('a').key;
+  expect(spaces.detach('a')).toBe(key);
+  expect(spaces.rowFor(key))
+      .toMatchObject({tabId: '', pending: true, asleep: false});
+  spaces.adopt('rebuilt', URL_OF);
+  expect(spaces.byTab('rebuilt').key).toBe(key);
+  expect(spaces.tabsIn('s')).toEqual(['rebuilt', 'b']);
+});
+
+test('only a sleeping row can be dropped', () => {
+  const spaces = spacesWith(['a'], twoSpaces);
+  expect(spaces.drop(spaces.byTab('a').key)).toBe(false);
+  expect(spaces.drop(spaces.rowsIn('other')[0].key)).toBe(true);
+  expect(spaces.rowsIn('other')).toEqual([]);
+});
+
+test('a link joins the group its opener is already in', () => {
+  const spaces = spacesWith(['a', 'b']);
+  spaces.setGroup('a', 'g');
+  spaces.setOpener('b', 'a');
+  spaces.groupWithOpener('b', () => {
+    throw new Error('created a group');
+  });
+  expect(spaces.keysInGroup('g')).toEqual(['a', 'b']);
+});
+
+test('a link and a loose opener form a group named after the opener', () => {
+  const spaces = spacesWith(['a', 'b']);
+  spaces.track(tab('a'));
+  spaces.setOpener('b', 'a');
+  const created: string[][] = [];
+  spaces.groupWithOpener('b', (spaceId: string, name: string) => {
+    created.push([spaceId, name]);
+    return 'new';
+  });
+  expect(created).toEqual([['s', 'a']]);
+  expect(spaces.keysInGroup('new')).toEqual(['a', 'b']);
+});
+
+test('a grouped link stays in its own group', () => {
+  const spaces = spacesWith(['a', 'b']);
+  spaces.setGroup('a', 'g');
+  spaces.setGroup('b', 'mine');
+  spaces.setOpener('b', 'a');
+  spaces.groupWithOpener('b', () => 'new');
+  expect(spaces.byTab('b').group).toBe('mine');
+});
+
+test('ungrouping releases every row of the group, sleeping ones too', () => {
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0], tabs: [
+    {id: 'z', url: 'https://z.test/', title: '', favicon: '', group: 'g'}]}]};
+  const spaces = spacesWith(['a', 'b'], saved);
+  spaces.setGroup('a', 'g');
+  spaces.setGroup('b', 'h');
+  expect(spaces.keysInGroup('g')).toEqual(['z', 'a']);
+  spaces.clearGroup('g');
+  expect(spaces.keysInGroup('g')).toEqual([]);
+  expect(spaces.keysInGroup('h')).toEqual(['b']);
+});
+
+test('a tab created for a space lands there, not in the active one', () => {
+  const spaces = spacesWith([], twoSpaces);
+  spaces.claim('new', 'other');
+  expect(spaces.requested('new')).toBe(true);
+  spaces.adopt('new', 'https://new.test/');
+  expect(spaces.spaceOf('new')).toBe('other');
+  expect(spaces.requested('new')).toBe(false);
+  spaces.claim('new', 's');
+  expect(spaces.spaceOf('new')).toBe('s');
+  spaces.claim('late', 'gone');
+  expect(spaces.requested('late')).toBe(false);
+});
+
+test('a claimed tab takes its space\'s waking row even after a redirect', () => {
+  const spaces = spacesWith([], twoSpaces);
+  const row = spaces.wake(spaces.rowsIn('other')[0].key);
+  spaces.claim('t', 'other');
+  spaces.adopt('t', 'https://redirected.test/');
+  expect(spaces.byTab('t').key).toBe(row.key);
+  expect(spaces.rowsIn('other')).toHaveLength(1);
+  expect(spaces.rowsIn('s')).toHaveLength(0);
+});
+
+test('tabs being created count as requested until each one settles', () => {
+  const spaces = spacesWith([]);
+  spaces.expectTab();
+  spaces.expectTab();
+  spaces.settleTab();
+  expect(spaces.requested('any')).toBe(true);
+  spaces.settleTab();
+  spaces.settleTab();
+  expect(spaces.requested('any')).toBe(false);
+  spaces.expectTab();
+  expect(spaces.requested('any')).toBe(true);
+});
+
+test('stepping through spaces wraps around and ignores unknown ids', () => {
+  const spaces = spacesWith([], twoSpaces);
+  expect(spaces.peek(1)).toBe('other');
+  spaces.step(1);
+  expect(spaces.activeId).toBe('other');
+  spaces.step(-1);
+  expect(spaces.activeId).toBe('s');
+  spaces.select('gone');
+  expect(spaces.activeId).toBe('s');
+});
+
+test('moving a space stops at either end', () => {
+  const spaces = spacesWith([], twoSpaces);
+  const order = () => spaces.all.map((space: any) => space.id);
+  spaces.move('s', -1);
+  expect(order()).toEqual(['s', 'other']);
+  spaces.move('s', -1);
+  spaces.move('other', 1);
+  expect(order()).toEqual(['s', 'other']);
+});
+
+test('removing a space hands back its live tabs and drops its rows', () => {
+  const spaces = spacesWith(['a', 'c'], twoSpaces);
+  spaces.assign('c', 'other', URL_OF);
+  expect(spaces.remove('other')).toEqual(['c']);
+  expect(spaces.rowsIn('other')).toEqual([]);
+  expect(spaces.byTab('c')).toBeUndefined();
+  expect(spaces.activeId).toBe('s');
+  expect(spaces.remove('s')).toEqual([]);
+});
+
+test('a tab moves before or after another only inside its space', () => {
+  const spaces = spacesWith(['a', 'b', 'c', 'd'], twoSpaces);
+  expect(spaces.placeAfter('a', 'c')).toBe(true);
+  expect(spaces.tabsIn('s')).toEqual(['b', 'c', 'a', 'd']);
+  expect(spaces.placeBefore('d', 'b')).toBe(true);
+  expect(spaces.tabsIn('s')).toEqual(['d', 'b', 'c', 'a']);
+  expect(spaces.placeAfter('a', 'a')).toBe(false);
+  spaces.assign('d', 'other', URL_OF);
+  expect(spaces.placeAfter('a', 'd')).toBe(false);
+  expect(spaces.placeAfter('a', 'gone')).toBe(false);
+});
+
+test('reordering a space moves only the rows it names', () => {
+  const spaces = spacesWith(['a', 'b', 'c'], twoSpaces);
+  const sleeper = spaces.rowsIn('other')[0].key;
+  spaces.reorder('s', ['c', sleeper, spaces.byTab('a').key]);
+  expect(spaces.tabsIn('s')).toEqual(['c', 'b', 'a']);
+  expect(spaces.rowsIn('other')[0].key).toBe(sleeper);
+});
+
+test('a tab moved onto its sleeping twin takes the twin\'s group', () => {
+  const spaces = spacesWith([], twoSpaces);
+  spaces.adopt('live', 'https://asleep.test/');
+  spaces.setGroup('live', 'home-group');
+  spaces.assign('live', 'other', 'https://asleep.test/');
+  expect(spaces.rowsIn('other')).toHaveLength(1);
+  expect(spaces.byTab('live').group).toBe('other-group');
+  expect(spaces.keysInGroup('home-group')).toEqual([]);
+});
+
+const proxy: {handler: Record<string, (...args: any[]) => unknown>} =
+    {handler: {}};
+const TabStripElement = new Function('CrLitElement', 'customElements',
+    'browserProxyFactory', 'INCOGNITO', 'MINI',
+    `${transpile(new URL(
+        '../build/src/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts',
+        import.meta.url))}\nreturn TabStripElement;`)(
+    class {}, {define: () => {}}, {getInstance: () => proxy}, false, false);
+
+const stripWith = (spaces: any, live: string[], active: string) => {
+  const Folders = load('folders', 'Folders');
+  const log: string[] = [];
+  proxy.handler = {
+    forgetOpeners: (ids: string[]) => log.push(`forget:${ids}`),
+    closeRemoteTab: (id: string) => log.push(`remote:${id}`),
+  };
+  const strip = Object.create(TabStripElement.prototype,
+      Object.getOwnPropertyDescriptors({
+        spaces_: spaces,
+        pinnedTabs_: new PinnedTabs(() => {}),
+        tidyGroups_: new Folders(() => {}),
+        nativeGroups_: {release: () => ''},
+        reopenHistory_: new ReopenHistory(),
+        items_: live.map(id => ({type: 'tab', id, tabData: tab(id)})),
+        activeTab_: active,
+        tabStripService_: {closeNodes: (ids: string[]) => log.push(`close:${ids}`)},
+        activateTab(id: string) {
+          log.push(`activate:${id}`);
+          this.activeTab_ = id;
+        },
+        archiveRows_: (ids: string[]) => log.push(`archive:${ids}`),
+        collapseSelection_: () => {},
+        refreshSections_: () => {},
+      }));
+  return {strip, log};
+};
+
+test('closing the active tab activates its successor before it goes', () => {
+  const spaces = spacesWith(['a', 'b', 'c']);
+  const {strip, log} = stripWith(spaces, ['a', 'b', 'c'], 'b');
+  strip.closeTabs_(['b']);
+  expect(log).toEqual(['activate:c', 'close:b']);
+});
+
+test('closing a background tab leaves the active one alone', () => {
+  const spaces = spacesWith(['a', 'b', 'c']);
+  const {strip, log} = stripWith(spaces, ['a', 'b', 'c'], 'a');
+  strip.closeTabs_(['c']);
+  expect(log).toEqual(['close:c']);
+});
+
+test('closing the active tab never wakes a sleeping neighbor', () => {
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0],
+    tabs: ['https://asleep.test/']}]};
+  const spaces = spacesWith(['a'], saved);
+  const {strip, log} = stripWith(spaces, ['a'], 'a');
+  strip.closeTabs_(['a']);
+  expect(log).toEqual(['close:a']);
+  expect(spaces.rowsIn('s')[0].pending).toBe(false);
+});
+
+test('closing a tab of a space in the background activates nothing', () => {
+  const spaces = spacesWith(['a', 'b', 'c'], twoSpaces);
+  spaces.assign('b', 'other', URL_OF);
+  spaces.assign('c', 'other', URL_OF);
+  const {strip, log} = stripWith(spaces, ['a', 'b', 'c'], 'b');
+  strip.closeTabs_(['b']);
+  expect(log).toEqual(['close:b']);
+});
+
+test('closing a sleeping row drops it and the group it emptied', () => {
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0], tabs: [
+    {id: 'y', url: 'https://y.test/', title: '', favicon: ''},
+    {id: 'z', url: 'https://z.test/', title: '', favicon: ''}]}]};
+  const spaces = spacesWith(['a'], saved);
+  const {strip, log} = stripWith(spaces, ['a'], 'a');
+  const lone = strip.tidyGroups_.create('s', 'Lone');
+  const shared = strip.tidyGroups_.create('s', 'Shared');
+  spaces.setGroup('y', lone.id);
+  spaces.setGroup('z', shared.id);
+  spaces.setGroup('a', shared.id);
+  strip.closeTarget_('y');
+  strip.closeTarget_('z');
+  expect(log).toEqual(['archive:y', 'archive:z']);
+  expect(spaces.rowsIn('s').map((row: any) => row.tabId)).toEqual(['a']);
+  expect(strip.tidyGroups_.byId(lone.id)).toBeUndefined();
+  expect(strip.tidyGroups_.byId(shared.id)).toBeDefined();
+});
+
+test('closing a row another window holds closes the tab over there', () => {
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0], tabs: [
+    {id: 'far', url: 'https://far.test/', title: '', favicon: '',
+      owner: 'other.w', tab: 'r1'}]}]};
+  const spaces = spacesWith(['a'], saved);
+  const {strip, log} = stripWith(spaces, ['a'], 'a');
+  strip.closeTarget_('far');
+  expect(log).toEqual(['archive:far', 'remote:r1']);
+  expect(spaces.rowsIn('s')).toHaveLength(1);
+});
+
+test('closing a live tab archives it and hands focus on', () => {
+  const spaces = spacesWith(['a', 'b']);
+  const {strip, log} = stripWith(spaces, ['a', 'b'], 'b');
+  strip.closeTarget_('b');
+  expect(log).toEqual(['archive:b', 'activate:a', 'close:b']);
+});
+
+test('closing a group closes its live tabs and drops its sleeping rows', () => {
+  const saved = {activeSpace: 's', spaces: [{...state.spaces[0], tabs: [
+    {id: 'z', url: 'https://z.test/', title: '', favicon: ''}]}]};
+  const spaces = spacesWith(['a', 'b', 'c'], saved);
+  const {strip, log} = stripWith(spaces, ['a', 'b', 'c'], 'c');
+  const group = strip.tidyGroups_.create('s', 'G');
+  for (const id of ['z', 'a', 'b']) {
+    spaces.setGroup(id, group.id);
+  }
+  strip.closeGroup_(group.id);
+  expect(log).toEqual(['archive:z,a,b', 'close:a,b']);
+  expect(spaces.dormantIn('s')).toEqual([]);
+  expect(strip.tidyGroups_.byId(group.id)).toBeUndefined();
+});
+
+test('going back to the opener activates it, then closes the tab', () => {
+  const spaces = spacesWith(['a', 'b']);
+  spaces.setOpener('b', 'a');
+  spaces.startTrail('b');
+  const {strip, log} = stripWith(spaces, ['a', 'b'], 'b');
+  expect(strip.canReturnToOpener()).toBe(true);
+  expect(strip.returnToOpener()).toBe(true);
+  expect(log).toEqual(['activate:a', 'close:b']);
+});
+
+test('a tab without a trail has no opener to go back to', () => {
+  const spaces = spacesWith(['a', 'b']);
+  spaces.setOpener('b', 'a');
+  const {strip, log} = stripWith(spaces, ['a', 'b'], 'b');
+  expect(strip.canReturnToOpener()).toBe(false);
+  expect(strip.returnToOpener()).toBe(false);
+  expect(log).toEqual([]);
+});
+
+test('picking an unrelated tab forgets the openers of the space', () => {
+  const spaces = spacesWith(['a', 'b', 'c']);
+  spaces.setOpener('b', 'a');
+  const {strip, log} = stripWith(spaces, ['a', 'b', 'c'], 'b');
+  strip.selectRow_('a');
+  expect(spaces.byTab('b').opener).toBe(spaces.byTab('a').key);
+  strip.selectRow_('c');
+  expect(spaces.byTab('b').opener).toBe('');
+  expect(log).toEqual(['activate:a', 'forget:a,b,c', 'activate:c']);
+});
+
+test('entering a space focuses the tab it was left on, never another space\'s', () => {
+  const spaces = spacesWith(['a', 'b', 'c'], twoSpaces);
+  spaces.assign('c', 'other', URL_OF);
+  spaces.noteActive('b');
+  const {strip, log} = stripWith(spaces, ['a', 'b', 'c'], 'c');
+  strip.focusSpace_();
+  expect(log).toEqual(['activate:b']);
+  spaces.assign('c', 's', URL_OF);
+  spaces.select('other');
+  strip.focusSpace_();
+  expect(log).toEqual(['activate:b']);
 });

@@ -6508,7 +6508,7 @@ index a15445b..3cd8ae6 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..752dc5f 100644
+index b7a5099..94ea278 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6820,7 +6820,7 @@ index b7a5099..752dc5f 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +343,109 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +343,110 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6877,6 +6877,7 @@ index b7a5099..752dc5f 100644
 +    this.spaces_.restore(state, tabs, claimed, stale);
 +    this.folders_.restore(state);
 +    this.tidyGroups_.restore(state, space => space.tidyGroups);
++    this.spaces_.dropForeignGroups(id => this.tidyGroups_.byId(id)?.space);
 +    for (const entry of this.pinnedTabs_.entries) {
 +      if (entry.tabId) {
 +        this.spaces_.assign(entry.tabId, entry.space, entry.url);
@@ -6930,7 +6931,7 @@ index b7a5099..752dc5f 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -175,18 +461,8 @@ export class TabStripElement extends CrLitElement implements
+@@ -175,18 +462,8 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6951,7 +6952,7 @@ index b7a5099..752dc5f 100644
    }
  
  
-@@ -194,14 +470,39 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +471,39 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -6992,7 +6993,7 @@ index b7a5099..752dc5f 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -209,6 +510,12 @@ export class TabStripElement extends CrLitElement implements
+@@ -209,6 +511,12 @@ export class TabStripElement extends CrLitElement implements
      this.dragDelegate_.onUpdate();
    }
 
@@ -7005,7 +7006,7 @@ index b7a5099..752dc5f 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
 
-@@ -217,48 +524,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +525,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7059,7 +7060,7 @@ index b7a5099..752dc5f 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +579,2312 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +580,2319 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8173,13 +8174,20 @@ index b7a5099..752dc5f 100644
 +    if (!group || group.space === spaceId) {
 +      return;
 +    }
-+    for (const id of this.spaces_.keysInGroup(groupId)) {
++    const ids = this.spaces_.keysInGroup(groupId);
++    const keys = ids.map(id => this.spaces_.rowFor(id)!.key);
++    for (const id of ids) {
 +      const target = this.targetFor(id);
 +      if (target) {
 +        this.moveToSpace_(target, spaceId);
 +      }
 +    }
 +    this.tidyGroups_.moveTo(groupId, spaceId);
++    for (const key of keys) {
++      if (this.spaces_.rowFor(key)?.space === spaceId) {
++        this.spaces_.setGroup(key, groupId);
++      }
++    }
 +    this.refreshSections_();
 +  }
 +

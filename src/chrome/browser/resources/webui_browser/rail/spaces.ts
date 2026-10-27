@@ -732,6 +732,7 @@ export class Spaces {
     if (row.space !== spaceId) {
       const dormant = this.dormantWith_(spaceId, url);
       row.space = spaceId;
+      row.group = dormant?.group ?? '';
       if (dormant) {
         this.replaceRow_(dormant, row);
       } else {
@@ -911,8 +912,7 @@ export class Spaces {
   }
 
   setGroup(key: string, groupId: string) {
-    const row = this.rows_.find(
-        other => other.key === key || other.tabId === key);
+    const row = this.rowFor(key);
     if (!row || row.group === groupId) {
       return;
     }
@@ -924,7 +924,7 @@ export class Spaces {
       tabId: string, createGroup: (spaceId: string, name: string) => string) {
     const row = this.byTab(tabId);
     const opener = row ? this.rowFor(row.opener) : undefined;
-    if (!row || !opener || row.group) {
+    if (!row || !opener || row.group || opener.space !== row.space) {
       return;
     }
     const groupId = opener.group || createGroup(opener.space, opener.title);
@@ -946,7 +946,23 @@ export class Spaces {
   }
 
   rowFor(id: string): TabRow|undefined {
+    if (!id) {
+      return undefined;
+    }
     return this.rows_.find(row => row.key === id || row.tabId === id);
+  }
+
+  dropForeignGroups(spaceOfGroup: (groupId: string) => string|undefined) {
+    let changed = false;
+    for (const row of this.rows_) {
+      if (row.group && spaceOfGroup(row.group) !== row.space) {
+        row.group = '';
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.onChange_();
+    }
   }
 
   keysInGroup(groupId: string): string[] {
@@ -1009,6 +1025,9 @@ export class Spaces {
     const row = this.dormantByKey(key);
     if (!row || !this.byId(spaceId)) {
       return false;
+    }
+    if (row.space !== spaceId) {
+      row.group = '';
     }
     row.space = spaceId;
     this.toEnd_(row);

@@ -93,8 +93,9 @@ content::WebContents* InsertTab(BrowserWindowInterface* browser,
 
   std::unique_ptr<content::WebContents> contents =
       content::WebContents::Create(content::WebContents::CreateParams(profile));
-  contents->GetController().LoadURLWithParams(
-      content::NavigationController::LoadURLParams(url));
+  content::NavigationController::LoadURLParams load(url);
+  load.transition_type = ui::PAGE_TRANSITION_TYPED;
+  contents->GetController().LoadURLWithParams(load);
 
   if (mini) {
     content::WebContents* inserted = contents.get();
