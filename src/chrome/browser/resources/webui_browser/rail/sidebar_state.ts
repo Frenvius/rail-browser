@@ -93,6 +93,55 @@ export function parseSidebarState(value: string): SidebarState|null {
   }
 }
 
+interface OpenTab {
+  id: string;
+  url: string;
+}
+
+function matchedUrls(urls: string[], open: OpenTab[]): number {
+  const left = open.map(tab => tab.url);
+  return urls.filter(url => {
+    const index = left.indexOf(url);
+    if (index < 0) {
+      return false;
+    }
+    left.splice(index, 1);
+    return true;
+  }).length;
+}
+
+export function earlierOwnerOf(
+    state: SidebarState|null, open: OpenTab[], known = ''): string {
+  const favorites = state?.favoritesByProfile ??
+      {'': state?.favorites ?? state?.essentials ?? []};
+  const entries: Array<StoredTab|StoredPin|string> = [
+    ...(state?.spaces ?? []).flatMap(space => [...space.pinned, ...space.tabs]),
+    ...Object.values(favorites).flat(),
+  ];
+  const byOwner = new Map<string, Array<StoredTab|StoredPin>>();
+  for (const entry of entries) {
+    if (typeof entry === 'string' || !isEarlierRun(entry.owner)) {
+      continue;
+    }
+    byOwner.set(entry.owner!, [...(byOwner.get(entry.owner!) ?? []), entry]);
+  }
+  if (byOwner.has(known)) {
+    return known;
+  }
+  const ranked = [...byOwner].map(([owner, owned]) => {
+    const matched = matchedUrls(owned.map(entry => entry.url), open);
+    const sameTab = owned.filter(
+        entry => open.some(tab => tab.id === entry.tab && tab.url === entry.url));
+    return {owner, rank: [matched, matched - owned.length, sameTab.length]};
+  });
+  const byRank = (one: number[], other: number[]) =>
+      one.map((value, index) => other[index]! - value).find(Boolean) ?? 0;
+  const [best] = ranked.filter(candidate => candidate.rank[0]! > 0)
+                     .sort((one, other) => byRank(one.rank, other.rank) ||
+                               one.owner.localeCompare(other.owner));
+  return best?.owner ?? '';
+}
+
 export async function readSidebarState(): Promise<SidebarState|null> {
   const {value} =
       await browserProxyFactory.getInstance().handler.getSidebarState();
@@ -176,6 +225,16 @@ function bindingOf(record: Record<string, unknown>): unknown[]|undefined {
       undefined;
 }
 
+function boundThisRun(binding: unknown[]|undefined): boolean {
+  const owner = binding?.[0];
+  return typeof owner === 'string' && !isEarlierRun(owner);
+}
+
+function boundEarlier(binding: unknown[]|undefined): boolean {
+  const owner = binding?.[0];
+  return typeof owner === 'string' && isEarlierRun(owner);
+}
+
 export function mergeState(
     base: unknown, mine: unknown, theirs: unknown): unknown {
   if (Array.isArray(mine) && Array.isArray(theirs)) {
@@ -193,9 +252,13 @@ export function mergeState(
         merged[key] = value;
       }
     }
-    const binding =
-        pick(bindingOf(old), bindingOf(mine), bindingOf(theirs)) as
-        unknown[] | undefined;
+    const ours = bindingOf(mine);
+    const others = bindingOf(theirs);
+    const binding = (boundThisRun(ours) && boundEarlier(others) ? ours :
+                     boundThisRun(others) && boundEarlier(ours) ?
+                     others :
+                     pick(bindingOf(old), ours, others)) as unknown[] |
+        undefined;
     BINDING_KEYS.forEach((key, index) => {
       if (binding && binding[index] !== null) {
         merged[key] = binding[index];
@@ -308,14 +371,19 @@ export class SidebarStore {
       return incoming;
     }
     const rev = incoming.rev ?? '';
+    const known = !!rev && this.history_.has(rev);
+    const own = this.own_.delete(rev);
     const theirs = unstamped(incoming);
     const base = this.history_.get(incoming.parent ?? '');
-    if (rev) {
+    if (rev && (own || !known)) {
       this.head_ = rev;
       this.remember_(rev, theirs);
     }
-    if (this.own_.delete(rev)) {
+    if (own) {
       this.received_ = false;
+      return null;
+    }
+    if (known) {
       return null;
     }
     const text = JSON.stringify(theirs);

@@ -3,7 +3,7 @@ import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
 import {TabNetworkState} from '../tabs.mojom-webui.js';
 
 import type {SidebarState, StoredPin} from './sidebar_state.js';
-import {WINDOW_ID} from './sidebar_state.js';
+import {isEarlierRun, WINDOW_ID} from './sidebar_state.js';
 
 const FAVORITES_PREFIX = 'fav:';
 
@@ -31,6 +31,7 @@ export interface PinnedEntry {
   tabId: string;
   owner: string;
   remote: string;
+  earlierTab: string;
   folder: string;
 }
 
@@ -38,7 +39,6 @@ export interface PinnedEntry {
 // not have a tab driving it, which is what lets the row outlive a close.
 export class PinnedTabs {
   private entries_: PinnedEntry[] = [];
-  private restored_ = false;
 
   constructor(private onChange_: () => void) {}
 
@@ -62,7 +62,7 @@ export class PinnedTabs {
 
   restore(
       state: SidebarState|null, tabs: Tab[], claimed: Set<string>,
-      stale: (owner?: string) => boolean = () => false) {
+      adopted = '') {
     const previous = new Map(this.entries_.map(entry => [entry.key, entry]));
     this.entries_ = [];
     const groups: Array<[string, StoredPin[]]> =
@@ -83,17 +83,23 @@ export class PinnedTabs {
         if (existing) {
           previous.delete(existing.key);
         }
-        const remote = stale(pin.owner) ? '' : pin.tab ?? '';
+        const earlier = isEarlierRun(pin.owner);
+        const remote = earlier ? '' : pin.tab ?? '';
         const unclaimed = tabs.filter(candidate => !claimed.has(candidate.id));
-        const byUrlMatch = !existing && !this.restored_;
+        const byUrlMatch = earlier && !!adopted && pin.owner === adopted;
+        const sameUrl = (candidate: Tab) =>
+            byUrlMatch && candidate.url === pin.url;
         const tab =
             unclaimed.find(candidate => candidate.id === existing?.tabId) ??
             unclaimed.find(
-                candidate => remote ? candidate.id === remote :
-                                      byUrlMatch && candidate.url === pin.url);
+                candidate => sameUrl(candidate) && candidate.id === pin.tab) ??
+            unclaimed.find(
+                candidate =>
+                    remote ? candidate.id === remote : sameUrl(candidate));
         if (tab) {
           claimed.add(tab.id);
         }
+        const parked = earlier && !tab;
         const foreign = !tab && !!remote && pin.owner !== WINDOW_ID &&
             !tabs.some(one => one.id === remote);
         this.entries_.push({
@@ -106,13 +112,33 @@ export class PinnedTabs {
           title: pin.title,
           favicon: pin.favicon,
           tabId: tab ? tab.id : '',
-          owner: foreign ? pin.owner ?? '' : '',
+          owner: foreign || parked ? pin.owner ?? '' : '',
           remote: foreign ? remote : '',
+          earlierTab: parked ? pin.tab ?? '' : '',
           folder: pin.folder ?? '',
         });
       }
     }
-    this.restored_ = true;
+  }
+
+  reattach(tabs: Tab[], claimed: Set<string>): PinnedEntry[] {
+    const reattached: PinnedEntry[] = [];
+    for (const entry of this.entries_) {
+      if (entry.tabId || entry.remote || isEarlierRun(entry.owner)) {
+        continue;
+      }
+      const tab = tabs.find(
+          candidate => !claimed.has(candidate.id) && candidate.url === entry.url);
+      if (tab) {
+        claimed.add(tab.id);
+        entry.tabId = tab.id;
+        reattached.push(entry);
+      }
+    }
+    if (reattached.length) {
+      this.onChange_();
+    }
+    return reattached;
   }
 
   snapshot(): PinnedEntry[] {
@@ -141,6 +167,7 @@ export class PinnedTabs {
       tabId: tab.id,
       owner: '',
       remote: '',
+      earlierTab: '',
       folder: '',
     });
   }
@@ -157,6 +184,7 @@ export class PinnedTabs {
       tabId: '',
       owner: row.remote ? row.owner ?? '' : '',
       remote: row.remote ?? '',
+      earlierTab: '',
       folder: '',
     });
   }

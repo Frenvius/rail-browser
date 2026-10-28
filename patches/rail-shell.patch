@@ -6553,7 +6553,7 @@ index b7a5099..94ea278 100644
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow, TidySection} from '../rail/sections.js';
 +import {anchorDroppedGroups, reanchorEmptyGroups, splitSections} from '../rail/sections.js';
 +import type {SidebarState} from '../rail/sidebar_state.js';
-+import {INCOGNITO, isEarlierRun, MINI, readSidebarState, SidebarStore} from '../rail/sidebar_state.js';
++import {earlierOwnerOf, INCOGNITO, MINI, readSidebarState, SidebarStore, WINDOW_ID} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
 +import type {BoardColumn} from '../rail/space_board.js';
 +import {spaceBoard} from '../rail/space_board.js';
@@ -6647,7 +6647,7 @@ index b7a5099..94ea278 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -95,32 +166,128 @@ export class TabStripElement extends CrLitElement implements
+@@ -95,32 +166,130 @@ export class TabStripElement extends CrLitElement implements
          reflect: true,
          attribute: 'drag-in-progress',
        },
@@ -6734,6 +6734,8 @@ index b7a5099..94ea278 100644
 +  protected accessor archiveHours_: ArchiveHours = {};
 +  private readonly selection_ = new TabSelection();
 +  private pendingBelow_ = '';
++  private sidebarRestored_ = false;
++  private unappliedSidebarState_: string|null = null;
 +  private readonly store_ = new SidebarStore(
 +      () => serializeSidebar(
 +          this.spaces_, this.pinnedTabs_, this.folders_, this.tidyGroups_));
@@ -6786,7 +6788,7 @@ index b7a5099..94ea278 100644
    }
  
    override connectedCallback() {
-@@ -128,11 +295,33 @@ export class TabStripElement extends CrLitElement implements
+@@ -128,11 +297,33 @@ export class TabStripElement extends CrLitElement implements
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -6820,7 +6822,7 @@ index b7a5099..94ea278 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +343,110 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +345,125 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -6837,6 +6839,12 @@ index b7a5099..94ea278 100644
 +    if (primary) {
 +      this.openStartupTab_(restoredRow);
 +    }
++    this.sidebarRestored_ = true;
++    if (this.unappliedSidebarState_ !== null) {
++      this.onSidebarStateChanged_(this.unappliedSidebarState_);
++      this.unappliedSidebarState_ = null;
++    }
++    this.store_.save();
 +    if (INCOGNITO && !MINI &&
 +        items.every(
 +            item => item.type !== 'tab' || isNewTabUrl(item.tabData.url))) {
@@ -6855,37 +6863,46 @@ index b7a5099..94ea278 100644
 +
 +  private async restoreSidebar_(tabs: Tab[]): Promise<boolean> {
 +    const handler = browserProxyFactory.getInstance().handler;
-+    const [state, {profiles}, {windows}] = await Promise.all([
++    const [state, {profiles}, {windows}, {earlier}] = await Promise.all([
 +      readSidebarState(),
 +      handler.listProfiles(),
 +      handler.listWindows(),
++      handler.exchangeWindowKey(WINDOW_ID),
 +    ]);
 +    const primary = !MINI && !windows.length;
 +    this.store_.seed(state);
 +    this.spaces_.setProfiles(profiles);
-+    this.restoreSidebarState_(state, tabs, primary ? () => true : isEarlierRun);
++    const claimed = this.restoreSidebarState_(
++        state, tabs, earlierOwnerOf(state, tabs, earlier));
++    for (const entry of this.pinnedTabs_.reattach(tabs, claimed)) {
++      this.spaces_.assignPinned(entry.tabId, entry.space, entry.url);
++    }
 +    return primary;
 +  }
 +
 +  private restoreSidebarState_(
-+      state: SidebarState|null, tabs: Tab[],
-+      stale: (owner?: string) => boolean = () => false) {
++      state: SidebarState|null, tabs: Tab[], adopted = ''): Set<string> {
 +    const claimed = new Set<string>();
 +    this.folders_.clear();
 +    this.tidyGroups_.clear();
-+    this.pinnedTabs_.restore(state, tabs, claimed, stale);
-+    this.spaces_.restore(state, tabs, claimed, stale);
++    this.pinnedTabs_.restore(state, tabs, claimed, adopted);
++    this.spaces_.restore(state, tabs, claimed, adopted);
 +    this.folders_.restore(state);
 +    this.tidyGroups_.restore(state, space => space.tidyGroups);
 +    this.spaces_.dropForeignGroups(id => this.tidyGroups_.byId(id)?.space);
 +    for (const entry of this.pinnedTabs_.entries) {
 +      if (entry.tabId) {
-+        this.spaces_.assign(entry.tabId, entry.space, entry.url);
++        this.spaces_.assignPinned(entry.tabId, entry.space, entry.url);
 +      }
 +    }
++    return claimed;
 +  }
 +
 +  private onSidebarStateChanged_(value: string) {
++    if (!this.sidebarRestored_) {
++      this.unappliedSidebarState_ = value;
++      return;
++    }
 +    const state = this.store_.accept(value);
 +    if (!state) {
 +      return;
@@ -6931,7 +6948,7 @@ index b7a5099..94ea278 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -175,18 +462,8 @@ export class TabStripElement extends CrLitElement implements
+@@ -175,18 +464,8 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -6952,7 +6969,7 @@ index b7a5099..94ea278 100644
    }
  
  
-@@ -194,14 +471,39 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +473,39 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -6993,7 +7010,7 @@ index b7a5099..94ea278 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -209,6 +511,12 @@ export class TabStripElement extends CrLitElement implements
+@@ -209,6 +513,12 @@ export class TabStripElement extends CrLitElement implements
      this.dragDelegate_.onUpdate();
    }
 
@@ -7006,7 +7023,7 @@ index b7a5099..94ea278 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
 
-@@ -217,48 +525,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +527,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7060,7 +7077,7 @@ index b7a5099..94ea278 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +580,2319 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +582,2330 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7210,8 +7227,13 @@ index b7a5099..94ea278 100644
 +  private addTab(tab: Tab, index: number) {
 +    const requested = this.spaces_.requested(tab.id);
 +    const taken = this.taking_.has(tab.id);
-+    this.pinnedTabs_.adoptRemote(tab.id);
-+    this.spaces_.adopt(tab.id, tab.url);
++    const pin = this.pinnedTabs_.adoptRemote(tab.id) ??
++        this.pinnedTabs_.byTab(tab.id);
++    if (pin) {
++      this.spaces_.assignPinned(tab.id, pin.space, tab.url);
++    } else {
++      this.spaces_.adopt(tab.id, tab.url);
++    }
 +    const neighbors = this.items_;
 +    const at = Math.min(index, neighbors.length);
 +    const items = [...neighbors];
@@ -7501,7 +7523,7 @@ index b7a5099..94ea278 100644
 +    const key = this.reopenHistory_.claimPinTab(row.url);
 +    const entry = key ? this.pinnedTabs_.byKey(key) : undefined;
 +    if (entry && !entry.tabId) {
-+      this.spaces_.claim(tabId, entry.space);
++      this.spaces_.assignPinned(tabId, entry.space, row.url);
 +      this.pinnedTabs_.attach(entry.key, tabId);
 +      const item = this.findItem_<TabItem>(tabId, 'tab');
 +      if (item) {
@@ -8255,7 +8277,11 @@ index b7a5099..94ea278 100644
 +      const wasActive = tabId === this.activeTab_;
 +      const rehome = this.spaces_.profileOf(this.spaces_.spaceOf(tabId)) !==
 +          this.spaces_.profileOf(spaceId);
-+      this.spaces_.assign(tabId, spaceId, target.url);
++      if (entry) {
++        this.spaces_.assignPinned(tabId, spaceId, target.url);
++      } else {
++        this.spaces_.assign(tabId, spaceId, target.url);
++      }
 +      if (rehome) {
 +        this.reprofile_(tabId, spaceId, entry?.key ?? '');
 +      } else if (wasActive) {
@@ -8898,12 +8924,14 @@ index b7a5099..94ea278 100644
 +      return;
 +    }
 +    this.wakingPins_.add(entry.key);
++    this.spaces_.expectPinnedTab();
 +    try {
 +      const tabId = await this.createTab_(entry.url, entry.space);
 +      if (tabId) {
 +        this.pinnedTabs_.attach(entry.key, tabId);
 +      }
 +    } finally {
++      this.spaces_.settlePinnedTab();
 +      this.wakingPins_.delete(entry.key);
 +      this.refreshSections_();
 +    }
@@ -9639,6 +9667,54 @@ index 9069a86..99ca059 100644
    goBack() {
      this.guestHandler.goBack();
    }
+diff --git a/chrome/browser/sessions/session_restore.cc b/chrome/browser/sessions/session_restore.cc
+index 684340e..b0df14f 100644
+--- a/chrome/browser/sessions/session_restore.cc
++++ b/chrome/browser/sessions/session_restore.cc
+@@ -83,6 +83,7 @@
+ #include "chrome/browser/ui/ui_features.h"
+ #include "chrome/browser/ui/waap/initial_webui_window_metrics_manager.h"
+ #include "chrome/browser/ui/webui/whats_new/whats_new_util.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_window_key.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser.h"
+ #include "chrome/browser/ui/window_metadata/window_metadata_controller.h"
+ #include "chrome/browser/web_applications/web_app_provider.h"
+@@ -1339,6 +1340,7 @@ class SessionRestoreImpl : public BrowserCollectionObserver {
+     base::TimeTicks now = base::TimeTicks::Now();
+     BrowserWindowInterface* browser_window =
+         CreateBrowserWindow(std::move(params));
++    rail::RememberEarlierWindowKey(browser_window->GetSessionID(), extra_data);
+     if (auto* manager =
+             InitialWebUIWindowMetricsManager::From(browser_window)) {
+       manager->SetWindowCreationInfo(
+diff --git a/chrome/browser/sessions/session_service_base.cc b/chrome/browser/sessions/session_service_base.cc
+index 7495323..68c69a7 100644
+--- a/chrome/browser/sessions/session_service_base.cc
++++ b/chrome/browser/sessions/session_service_base.cc
+@@ -38,6 +38,7 @@
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model_selection_state.h"
+ #include "chrome/browser/ui/ui_features.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_window_key.h"
+ #include "chrome/browser/ui/window_feature_controller/window_feature_controller.h"
+ #include "chrome/browser/ui/window_metadata/window_metadata_controller.h"
+ #include "components/saved_tab_groups/public/tab_group_sync_service.h"
+@@ -773,6 +774,15 @@ void SessionServiceBase::BuildCommandsForBrowser(
+     }
+   }
+
++  const std::string rail_window_key =
++      rail::WindowKeyOf(browser->GetSessionID());
++  if (!rail_window_key.empty()) {
++    command_storage_manager()->AppendRebuildCommand(
++        sessions::CreateAddWindowExtraDataCommand(
++            browser->GetSessionID(), rail::kWindowKeyExtraData,
++            rail_window_key));
++  }
++
+   int index = 0;
+   for (const tabs::TabInterface* tab_interface : *tab_strip) {
+     WebContents* tab = tab_interface->GetContents();
 diff --git a/chrome/browser/taskbar/taskbar_decorator_win.cc b/chrome/browser/taskbar/taskbar_decorator_win.cc
 index 90969f7..e445d77 100644
 --- a/chrome/browser/taskbar/taskbar_decorator_win.cc
@@ -10748,7 +10824,7 @@ diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_
 index ffbd17c..4097a2d 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,40 @@ source_set("headers") {
+@@ -13,6 +13,41 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
@@ -10786,10 +10862,11 @@ index ffbd17c..4097a2d 100644
 +    "rail/rail_mini_window_restore.h",
 +    "rail/rail_tab_transfer.h",
 +    "rail/rail_updater.h",
++    "rail/rail_window_key.h",
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -26,6 +60,8 @@ source_set("webui_browser") {
+@@ -26,6 +61,8 @@ source_set("webui_browser") {
      ":headers",
      "//base",
      "//chrome/browser/ui/bookmarks",
@@ -10798,7 +10875,7 @@ index ffbd17c..4097a2d 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -36,7 +72,9 @@ source_set("webui_browser") {
+@@ -36,7 +73,9 @@ source_set("webui_browser") {
      "//chrome/browser/ui/views/location_bar",
      "//chrome/browser/ui/views/side_panel",
      "//chrome/browser/ui/webui/cr_components/searchbox",
@@ -10808,7 +10885,7 @@ index ffbd17c..4097a2d 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/bookmarks",
      "//components/browser_apis/tab_drag:mojom",
-@@ -44,6 +82,7 @@ source_set("webui_browser") {
+@@ -44,6 +83,7 @@ source_set("webui_browser") {
      "//components/browser_apis/tab_strip:mojom_ui_controller",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
      "//components/guest_contents/common:mojom",
@@ -10816,7 +10893,7 @@ index ffbd17c..4097a2d 100644
      "//content/public/browser",
      "//ui/base/unowned_user_data",
      "//ui/color",
-@@ -57,6 +96,62 @@ source_set("impl") {
+@@ -57,6 +97,63 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -10876,10 +10953,11 @@ index ffbd17c..4097a2d 100644
 +    "rail/rail_tab_sleep.h",
 +    "rail/rail_tab_transfer.cc",
 +    "rail/rail_updater.cc",
++    "rail/rail_window_key.cc",
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -80,6 +175,17 @@ source_set("impl") {
+@@ -80,6 +177,17 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
    }
  
@@ -10897,7 +10975,7 @@ index ffbd17c..4097a2d 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -89,8 +195,13 @@ source_set("impl") {
+@@ -89,8 +197,13 @@ source_set("impl") {
      "//chrome/browser/bookmarks",
      "//chrome/browser/contextual_search",
      "//chrome/browser/devtools",
@@ -10911,7 +10989,7 @@ index ffbd17c..4097a2d 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/resources/webui_toolbar_shared:resources",
      "//chrome/browser/themes",
-@@ -106,6 +217,7 @@ source_set("impl") {
+@@ -106,6 +219,7 @@ source_set("impl") {
      "//chrome/browser/ui/find_bar",
      "//chrome/browser/ui/fullscreen",
      "//chrome/browser/ui/location_bar",
@@ -10919,7 +10997,7 @@ index ffbd17c..4097a2d 100644
      "//chrome/browser/ui/side_panel",
      "//chrome/browser/ui/side_panel:side_panel_views_dependent",
      "//chrome/browser/ui/tabs:tabs_public",
-@@ -123,8 +235,12 @@ source_set("impl") {
+@@ -123,8 +237,12 @@ source_set("impl") {
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
      "//chrome/browser/ui/webui:favicon_source",
@@ -10932,7 +11010,7 @@ index ffbd17c..4097a2d 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +248,43 @@ source_set("impl") {
+@@ -132,13 +250,43 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
@@ -10976,7 +11054,7 @@ index ffbd17c..4097a2d 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +305,33 @@ source_set("impl") {
+@@ -159,17 +307,33 @@ source_set("impl") {
        "//ui/base/accelerators/global_accelerator_listener",
      ]
    }
@@ -11163,7 +11241,7 @@ index 7e0800a..2ae8aff 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +197,109 @@ interface PageHandler {
+@@ -93,6 +197,111 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -11219,6 +11297,8 @@ index 7e0800a..2ae8aff 100644
 +  RecordSpaceVisit(string space_id, url.mojom.Url url);
 +
 +  ListWindows() => (array<RailWindow> windows);
++
++  ExchangeWindowKey(string key) => (string earlier);
 +
 +  MoveTabsToWindow(int32 window_id, array<tabs_api.mojom.NodeId> ids)
 +      => (bool moved);
@@ -11479,7 +11559,7 @@ index cb0e145..5694e00 100644
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
-@@ -27,12 +29,29 @@
+@@ -27,12 +29,30 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
@@ -11499,6 +11579,7 @@ index cb0e145..5694e00 100644
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_sleep.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_transfer.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_window_key.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
  #include "components/browser_apis/tab_strip/types/node_id.h"
@@ -11509,7 +11590,7 @@ index cb0e145..5694e00 100644
  #include "components/vector_icons/vector_icons.h"
  #include "content/public/browser/devtools_agent_host.h"
  #include "content/public/browser/navigation_controller.h"
-@@ -41,6 +60,7 @@
+@@ -41,6 +61,7 @@
  #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/ui_base_features.h"
  #include "ui/gfx/vector_icon_types.h"
@@ -11517,7 +11598,7 @@ index cb0e145..5694e00 100644
  #include "ui/views/controls/menu/menu_model_adapter.h"
  #include "ui/views/controls/menu/menu_runner.h"
  #include "ui/views/interaction/element_tracker_views.h"
-@@ -199,12 +219,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -199,12 +220,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
    }
  
    if (!tab) {
@@ -11532,7 +11613,7 @@ index cb0e145..5694e00 100644
      return;
    }
  
-@@ -290,7 +310,114 @@ void WebUIBrowserPageHandler::Close() {
+@@ -290,7 +311,114 @@ void WebUIBrowserPageHandler::Close() {
    GetBrowserWindow()->Close();
  }
  
@@ -11647,7 +11728,7 @@ index cb0e145..5694e00 100644
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
    back_forward_menu_model_.reset();
-@@ -314,12 +441,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
+@@ -314,12 +442,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
                              : BackForwardMenuModel::ModelType::kForward);
    back_forward_menu_model_adapter_ =
        std::make_unique<views::MenuModelAdapter>(back_forward_menu_model_.get());
@@ -11671,7 +11752,7 @@ index cb0e145..5694e00 100644
  }
  
  // static
-@@ -337,6 +472,389 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +473,395 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -11992,6 +12073,12 @@ index cb0e145..5694e00 100644
 +  std::move(callback).Run(std::move(windows));
 +}
 +
++void WebUIBrowserPageHandler::ExchangeWindowKey(
++    const std::string& key,
++    ExchangeWindowKeyCallback callback) {
++  std::move(callback).Run(rail::ExchangeWindowKey(GetBrowser(), key));
++}
++
 +void WebUIBrowserPageHandler::MoveTabsToWindow(
 +    int32_t window_id,
 +    const std::vector<tabs_api::NodeId>& ids,
@@ -12061,7 +12148,7 @@ index cb0e145..5694e00 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +862,60 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +869,60 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -12156,7 +12243,7 @@ index 41a8923..66011b9 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,10 +67,105 @@ class WebUIBrowserPageHandler
+@@ -56,10 +67,107 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -12203,6 +12290,8 @@ index 41a8923..66011b9 100644
 +                    AddSiteRouteCallback callback) override;
 +  void RecordSpaceVisit(const std::string& space_id, const GURL& url) override;
 +  void ListWindows(ListWindowsCallback callback) override;
++  void ExchangeWindowKey(const std::string& key,
++                         ExchangeWindowKeyCallback callback) override;
 +  void MoveTabsToWindow(int32_t window_id,
 +                        const std::vector<tabs_api::NodeId>& ids,
 +                        MoveTabsToWindowCallback callback) override;
@@ -12262,7 +12351,7 @@ index 41a8923..66011b9 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -71,19 +179,30 @@ class WebUIBrowserPageHandler
+@@ -71,19 +181,30 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  

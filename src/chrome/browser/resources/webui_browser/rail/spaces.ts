@@ -6,7 +6,7 @@ import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
 import type {Folders} from './folders.js';
 import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 import type {SidebarState, StoredPin, StoredSpace, StoredTab} from './sidebar_state.js';
-import {INCOGNITO, MINI, WINDOW_ID} from './sidebar_state.js';
+import {INCOGNITO, isEarlierRun, MINI, WINDOW_ID} from './sidebar_state.js';
 
 export const SPACE_COLORS = [
   '#331b47', '#591b1c', '#58341a', '#725919',
@@ -273,6 +273,7 @@ export interface TabRow {
   group: string;
   owner: string;
   remote: string;
+  earlierTab: string;
   url: string;
   title: string;
   favicon: string;
@@ -295,6 +296,7 @@ interface RowFields {
   group?: string;
   owner?: string;
   remote?: string;
+  earlierTab?: string;
 }
 
 export type DormantFields =
@@ -316,6 +318,7 @@ export class Spaces {
   private rows_: TabRow[] = [];
   private claims_ = new Map<string, string>();
   private creating_ = 0;
+  private openingPins_ = 0;
   private profiles_: SpaceProfile[] = [];
   private material_: SystemBackdropMaterial = DEFAULT_MATERIAL;
 
@@ -374,11 +377,12 @@ export class Spaces {
     this.rows_ = [];
     this.claims_.clear();
     this.creating_ = 0;
+    this.openingPins_ = 0;
   }
 
   restore(
       state: SidebarState|null, tabs: Tab[], claimed: Set<string>,
-      stale: (owner?: string) => boolean = () => false) {
+      adopted = '') {
     const previous = this.rows_;
     const activeKeys =
         new Map(this.spaces_.map(space => [space.id, space.activeKey]));
@@ -417,12 +421,19 @@ export class Spaces {
       this.spaces_.push(space);
       for (const entry of stored.tabs ?? []) {
         const {id, url, title, favicon, group, ...origin} = storedTab(entry);
-        const byUrl = stale(origin.owner);
-        const owner = byUrl ? '' : origin.owner ?? '';
-        const remote = byUrl ? '' : origin.tab ?? '';
-        const tab = MINI ? undefined : tabs.find(
-            candidate => !claimed.has(candidate.id) &&
-                (byUrl ? candidate.url === url : candidate.id === remote));
+        const earlier = isEarlierRun(origin.owner);
+        const byUrl = earlier && !!adopted && origin.owner === adopted;
+        const owner = earlier ? '' : origin.owner ?? '';
+        const remote = earlier ? '' : origin.tab ?? '';
+        const unclaimed =
+            MINI ? [] : tabs.filter(candidate => !claimed.has(candidate.id));
+        const tab = byUrl ?
+            unclaimed.find(
+                candidate =>
+                    candidate.url === url && candidate.id === origin.tab) ??
+                unclaimed.find(candidate => candidate.url === url) :
+            unclaimed.find(candidate => !!remote && candidate.id === remote);
+        const parked = earlier && !tab;
         if (tab) {
           claimed.add(tab.id);
         } else if (remote && tabs.some(one => one.id === remote)) {
@@ -444,8 +455,9 @@ export class Spaces {
           title,
           favicon,
           group,
-          owner: foreign ? owner : '',
+          owner: foreign ? owner : parked ? origin.owner : '',
           remote: foreign ? remote : '',
+          earlierTab: parked ? origin.tab : '',
         });
         used.add(row.key);
         if (url === stored.activeUrl && !space.activeKey) {
@@ -466,6 +478,19 @@ export class Spaces {
       }
       const home = MINI ? undefined : homes.get(tab.id);
       if (!home || !this.byId(home.space) || this.claims_.has(tab.id)) {
+        const parked = MINI || this.claims_.has(tab.id) ?
+            undefined :
+            this.rows_.find(
+                row => !row.tabId && !row.remote &&
+                    isEarlierRun(row.owner) && row.url === tab.url);
+        if (parked) {
+          claimed.add(tab.id);
+          parked.tabId = tab.id;
+          parked.owner = '';
+          parked.earlierTab = '';
+          this.onChange_();
+          continue;
+        }
         this.adopt(tab.id, tab.url);
         continue;
       }
@@ -627,6 +652,14 @@ export class Spaces {
     this.creating_ = Math.max(0, this.creating_ - 1);
   }
 
+  expectPinnedTab() {
+    this.openingPins_++;
+  }
+
+  settlePinnedTab() {
+    this.openingPins_ = Math.max(0, this.openingPins_ - 1);
+  }
+
   requested(tabId: string): boolean {
     return this.creating_ > 0 || this.claims_.has(tabId);
   }
@@ -742,6 +775,26 @@ export class Spaces {
     this.onChange_();
   }
 
+  assignPinned(tabId: string, spaceId: string, url: string) {
+    this.claims_.delete(tabId);
+    if (!this.byId(spaceId)) {
+      return;
+    }
+    const row = this.byTab(tabId);
+    if (!row) {
+      this.push_({space: spaceId, tabId, url, title: '', favicon: ''});
+      this.onChange_();
+      return;
+    }
+    row.url = url;
+    if (row.space !== spaceId) {
+      row.space = spaceId;
+      row.group = '';
+      this.toEnd_(row);
+    }
+    this.onChange_();
+  }
+
   private attach_(spaceId: string, tabId: string, url: string) {
     const dormant = this.dormantWith_(spaceId, url);
     if (dormant) {
@@ -752,12 +805,12 @@ export class Spaces {
   }
 
   private dormantWith_(spaceId: string, url: string): TabRow|undefined {
-    if (!url || isNewTabUrl(url)) {
+    if (!url || isNewTabUrl(url) || this.openingPins_) {
       return undefined;
     }
     return this.rows_.find(
         row => row.space === spaceId && !row.tabId && !row.pending &&
-            !row.remote && row.url === url);
+            !row.remote && !isEarlierRun(row.owner) && row.url === url);
   }
 
   private replaceRow_(dormant: TabRow, row: TabRow) {
@@ -1258,6 +1311,7 @@ export class Spaces {
       group: fields.group ?? '',
       owner: fields.owner ?? '',
       remote: fields.remote ?? '',
+      earlierTab: fields.earlierTab ?? '',
       space: fields.space,
       tabId: fields.tabId,
       url: fields.url,
@@ -1300,6 +1354,17 @@ export class Spaces {
   }
 }
 
+type Binding = Pick<TabRow, 'tabId'|'owner'|'remote'|'earlierTab'>;
+
+function storedBinding({tabId, owner, remote, earlierTab}: Binding):
+    {owner?: string, tab?: string} {
+  if (tabId) {
+    return {owner: WINDOW_ID, tab: tabId};
+  }
+  const earlier = isEarlierRun(owner) ? earlierTab : '';
+  return {owner: owner || undefined, tab: remote || earlier || undefined};
+}
+
 function storePin(entry: PinnedEntry): StoredPin {
   const {key, home, homeTitle, homeFavicon, url, title, favicon, folder} =
       entry;
@@ -1312,8 +1377,7 @@ function storePin(entry: PinnedEntry): StoredPin {
     title,
     favicon,
     folder,
-    owner: entry.tabId ? WINDOW_ID : entry.owner || undefined,
-    tab: entry.tabId || entry.remote || undefined,
+    ...storedBinding(entry),
   };
 }
 
@@ -1334,14 +1398,13 @@ export function serializeSidebar(
     tidyGroups: tidyGroups.storedIn(space.id),
     tabs: spaces.rowsIn(space.id)
               .filter(row => !pinned.byTab(row.tabId) && !isNewTabUrl(row.url))
-              .map(({key, url, title, favicon, group, tabId, owner, remote}) => ({
-                     id: key,
-                     url,
-                     title,
-                     favicon,
-                     group,
-                     owner: tabId ? WINDOW_ID : owner || undefined,
-                     tab: tabId || remote || undefined,
+              .map(row => ({
+                     id: row.key,
+                     url: row.url,
+                     title: row.title,
+                     favicon: row.favicon,
+                     group: row.group,
+                     ...storedBinding(row),
                    })),
   }));
   const favoritesByProfile: Record<string, StoredPin[]> = {};

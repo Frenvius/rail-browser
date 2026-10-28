@@ -14,18 +14,30 @@ const compile = (file: string) => transpile(new URL(
     `../src/chrome/browser/resources/webui_browser/rail/${file}.ts`,
     import.meta.url));
 
+const isEarlierRun = (owner?: string) => !!owner && owner.startsWith('old.');
+
 const load = (file: string, name: string, mini = false,
     deps: Record<string, unknown> = {}) => {
-  const compiled = compile(file);
-  return new Function('SystemBackdropMaterial', 'INCOGNITO', 'MINI',
-      'WINDOW_ID', ...Object.keys(deps), `${compiled}\nreturn ${name};`)(
-      {kAcrylic: 0, kMica: 1, kMicaAlt: 2}, false, mini, 'test-window',
-      ...Object.values(deps));
+  const scope: Record<string, unknown> = {
+    SystemBackdropMaterial: {kAcrylic: 0, kMica: 1, kMicaAlt: 2},
+    INCOGNITO: false,
+    MINI: mini,
+    WINDOW_ID: 'test-window',
+    isEarlierRun,
+    ...deps,
+  };
+  return new Function(...Object.keys(scope),
+      `${compile(file)}\nreturn ${name};`)(...Object.values(scope));
 };
 
-const mergeState = new Function('loadTimeData', 'location',
-    `${compile('sidebar_state')}\nreturn mergeState;`)(
-    {isInitialized: () => false}, {search: ''});
+const loadSidebarState = (name: string) => new Function('loadTimeData',
+    'location', `${compile('sidebar_state')}\nreturn ${name};`)({
+      isInitialized: () => true,
+      valueExists: (key: string) => key === 'railRunId',
+      getString: () => 'new',
+    }, {search: ''});
+const mergeState = loadSidebarState('mergeState');
+const earlierOwnerOf = loadSidebarState('earlierOwnerOf');
 const Spaces = load('spaces', 'Spaces');
 const PinnedTabs = load('pinned_tabs', 'PinnedTabs');
 const ReopenHistory = load('pinned_tabs', 'ReopenHistory');
@@ -340,13 +352,134 @@ test('a startup beside another window matches an earlier run by URL', () => {
   saved.spaces[0]!.tabs[1]!.tab = 'b0';
   const tabs = ids.flatMap(space => [0, 1].map(index =>
       ({...tab(`${space}${index}`), url: url(`${space}${index}`)})));
-  spaces.restore(saved, tabs, new Set(),
-      (owner?: string) => !!owner && owner.startsWith('old.'));
+  spaces.restore(saved, tabs, new Set(), 'old.w');
   for (const space of ids) {
     expect(spaces.rowsIn(space).map((row: {tabId: string}) => row.tabId))
         .toEqual([`${space}0`, `${space}1`]);
   }
   expect(spaces.remotes()).toEqual([]);
+});
+
+const restartUrl = (id: string) => `https://${id}.test/`;
+const restartTab = (id: string, url = restartUrl(id)) => ({...tab(id), url});
+const storedRow = (id: string, owner: string, url = restartUrl(id)) =>
+    ({id: `row-${id}`, url, title: '', favicon: '', owner, tab: `old-${id}`});
+const restartState = (rows: Record<string, unknown[]>) => ({
+  activeSpace: 'a',
+  spaces: Object.entries(rows).map(([id, tabs]) =>
+      ({...state.spaces[0], id, name: id, tabs})),
+});
+const rowTabs = (spaces: any, space: string) =>
+    spaces.rowsIn(space).map((row: {url: string, tabId: string}) =>
+        [row.url, row.tabId]);
+
+test('a window restoring after another one saved still finds its rows', () => {
+  const first = new (load('spaces', 'Spaces', false, {WINDOW_ID: 'new.w1'}))(
+      () => {});
+  const serialize = load('spaces', 'serializeSidebar', false,
+      {WINDOW_ID: 'new.w1'});
+  const saved = restartState({
+    a: [storedRow('a0', 'old.w1'), storedRow('a1', 'old.w1')],
+    b: [storedRow('b0', 'old.w2'), storedRow('b1', 'old.w2')],
+  });
+  first.restore(saved, [restartTab('a0'), restartTab('a1')], new Set(),
+      'old.w1');
+  const none = {entriesIn: () => [], byTab: () => undefined,
+    favoriteProfiles: () => []};
+  const noFolders = {storedIn: () => []};
+  const written = serialize(first, none, noFolders, noFolders);
+  expect(written.spaces[1].tabs.map((row: {owner: string}) => row.owner))
+      .toEqual(['old.w2', 'old.w2']);
+
+  const second = new (load('spaces', 'Spaces', false, {WINDOW_ID: 'new.w2'}))(
+      () => {});
+  second.restore(written, [restartTab('b0'), restartTab('b1')], new Set(),
+      'old.w2');
+  expect(rowTabs(second, 'a')).toEqual([
+    [restartUrl('a0'), ''], [restartUrl('a1'), '']]);
+  expect(rowTabs(second, 'b')).toEqual([
+    [restartUrl('b0'), 'b0'], [restartUrl('b1'), 'b1']]);
+});
+
+test('a startup only takes rows of the earlier window it matches', () => {
+  const spaces = new Spaces(() => {});
+  const mail = restartUrl('mail');
+  const saved = restartState({
+    a: [storedRow('m1', 'old.w1', mail), storedRow('a0', 'old.w1')],
+    b: [storedRow('m2', 'old.w2', mail), storedRow('b0', 'old.w2')],
+  });
+  const tabs = [restartTab('x', mail), restartTab('b0')];
+  const owner = earlierOwnerOf(saved, tabs);
+  expect(owner).toBe('old.w2');
+  spaces.restore(saved, tabs, new Set(), owner);
+  expect(rowTabs(spaces, 'a')).toEqual([[mail, ''], [restartUrl('a0'), '']]);
+  expect(rowTabs(spaces, 'b')).toEqual([[mail, 'x'], [restartUrl('b0'), 'b0']]);
+});
+
+test('the earlier window is the one whose tabs match best', () => {
+  const mail = restartUrl('mail');
+  const saved = restartState({
+    a: [storedRow('m1', 'old.w1', mail), storedRow('a0', 'old.w1')],
+    b: [storedRow('m2', 'old.w2', mail)],
+  });
+  expect(earlierOwnerOf(saved, [restartTab('t', mail)])).toBe('old.w2');
+  expect(earlierOwnerOf(saved, [restartTab('t', mail), restartTab('a0')]))
+      .toBe('old.w1');
+  expect(earlierOwnerOf(saved, [restartTab('t', restartUrl('other'))]))
+      .toBe('');
+  const twins = restartState({
+    a: [storedRow('m1', 'old.w1', mail)],
+    b: [storedRow('m2', 'old.w2', mail)],
+  });
+  expect(earlierOwnerOf(twins, [{...restartTab('old-m2', mail)}]))
+      .toBe('old.w2');
+  expect(earlierOwnerOf(restartState({
+    a: [{...storedRow('n', 'new.w1'), url: mail}],
+  }), [restartTab('t', mail)])).toBe('');
+});
+
+test('a known window key wins only when it still owns entries', () => {
+  const mail = restartUrl('mail');
+  const twins = restartState({
+    a: [storedRow('m1', 'old.w1', mail)],
+    b: [storedRow('m2', 'old.w2', mail)],
+  });
+  const open = [restartTab('t', mail)];
+  expect(earlierOwnerOf(twins, open, 'old.w2')).toBe('old.w2');
+  expect(earlierOwnerOf(twins, open, 'old.w1')).toBe('old.w1');
+  expect(earlierOwnerOf(twins, open, 'old.lost')).toBe('old.w1');
+  expect(earlierOwnerOf(twins, [restartTab('t', restartUrl('other'))],
+      'old.w2')).toBe('old.w2');
+});
+
+test('a row from an earlier run never binds a tab by its old id', () => {
+  const spaces = new Spaces(() => {});
+  const saved = restartState({a: [storedRow('a0', 'old.w1')], b: []});
+  spaces.restore(saved, [restartTab('old-a0', restartUrl('other'))],
+      new Set());
+  expect(rowTabs(spaces, 'a')).toEqual([
+    [restartUrl('a0'), ''], [restartUrl('other'), 'old-a0']]);
+  expect(spaces.remotes()).toEqual([]);
+});
+
+test('an unknown tab takes the parked row with its URL', () => {
+  const spaces = new Spaces(() => {});
+  const saved = restartState({
+    a: [storedRow('a0', 'old.w1')],
+    b: [storedRow('b0', 'old.w2')],
+  });
+  spaces.restore(saved, [restartTab('t', restartUrl('b0'))], new Set());
+  expect(rowTabs(spaces, 'b')).toEqual([[restartUrl('b0'), 't']]);
+});
+
+test('a binding from this run outlasts one from an earlier run', () => {
+  const row = {id: 'r', url: 'https://example.test/'};
+  const earlier = {tabs: [{...row, owner: 'old.w', tab: '10:2'}]};
+  const current = {tabs: [{...row, owner: 'new.a', tab: '12:2'}]};
+  for (const base of [undefined, earlier, current]) {
+    expect(mergeState(base, current, earlier).tabs[0].owner).toBe('new.a');
+    expect(mergeState(base, earlier, current).tabs[0].owner).toBe('new.a');
+  }
 });
 
 test('a window binding a row keeps its tab when the id repeats a run', () => {
@@ -459,14 +592,50 @@ test('restoring a pin never claims a loose tab by URL', () => {
   expect(pins.entries[0].tabId).toBe('');
 });
 
-test('the first restore reattaches pins to open tabs by URL', () => {
+test('startup reattaches pins to open tabs no row claimed by URL', () => {
   const pins = new PinnedTabs(() => {});
   const pin = {id: 'pinned-a', home: 'https://example.test/',
     url: 'https://example.test/', title: '', favicon: ''};
   const saved = {...state, spaces: [{...state.spaces[0], pinned: [pin]}]};
-  pins.restore(saved, [tab('open')], new Set());
+  const claimed = new Set<string>();
+  pins.restore(saved, [tab('open')], claimed);
+  expect(pins.entries[0].tabId).toBe('');
+  expect(pins.reattach([tab('open')], claimed)).toEqual([pins.entries[0]]);
   expect(pins.entries[0].tabId).toBe('open');
   expect(pins.entries[0].key).toBe('pinned-a');
+  pins.restore(saved, [tab('taken')], new Set());
+  expect(pins.reattach([tab('taken')], new Set(['taken']))).toEqual([]);
+});
+
+test('a pinned tab never takes the sleeping row that shows its page', () => {
+  const spaces = spacesWith([], twoSpaces);
+  spaces.assignPinned('pin', 'other', 'https://asleep.test/');
+  expect(spaces.rowsIn('other').map((row: any) => [row.key, row.tabId]))
+      .toEqual([['asleep', ''], [spaces.byTab('pin').key, 'pin']]);
+  expect(spaces.rowsIn('other')[0].group).toBe('other-group');
+});
+
+test('moving a pinned tab keeps the sleeping row of its page', () => {
+  const spaces = spacesWith([], twoSpaces);
+  spaces.assignPinned('pin', 's', 'https://asleep.test/');
+  spaces.assignPinned('pin', 'other', 'https://asleep.test/');
+  expect(spaces.rowsIn('s')).toHaveLength(0);
+  expect(spaces.rowsIn('other').map((row: any) => row.tabId))
+      .toEqual(['', 'pin']);
+});
+
+test('a pinned tab being opened never takes a sleeping row', () => {
+  const spaces = spacesWith([], twoSpaces);
+  spaces.expectPinnedTab();
+  spaces.adopt('pin', 'https://asleep.test/');
+  spaces.claim('pin', 'other');
+  spaces.settlePinnedTab();
+  expect(spaces.rowsIn('other').map((row: any) => row.tabId))
+      .toEqual(['', 'pin']);
+  spaces.adopt('later', 'https://asleep.test/');
+  spaces.assign('later', 'other', 'https://asleep.test/');
+  expect(spaces.rowsIn('other').map((row: any) => row.tabId))
+      .toEqual(['later', 'pin']);
 });
 
 test('a pin from an earlier run never binds a tab by its old id', () => {
@@ -477,7 +646,7 @@ test('a pin from an earlier run never binds a tab by its old id', () => {
   const saved = {...state, spaces: [{...state.spaces[0], pinned: [pin]}]};
   pins.restore(saved,
       [{...tab('other'), url: 'https://other.test/'}, tab('open')], new Set(),
-      (owner?: string) => !!owner && owner.startsWith('old.'));
+      'old.w');
   expect(pins.entries[0].tabId).toBe('open');
   expect(pins.entries[0].remote).toBe('');
 });
