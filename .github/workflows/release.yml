@@ -136,13 +136,13 @@ jobs:
       run:
         shell: powershell
     steps:
-      - name: Draft release
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           RAIL_VERSION: ${{ needs.build.outputs.version }}
           RAIL_ASSETS: ${{ needs.build.outputs.assets }}
         run: |
           $files = (Get-ChildItem $env:RAIL_ASSETS -File).FullName
-          gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --verify-tag --draft `
+          gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --verify-tag --latest `
             --title "Rail $env:RAIL_VERSION" --generate-notes @files
           exit $LASTEXITCODE
