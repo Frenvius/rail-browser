@@ -51,6 +51,10 @@ function listen() {
   });
 }
 
+export function isNativeMenuOpen(): boolean {
+  return pending !== null;
+}
+
 export function showNativeMenu(
     items: NativeMenuItem[], onCommand: (command: string) => void) {
   listen();

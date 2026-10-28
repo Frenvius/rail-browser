@@ -128,7 +128,7 @@ class RailSettingsWindow::ClientView : public views::ClientView {
 
   void OnMouseEvent(ui::MouseEvent* event) override {
 #if BUILDFLAG(IS_WIN)
-    HandleFramelessMouseEvent(GetWidget(), event);
+    HandleFramelessMouseEvent(GetWidget(), event, nullptr);
 #endif
   }
 

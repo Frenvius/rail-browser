@@ -2,6 +2,7 @@
   <img width="64" height="64" src="logo-icon.svg" alt="Rail logo">
   <h1>Rail</h1>
   <p>A sidebar-first desktop browser built on Chromium.</p>
+  <p><a href="https://railbrowser.app">railbrowser.app</a> · <a href="https://railbrowser.app/download">Download for Windows</a></p>
 </div>
 
 <p align="center">

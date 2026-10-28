@@ -515,6 +515,43 @@ webui-browser-tab-strip {
   transform: translateX(-100%);
 }
 
+:host([sidebar-collapsed]:not([sidebar-icons-only], [library-open], [mini]))
+    #main::before {
+  bottom: 0;
+  content: '';
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 12px;
+  z-index: 6;
+}
+
+:host([sidebar-collapsed][sidebar-peek]:not([sidebar-icons-only])) .tabstripDiv,
+:host([sidebar-collapsed][sidebar-peek-closing]:not([sidebar-icons-only]))
+    .tabstripDiv {
+  background: var(--rail-chrome-strong);
+  border: 1px solid var(--rail-border);
+  border-radius: 8px;
+  bottom: 6px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 40%);
+  box-sizing: border-box;
+  left: 6px;
+  position: absolute;
+  top: 0;
+  z-index: 6;
+}
+
+:host([sidebar-collapsed][sidebar-peek]:not([sidebar-icons-only])) .tabstripDiv {
+  opacity: 1;
+  transform: none;
+}
+
+:host([sidebar-animate][sidebar-peek-closing]) .tabstripDiv {
+  transition:
+      opacity 180ms cubic-bezier(.4, 0, 1, 1),
+      transform 180ms cubic-bezier(.4, 0, 1, 1);
+}
+
 :host([sidebar-collapsed]:not([sidebar-icons-only])) #sidebarResizer {
   left: 0;
   pointer-events: none;

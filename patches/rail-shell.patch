@@ -11089,7 +11089,7 @@ index ffbd17c..4097a2d 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..2ae8aff 100644
+index 7e0800a..434594f 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,12 @@
@@ -11175,7 +11175,7 @@ index 7e0800a..2ae8aff 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +98,56 @@ interface Page {
+@@ -44,6 +98,58 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -11207,6 +11207,8 @@ index 7e0800a..2ae8aff 100644
 +
 +  OnSidebarIconsOnlyChanged(bool icons_only);
 +
++  OnLeftEdgeHovered();
++
 +  OnThemedTitlebarChanged(bool themed);
 +
 +  OnTabSleepChanged(int32 minutes, array<string> exceptions,
@@ -11232,7 +11234,7 @@ index 7e0800a..2ae8aff 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -58,7 +162,7 @@ interface PageHandler {
+@@ -58,7 +164,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -11241,7 +11243,7 @@ index 7e0800a..2ae8aff 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +197,111 @@ interface PageHandler {
+@@ -93,6 +199,112 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -11249,6 +11251,7 @@ index 7e0800a..2ae8aff 100644
 +  GetSidebarState() => (string value);
 +  SetSidebarState(string value);
 +  GetSidebarIconsOnly() => (bool icons_only);
++  GetPointerDistanceOutsideWindow() => (int32 distance);
 +  IsMaximized() => (bool maximized);
 +  GetThemedTitlebar() => (bool themed);
 +
@@ -11417,7 +11420,7 @@ index c2b7ec4..514959e 100644
  
  gfx::Rect FindBarOwnerWebUIBrowser::GetFindBarClippingBox() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
-index f8a5a94..2ceab77 100644
+index f8a5a94..204b805 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 @@ -4,8 +4,10 @@
@@ -11474,7 +11477,7 @@ index f8a5a94..2ceab77 100644
    // Set up element tracking callback to notify us when the
    // kLocationIconElementId bounds change, so that we can reposition the
    // Permission dialog widget as per the latest position of WebUI Anchor.
-@@ -49,7 +72,26 @@ void WebUIBrowserClientView::AddedToWidget() {
+@@ -49,7 +72,27 @@ void WebUIBrowserClientView::AddedToWidget() {
                                base::Unretained(this)));
  }
  
@@ -11485,7 +11488,8 @@ index f8a5a94..2ceab77 100644
 +                                       ui ? ui->page() : nullptr)) {
 +    return;
 +  }
-+  rail::HandleFramelessMouseEvent(GetWidget(), event);
++  rail::HandleFramelessMouseEvent(GetWidget(), event,
++                                  ui ? ui->page() : nullptr);
 +#endif
 +}
 +
@@ -11547,7 +11551,7 @@ index 5e6d29d..76021ae 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index cb0e145..5694e00 100644
+index cb0e145..7fa164f 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,8 @@
@@ -11559,7 +11563,7 @@ index cb0e145..5694e00 100644
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
-@@ -27,12 +29,30 @@
+@@ -27,12 +29,31 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
@@ -11579,6 +11583,7 @@ index cb0e145..5694e00 100644
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_sleep.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_transfer.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_window_key.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
@@ -11590,7 +11595,7 @@ index cb0e145..5694e00 100644
  #include "components/vector_icons/vector_icons.h"
  #include "content/public/browser/devtools_agent_host.h"
  #include "content/public/browser/navigation_controller.h"
-@@ -41,6 +61,7 @@
+@@ -41,6 +62,7 @@
  #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/ui_base_features.h"
  #include "ui/gfx/vector_icon_types.h"
@@ -11598,7 +11603,7 @@ index cb0e145..5694e00 100644
  #include "ui/views/controls/menu/menu_model_adapter.h"
  #include "ui/views/controls/menu/menu_runner.h"
  #include "ui/views/interaction/element_tracker_views.h"
-@@ -199,12 +220,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -199,12 +221,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
    }
  
    if (!tab) {
@@ -11613,7 +11618,7 @@ index cb0e145..5694e00 100644
      return;
    }
  
-@@ -290,7 +311,114 @@ void WebUIBrowserPageHandler::Close() {
+@@ -290,7 +312,114 @@ void WebUIBrowserPageHandler::Close() {
    GetBrowserWindow()->Close();
  }
  
@@ -11728,7 +11733,7 @@ index cb0e145..5694e00 100644
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
    back_forward_menu_model_.reset();
-@@ -314,12 +442,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
+@@ -314,12 +443,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
                              : BackForwardMenuModel::ModelType::kForward);
    back_forward_menu_model_adapter_ =
        std::make_unique<views::MenuModelAdapter>(back_forward_menu_model_.get());
@@ -11752,7 +11757,7 @@ index cb0e145..5694e00 100644
  }
  
  // static
-@@ -337,6 +473,395 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +474,405 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -11782,6 +11787,16 @@ index cb0e145..5694e00 100644
 +  BrowserWindowInterface* browser = GetBrowser();
 +  std::move(callback).Run(rail::GetSidebarIconsOnly(
 +      browser ? browser->GetProfile()->GetPrefs() : nullptr));
++}
++
++void WebUIBrowserPageHandler::GetPointerDistanceOutsideWindow(
++    GetPointerDistanceOutsideWindowCallback callback) {
++#if BUILDFLAG(IS_WIN)
++  std::move(callback).Run(
++      rail::PointerDistanceOutsideWidget(GetBrowserWindow()->widget()));
++#else
++  std::move(callback).Run(-1);
++#endif
 +}
 +
 +void WebUIBrowserPageHandler::IsMaximized(IsMaximizedCallback callback) {
@@ -12148,7 +12163,7 @@ index cb0e145..5694e00 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +869,60 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +880,60 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -12211,7 +12226,7 @@ index cb0e145..5694e00 100644
  BrowserWindowInterface* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 41a8923..66011b9 100644
+index 41a8923..44a76d8 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -7,10 +7,16 @@
@@ -12243,13 +12258,15 @@ index 41a8923..66011b9 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,10 +67,107 @@ class WebUIBrowserPageHandler
+@@ -56,10 +67,109 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
 +  void GetSidebarState(GetSidebarStateCallback callback) override;
 +  void SetSidebarState(const std::string& value) override;
 +  void GetSidebarIconsOnly(GetSidebarIconsOnlyCallback callback) override;
++  void GetPointerDistanceOutsideWindow(
++      GetPointerDistanceOutsideWindowCallback callback) override;
 +  void IsMaximized(IsMaximizedCallback callback) override;
 +  void GetThemedTitlebar(GetThemedTitlebarCallback callback) override;
 +  void StartTabDragGhost(const gfx::Rect& row,
@@ -12351,7 +12368,7 @@ index 41a8923..66011b9 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -71,19 +181,30 @@ class WebUIBrowserPageHandler
+@@ -71,19 +183,30 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  

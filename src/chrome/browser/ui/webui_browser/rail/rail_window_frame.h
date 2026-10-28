@@ -39,6 +39,8 @@ gfx::Rect StableSavedBounds(const views::Widget* widget,
 // A frameless window has no native frame to grab, so the client area answers
 // for the resize edges and the caption itself.
 
+int PointerDistanceOutsideWidget(const views::Widget* widget);
+
 void InstallResizeCursorSubclass(views::Widget* widget);
 void RemoveResizeCursorSubclass(views::Widget* widget);
 
@@ -50,7 +52,9 @@ int ResizeComponentForPoint(const views::Widget* widget,
 
 // Applies the resize cursor on hover and hands a left press to the native
 // move/resize loop. Returns true when the event was consumed.
-bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event);
+bool HandleFramelessMouseEvent(views::Widget* widget,
+                               ui::MouseEvent* event,
+                               webui_browser::mojom::Page* page);
 
 bool HandleFramelessContextMenu(views::Widget* widget,
                                 ui::MouseEvent* event,

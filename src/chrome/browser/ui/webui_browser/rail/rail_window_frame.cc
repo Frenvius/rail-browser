@@ -9,6 +9,7 @@
 #include <dwmapi.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <optional>
 
 #include "base/supports_user_data.h"
@@ -304,6 +305,25 @@ gfx::Rect StableSavedBounds(const views::Widget* widget,
   return stable;
 }
 
+int PointerDistanceOutsideWidget(const views::Widget* widget) {
+  if (!widget) {
+    return -1;
+  }
+  const HWND hwnd = views::HWNDForWidget(widget);
+  RECT rect;
+  POINT cursor;
+  if (!hwnd || !::GetWindowRect(hwnd, &rect) || !::GetCursorPos(&cursor)) {
+    return -1;
+  }
+  const LONG distance =
+      std::max({rect.left - cursor.x, cursor.x - (rect.right - 1),
+                rect.top - cursor.y, cursor.y - (rect.bottom - 1), 0L});
+  const float scale =
+      display::win::GetScreenWin()->GetScaleFactorForHWND(hwnd);
+  return scale > 0.f ? static_cast<int>(distance / scale)
+                     : static_cast<int>(distance);
+}
+
 void InstallResizeCursorSubclass(views::Widget* widget) {
   CHECK(::SetWindowSubclass(views::HWNDForWidget(widget),
                             ResizeCursorSubclassProc, kResizeCursorSubclassId,
@@ -381,7 +401,9 @@ bool HandleFramelessContextMenu(views::Widget* widget,
   return true;
 }
 
-bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event) {
+bool HandleFramelessMouseEvent(views::Widget* widget,
+                               ui::MouseEvent* event,
+                               webui_browser::mojom::Page* page) {
   const bool is_hover_event = event->type() == ui::EventType::kMouseMoved ||
                               event->type() == ui::EventType::kMouseEntered;
   const bool is_left_press = event->type() == ui::EventType::kMousePressed &&
@@ -402,6 +424,9 @@ bool HandleFramelessMouseEvent(views::Widget* widget, ui::MouseEvent* event) {
   if (is_hover_event) {
     if (wchar_t* cursor = ResizeCursorForComponent(component)) {
       ::SetCursor(::LoadCursor(nullptr, cursor));
+    }
+    if (component == HTLEFT && page) {
+      page->OnLeftEdgeHovered();
     }
     return false;
   }

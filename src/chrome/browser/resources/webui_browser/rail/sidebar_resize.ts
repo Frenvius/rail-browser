@@ -1,5 +1,7 @@
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
+import {isNativeMenuOpen} from './native_menu.js';
+
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 420;
 const DEFAULT_WIDTH = 208;
@@ -14,6 +16,13 @@ const SLIDE_EASING = 'cubic-bezier(.2, 0, 0, 1)';
 const LIBRARY_ATTRIBUTE = 'library-open';
 const LIBRARY_WIDE_ATTRIBUTE = 'library-wide';
 const LIBRARY_PAGE_PEEK = 64;
+const PEEK_ATTRIBUTE = 'sidebar-peek';
+const PEEK_CLOSING_ATTRIBUTE = 'sidebar-peek-closing';
+const PEEK_EDGE = 12;
+const PEEK_CLOSE_DELAY_MS = 240;
+const PEEK_CLOSING_FALLBACK_MS = 600;
+const PEEK_OUTSIDE_MARGIN = 64;
+const PEEK_OUTSIDE_POLL_MS = 50;
 
 function slidingElements(host: HTMLElement): HTMLElement[] {
   const titlebar = host.shadowRoot?.querySelector('.titlebarDiv');
@@ -54,6 +63,7 @@ function slideRegionEdge(region: HTMLElement, beforeLeft: number) {
 export function toggleSidebarCollapsed(host: HTMLElement) {
   slideSidebar(host, () => {
     const collapsed = !host.hasAttribute(COLLAPSED_ATTRIBUTE);
+    clearPeek(host);
     host.toggleAttribute(COLLAPSED_ATTRIBUTE, collapsed);
     localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
   });
@@ -86,6 +96,7 @@ export function setLibraryOpen(
           width: host.style.getPropertyValue(WIDTH_PROPERTY),
           collapsed: host.hasAttribute(COLLAPSED_ATTRIBUTE),
         };
+        clearPeek(host);
         host.removeAttribute(COLLAPSED_ATTRIBUTE);
       }
       applyLibraryWidth(host);
@@ -138,6 +149,153 @@ function initIconsOnly(host: HTMLElement) {
       ({iconsOnly}) => applyIconsOnly(host, iconsOnly));
 }
 
+let peekClosingTimer = 0;
+
+function clearPeek(host: HTMLElement) {
+  clearTimeout(peekClosingTimer);
+  host.removeAttribute(PEEK_ATTRIBUTE);
+  host.removeAttribute(PEEK_CLOSING_ATTRIBUTE);
+}
+
+function setPeek(host: HTMLElement, peek: boolean) {
+  clearTimeout(peekClosingTimer);
+  if (peek) {
+    host.removeAttribute(PEEK_CLOSING_ATTRIBUTE);
+    host.setAttribute(PEEK_ATTRIBUTE, '');
+    return;
+  }
+  if (!host.hasAttribute(PEEK_ATTRIBUTE)) {
+    return;
+  }
+  host.setAttribute(PEEK_CLOSING_ATTRIBUTE, '');
+  host.removeAttribute(PEEK_ATTRIBUTE);
+  peekClosingTimer = setTimeout(
+      () => host.removeAttribute(PEEK_CLOSING_ATTRIBUTE),
+      PEEK_CLOSING_FALLBACK_MS);
+}
+
+function finishPeekClosing(host: HTMLElement, e: TransitionEvent) {
+  if (e.target !== e.currentTarget || e.propertyName !== 'transform' ||
+      !host.hasAttribute(PEEK_CLOSING_ATTRIBUTE)) {
+    return;
+  }
+  clearTimeout(peekClosingTimer);
+  host.removeAttribute(PEEK_CLOSING_ATTRIBUTE);
+}
+
+function canPeek(host: HTMLElement): boolean {
+  return host.hasAttribute(COLLAPSED_ATTRIBUTE) &&
+      !host.hasAttribute(ICONS_ONLY_ATTRIBUTE) &&
+      !host.hasAttribute(LIBRARY_ATTRIBUTE) && !host.hasAttribute('mini');
+}
+
+function initSidebarPeek(host: HTMLElement) {
+  const main = host.shadowRoot?.getElementById('main');
+  const sidebar = host.shadowRoot?.querySelector<HTMLElement>('.tabstripDiv');
+  if (!main || !sidebar) {
+    return;
+  }
+
+  let timer = 0;
+  let pending: boolean|null = null;
+  const cancel = () => {
+    clearTimeout(timer);
+    pending = null;
+  };
+  const schedule = (peek: boolean, delay: number) => {
+    if (pending === peek) {
+      return;
+    }
+    cancel();
+    pending = peek;
+    timer = setTimeout(() => {
+      pending = null;
+      setPeek(host, peek && canPeek(host));
+    }, delay);
+  };
+
+  const atEdge = (e: PointerEvent) =>
+      e.clientX - main.getBoundingClientRect().left <= PEEK_EDGE;
+  const scheduleClose = () => {
+    if (!isNativeMenuOpen()) {
+      schedule(false, PEEK_CLOSE_DELAY_MS);
+    }
+  };
+
+  const openPeek = () => {
+    cancel();
+    setPeek(host, true);
+  };
+
+  let outsidePoll = 0;
+  const stopOutsidePoll = () => {
+    clearInterval(outsidePoll);
+    outsidePoll = 0;
+  };
+  const closeWhenPointerWandersOff = () => {
+    stopOutsidePoll();
+    const poll = setInterval(async () => {
+      if (!host.hasAttribute(PEEK_ATTRIBUTE)) {
+        stopOutsidePoll();
+        return;
+      }
+      const {distance} = await browserProxyFactory.getInstance()
+                             .handler.getPointerDistanceOutsideWindow();
+      if (poll === outsidePoll &&
+          (distance < 0 || distance > PEEK_OUTSIDE_MARGIN)) {
+        stopOutsidePoll();
+        scheduleClose();
+      }
+    }, PEEK_OUTSIDE_POLL_MS);
+    outsidePoll = poll;
+  };
+
+  const onPointer = (e: PointerEvent) => {
+    stopOutsidePoll();
+    if (!canPeek(host)) {
+      return;
+    }
+    const path = e.composedPath();
+    const overEdge = path[0] === main && atEdge(e);
+    if (!host.hasAttribute(PEEK_ATTRIBUTE)) {
+      if (overEdge) {
+        openPeek();
+      }
+      return;
+    }
+    if (overEdge || path.includes(sidebar)) {
+      cancel();
+    } else {
+      scheduleClose();
+    }
+  };
+  host.addEventListener('pointermove', onPointer);
+  host.addEventListener('pointerover', onPointer);
+  host.addEventListener('pointerleave', () => {
+    cancel();
+    if (host.hasAttribute(PEEK_ATTRIBUTE)) {
+      closeWhenPointerWandersOff();
+    }
+  });
+  sidebar.addEventListener(
+      'transitionend', e => finishPeekClosing(host, e));
+  sidebar.addEventListener(
+      'transitioncancel', e => finishPeekClosing(host, e));
+  const router = browserProxyFactory.getInstance().callbackRouter;
+  router.onRailMenuClosed.addListener(() => {
+    if (host.hasAttribute(PEEK_ATTRIBUTE) && !sidebar.matches(':hover')) {
+      schedule(false, PEEK_CLOSE_DELAY_MS);
+    }
+  });
+  router.onLeftEdgeHovered.addListener(() => {
+    if (host.hasAttribute(PEEK_ATTRIBUTE) || !canPeek(host)) {
+      return;
+    }
+    openPeek();
+    closeWhenPointerWandersOff();
+  });
+}
+
 function clampWidth(width: number): number {
   if (!Number.isFinite(width)) {
     return DEFAULT_WIDTH;
@@ -163,6 +321,7 @@ export function initSidebarResize(host: HTMLElement) {
   host.toggleAttribute(
       COLLAPSED_ATTRIBUTE, localStorage.getItem(COLLAPSED_KEY) === '1');
   initIconsOnly(host);
+  initSidebarPeek(host);
   requestAnimationFrame(() => host.setAttribute('sidebar-animate', ''));
   window.addEventListener('resize', () => {
     if (host.hasAttribute(LIBRARY_ATTRIBUTE)) {
