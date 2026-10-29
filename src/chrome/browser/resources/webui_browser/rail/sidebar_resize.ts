@@ -10,6 +10,7 @@ const COLLAPSED_KEY = 'rail.sidebarCollapsed';
 const COLLAPSED_ATTRIBUTE = 'sidebar-collapsed';
 const ICONS_ONLY_KEY = 'rail.sidebarIconsOnly';
 const ICONS_ONLY_ATTRIBUTE = 'sidebar-icons-only';
+const EXPAND_ON_HOVER_ATTRIBUTE = 'sidebar-expand-on-hover';
 const WIDTH_PROPERTY = '--rail-sidebar-width';
 const SLIDE_MS = 180;
 const SLIDE_EASING = 'cubic-bezier(.2, 0, 0, 1)';
@@ -20,6 +21,7 @@ const PEEK_ATTRIBUTE = 'sidebar-peek';
 const PEEK_CLOSING_ATTRIBUTE = 'sidebar-peek-closing';
 const PEEK_EDGE = 12;
 const PEEK_CLOSE_DELAY_MS = 240;
+const ICONS_PEEK_OPEN_DELAY_MS = 300;
 const PEEK_CLOSING_FALLBACK_MS = 600;
 const PEEK_OUTSIDE_MARGIN = 64;
 const PEEK_OUTSIDE_POLL_MS = 50;
@@ -134,8 +136,13 @@ function slideSidebar(host: HTMLElement, change: () => void) {
   });
 }
 
-function applyIconsOnly(host: HTMLElement, iconsOnly: boolean) {
+function applyIconsOnly(
+    host: HTMLElement, iconsOnly: boolean, expandOnHover: boolean) {
+  if (host.hasAttribute(ICONS_ONLY_ATTRIBUTE) !== iconsOnly) {
+    clearPeek(host);
+  }
   host.toggleAttribute(ICONS_ONLY_ATTRIBUTE, iconsOnly);
+  host.toggleAttribute(EXPAND_ON_HOVER_ATTRIBUTE, expandOnHover);
   localStorage.setItem(ICONS_ONLY_KEY, iconsOnly ? '1' : '0');
 }
 
@@ -144,9 +151,11 @@ function initIconsOnly(host: HTMLElement) {
       ICONS_ONLY_ATTRIBUTE, localStorage.getItem(ICONS_ONLY_KEY) === '1');
   const proxy = browserProxyFactory.getInstance();
   proxy.callbackRouter.onSidebarIconsOnlyChanged.addListener(
-      (iconsOnly: boolean) => applyIconsOnly(host, iconsOnly));
+      (iconsOnly: boolean, expandOnHover: boolean) =>
+          applyIconsOnly(host, iconsOnly, expandOnHover));
   proxy.handler.getSidebarIconsOnly().then(
-      ({iconsOnly}) => applyIconsOnly(host, iconsOnly));
+      ({iconsOnly, expandOnHover}) =>
+          applyIconsOnly(host, iconsOnly, expandOnHover));
 }
 
 let peekClosingTimer = 0;
@@ -175,7 +184,8 @@ function setPeek(host: HTMLElement, peek: boolean) {
 }
 
 function finishPeekClosing(host: HTMLElement, e: TransitionEvent) {
-  if (e.target !== e.currentTarget || e.propertyName !== 'transform' ||
+  if (e.target !== e.currentTarget ||
+      (e.propertyName !== 'transform' && e.propertyName !== 'width') ||
       !host.hasAttribute(PEEK_CLOSING_ATTRIBUTE)) {
     return;
   }
@@ -185,7 +195,8 @@ function finishPeekClosing(host: HTMLElement, e: TransitionEvent) {
 
 function canPeek(host: HTMLElement): boolean {
   return host.hasAttribute(COLLAPSED_ATTRIBUTE) &&
-      !host.hasAttribute(ICONS_ONLY_ATTRIBUTE) &&
+      (!host.hasAttribute(ICONS_ONLY_ATTRIBUTE) ||
+       host.hasAttribute(EXPAND_ON_HOVER_ATTRIBUTE)) &&
       !host.hasAttribute(LIBRARY_ATTRIBUTE) && !host.hasAttribute('mini');
 }
 
@@ -258,8 +269,14 @@ function initSidebarPeek(host: HTMLElement) {
     const path = e.composedPath();
     const overEdge = path[0] === main && atEdge(e);
     if (!host.hasAttribute(PEEK_ATTRIBUTE)) {
-      if (overEdge) {
-        openPeek();
+      if (!host.hasAttribute(ICONS_ONLY_ATTRIBUTE)) {
+        if (overEdge) {
+          openPeek();
+        }
+      } else if (path.includes(sidebar)) {
+        schedule(true, ICONS_PEEK_OPEN_DELAY_MS);
+      } else {
+        cancel();
       }
       return;
     }

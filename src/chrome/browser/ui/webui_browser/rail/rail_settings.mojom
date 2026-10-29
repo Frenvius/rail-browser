@@ -80,6 +80,10 @@ interface PageHandler {
 
   SetSidebarIconsOnly(bool icons_only);
 
+  GetSidebarExpandOnHover() => (bool expand);
+
+  SetSidebarExpandOnHover(bool expand);
+
   GetThemedTitlebar() => (bool themed);
 
   SetThemedTitlebar(bool themed);

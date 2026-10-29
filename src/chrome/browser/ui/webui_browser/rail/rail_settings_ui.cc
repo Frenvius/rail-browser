@@ -345,6 +345,15 @@ void RailSettingsUI::SetSidebarIconsOnly(bool icons_only) {
   rail::SetSidebarIconsOnly(PrefsFor(web_ui()), icons_only);
 }
 
+void RailSettingsUI::GetSidebarExpandOnHover(
+    GetSidebarExpandOnHoverCallback callback) {
+  std::move(callback).Run(rail::GetSidebarExpandOnHover(PrefsFor(web_ui())));
+}
+
+void RailSettingsUI::SetSidebarExpandOnHover(bool expand) {
+  rail::SetSidebarExpandOnHover(PrefsFor(web_ui()), expand);
+}
+
 void RailSettingsUI::GetThemedTitlebar(GetThemedTitlebarCallback callback) {
   std::move(callback).Run(rail::GetThemedTitlebar(PrefsFor(web_ui())));
 }

@@ -17,6 +17,7 @@ namespace rail {
 
 extern const char kSidebarStatePref[];
 extern const char kSidebarIconsOnlyPref[];
+extern const char kSidebarExpandOnHoverPref[];
 extern const char kThemedTitlebarPref[];
 extern const char kTrailDepthPref[];
 extern const char kTabSleepMinutesPref[];
@@ -36,6 +37,10 @@ void SetSidebarState(PrefService* prefs, const std::string& value);
 bool GetSidebarIconsOnly(PrefService* prefs);
 
 void SetSidebarIconsOnly(PrefService* prefs, bool icons_only);
+
+bool GetSidebarExpandOnHover(PrefService* prefs);
+
+void SetSidebarExpandOnHover(PrefService* prefs, bool expand);
 
 bool GetThemedTitlebar(PrefService* prefs);
 

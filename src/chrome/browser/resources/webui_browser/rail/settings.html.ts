@@ -34,6 +34,18 @@ ${this.section_ === 'general' ? html`
         </option>
       </select>
     </div>
+    ${this.sidebarIconsOnly_ ? html`
+      <div class="item">
+        <div class="rowtext">
+          <span class="cardtitle">Expand on hover</span>
+          <span class="cardhint">
+            Resting the pointer on the icons opens the full sidebar over the page
+          </span>
+        </div>
+        <cr-toggle ?checked="${this.sidebarExpandOnHover_}"
+          @change="${this.onSidebarExpandOnHoverChange_}"></cr-toggle>
+      </div>
+    ` : nothing}
   </div>
   <h2 class="section">Top Bar</h2>
   <div class="group">

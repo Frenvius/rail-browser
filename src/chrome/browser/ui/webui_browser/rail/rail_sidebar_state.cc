@@ -16,6 +16,7 @@ namespace rail {
 
 const char kSidebarStatePref[] = "rail.sidebar_state";
 const char kSidebarIconsOnlyPref[] = "rail.sidebar_icons_only";
+const char kSidebarExpandOnHoverPref[] = "rail.sidebar_expand_on_hover";
 const char kThemedTitlebarPref[] = "rail.titlebar_themed";
 const char kGroupOpenedLinksPref[] = "rail.group_opened_links";
 const char kTrailDepthPref[] = "rail.trail_depth";
@@ -36,6 +37,7 @@ void RegisterSidebarStateProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterStringPref(kSidebarStatePref, std::string());
   registry->RegisterBooleanPref(kSidebarIconsOnlyPref, false);
+  registry->RegisterBooleanPref(kSidebarExpandOnHoverPref, true);
   registry->RegisterBooleanPref(kThemedTitlebarPref, true);
   registry->RegisterBooleanPref(kGroupOpenedLinksPref, true);
   registry->RegisterIntegerPref(kTrailDepthPref, 1);
@@ -67,6 +69,16 @@ bool GetSidebarIconsOnly(PrefService* prefs) {
 void SetSidebarIconsOnly(PrefService* prefs, bool icons_only) {
   if (prefs) {
     prefs->SetBoolean(kSidebarIconsOnlyPref, icons_only);
+  }
+}
+
+bool GetSidebarExpandOnHover(PrefService* prefs) {
+  return prefs && prefs->GetBoolean(kSidebarExpandOnHoverPref);
+}
+
+void SetSidebarExpandOnHover(PrefService* prefs, bool expand) {
+  if (prefs) {
+    prefs->SetBoolean(kSidebarExpandOnHoverPref, expand);
   }
 }
 

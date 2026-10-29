@@ -22,6 +22,7 @@ const INK_ON_DARK: Readonly<Record<string, string>> = {
   '--rail-space-elevated': 'rgb(255 255 255 / 6%)',
   '--rail-space-hover': 'rgb(255 255 255 / 10%)',
   '--rail-space-hover-strong': 'rgb(255 255 255 / 16%)',
+  '--rail-space-opaque-base': '#1c1c1c',
 };
 const INK_ON_LIGHT: Readonly<Record<string, string>> = {
   '--rail-space-text': 'rgb(0 0 0 / 88%)',
@@ -32,6 +33,7 @@ const INK_ON_LIGHT: Readonly<Record<string, string>> = {
   '--rail-space-elevated': 'rgb(0 0 0 / 5%)',
   '--rail-space-hover': 'rgb(0 0 0 / 8%)',
   '--rail-space-hover-strong': 'rgb(0 0 0 / 13%)',
+  '--rail-space-opaque-base': '#f3f3f3',
 };
 
 function panes(root: ShadowRoot): HTMLElement[] {

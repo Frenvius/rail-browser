@@ -11205,7 +11205,7 @@ index 7e0800a..434594f 100644
 +
 +  OnSidebarStateChanged(string value);
 +
-+  OnSidebarIconsOnlyChanged(bool icons_only);
++  OnSidebarIconsOnlyChanged(bool icons_only, bool expand_on_hover);
 +
 +  OnLeftEdgeHovered();
 +
@@ -11250,7 +11250,7 @@ index 7e0800a..434594f 100644
 +
 +  GetSidebarState() => (string value);
 +  SetSidebarState(string value);
-+  GetSidebarIconsOnly() => (bool icons_only);
++  GetSidebarIconsOnly() => (bool icons_only, bool expand_on_hover);
 +  GetPointerDistanceOutsideWindow() => (int32 distance);
 +  IsMaximized() => (bool maximized);
 +  GetThemedTitlebar() => (bool themed);
@@ -11757,7 +11757,7 @@ index cb0e145..7fa164f 100644
  }
  
  // static
-@@ -337,6 +474,405 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +474,407 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -11785,8 +11785,9 @@ index cb0e145..7fa164f 100644
 +void WebUIBrowserPageHandler::GetSidebarIconsOnly(
 +    GetSidebarIconsOnlyCallback callback) {
 +  BrowserWindowInterface* browser = GetBrowser();
-+  std::move(callback).Run(rail::GetSidebarIconsOnly(
-+      browser ? browser->GetProfile()->GetPrefs() : nullptr));
++  PrefService* prefs = browser ? browser->GetProfile()->GetPrefs() : nullptr;
++  std::move(callback).Run(rail::GetSidebarIconsOnly(prefs),
++                          rail::GetSidebarExpandOnHover(prefs));
 +}
 +
 +void WebUIBrowserPageHandler::GetPointerDistanceOutsideWindow(
@@ -11806,8 +11807,9 @@ index cb0e145..7fa164f 100644
 +void WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged() {
 +  BrowserWindowInterface* browser = GetBrowser();
 +  if (browser && controller_) {
++    PrefService* prefs = browser->GetProfile()->GetPrefs();
 +    controller_->page()->OnSidebarIconsOnlyChanged(
-+        rail::GetSidebarIconsOnly(browser->GetProfile()->GetPrefs()));
++        rail::GetSidebarIconsOnly(prefs), rail::GetSidebarExpandOnHover(prefs));
 +  }
 +}
 +
@@ -12163,7 +12165,7 @@ index cb0e145..7fa164f 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +880,60 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +882,64 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -12177,6 +12179,10 @@ index cb0e145..7fa164f 100644
 +                            weak_factory_.GetWeakPtr()));
 +    sidebar_state_registrar_.Add(
 +        rail::kSidebarIconsOnlyPref,
++        base::BindRepeating(&WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged,
++                            weak_factory_.GetWeakPtr()));
++    sidebar_state_registrar_.Add(
++        rail::kSidebarExpandOnHoverPref,
 +        base::BindRepeating(&WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged,
 +                            weak_factory_.GetWeakPtr()));
 +    sidebar_state_registrar_.Add(

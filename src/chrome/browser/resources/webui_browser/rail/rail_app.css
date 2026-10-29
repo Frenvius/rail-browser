@@ -526,10 +526,11 @@ webui-browser-tab-strip {
   z-index: 6;
 }
 
-:host([sidebar-collapsed][sidebar-peek]:not([sidebar-icons-only])) .tabstripDiv,
-:host([sidebar-collapsed][sidebar-peek-closing]:not([sidebar-icons-only]))
-    .tabstripDiv {
-  background: var(--rail-chrome-strong);
+:host([sidebar-collapsed][sidebar-peek]) .tabstripDiv,
+:host([sidebar-collapsed][sidebar-peek-closing]) .tabstripDiv {
+  background:
+      linear-gradient(var(--rail-chrome-strong), var(--rail-chrome-strong)),
+      var(--rail-opaque-base);
   border: 1px solid var(--rail-border);
   border-radius: 8px;
   bottom: 6px;
@@ -569,6 +570,26 @@ webui-browser-tab-strip {
   --rail-sidebar-icons: 1;
   flex-basis: var(--rail-sidebar-icons-width);
   width: var(--rail-sidebar-icons-width);
+}
+
+:host([sidebar-collapsed][sidebar-icons-only][sidebar-peek]) #main,
+:host([sidebar-collapsed][sidebar-icons-only][sidebar-peek-closing]) #main {
+  padding-left: var(--rail-sidebar-icons-width);
+}
+
+:host([sidebar-collapsed][sidebar-icons-only][sidebar-peek]) .tabstripDiv,
+:host([sidebar-collapsed][sidebar-icons-only][sidebar-peek-closing])
+    .tabstripDiv {
+  left: 0;
+}
+
+:host([sidebar-collapsed][sidebar-icons-only][sidebar-peek]) .tabstripDiv {
+  --rail-sidebar-icons: 0;
+  width: var(--rail-sidebar-width);
+}
+
+:host([sidebar-animate][sidebar-collapsed][sidebar-icons-only]) .tabstripDiv {
+  transition: width 180ms cubic-bezier(.2, 0, 0, 1);
 }
 
 :host([sidebar-collapsed][sidebar-icons-only]) #sidebarResizer,

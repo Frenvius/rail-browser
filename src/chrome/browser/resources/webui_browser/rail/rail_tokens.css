@@ -26,6 +26,7 @@
   --rail-hover: var(--rail-space-hover, rgb(255 255 255 / 10%));
   --rail-hover-strong: var(--rail-space-hover-strong, rgb(255 255 255 / 16%));
   --rail-library-nav-width: 84px;
+  --rail-opaque-base: var(--rail-space-opaque-base, #1c1c1c);
   --rail-placeholder: #777;
   --rail-sidebar-icons-width: 48px;
   --rail-sidebar-width: 208px;

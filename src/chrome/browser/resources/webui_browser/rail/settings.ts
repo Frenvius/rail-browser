@@ -90,6 +90,7 @@ export class RailSettingsElement extends CrLitElement {
       tidyEnabled_: {type: Boolean, state: true},
       model_: {type: String, state: true},
       sidebarIconsOnly_: {type: Boolean, state: true},
+      sidebarExpandOnHover_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
       groupOpenedLinks_: {type: Boolean, state: true},
       reopenMiniWindows_: {type: Boolean, state: true},
@@ -135,6 +136,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor tidyEnabled_ = true;
   protected accessor model_ = '';
   protected accessor sidebarIconsOnly_ = false;
+  protected accessor sidebarExpandOnHover_ = true;
   protected accessor themedTitlebar_ = true;
   protected accessor groupOpenedLinks_ = true;
   protected accessor reopenMiniWindows_ = false;
@@ -241,6 +243,8 @@ export class RailSettingsElement extends CrLitElement {
     this.assistantEnabled_ = organize.assistantEnabled;
     this.tidyEnabled_ = organize.tidyEnabled;
     this.sidebarIconsOnly_ = (await handler.getSidebarIconsOnly()).iconsOnly;
+    this.sidebarExpandOnHover_ =
+        (await handler.getSidebarExpandOnHover()).expand;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
     this.groupOpenedLinks_ = (await handler.getGroupOpenedLinks()).grouped;
     this.reopenMiniWindows_ = (await handler.getReopenMiniWindows()).reopen;
@@ -336,6 +340,12 @@ export class RailSettingsElement extends CrLitElement {
     const iconsOnly = (e.target as HTMLSelectElement).value === 'icons';
     browserProxyFactory.getInstance().handler.setSidebarIconsOnly(iconsOnly);
     this.sidebarIconsOnly_ = iconsOnly;
+  }
+
+  protected onSidebarExpandOnHoverChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setSidebarExpandOnHover(
+        e.detail);
+    this.sidebarExpandOnHover_ = e.detail;
   }
 
   protected onThemedTitlebarChange_(e: CustomEvent<boolean>) {
