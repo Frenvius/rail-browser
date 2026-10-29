@@ -522,7 +522,6 @@ webui-browser-tab {
 }
 
 @container style(--rail-sidebar-icons: 1) {
-  #spaceTitle,
   #spaceBar,
   #dividerActions,
   #newTabButton span,

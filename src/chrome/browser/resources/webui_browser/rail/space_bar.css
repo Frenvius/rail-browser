@@ -438,3 +438,16 @@ hr {
   height: 1px;
   margin: 4px 0;
 }
+
+@container style(--rail-sidebar-icons: 1) {
+  #title {
+    justify-content: center;
+    margin-inline: 0;
+    padding-inline-start: 0;
+  }
+
+  #name,
+  #nameInput {
+    display: none;
+  }
+}
