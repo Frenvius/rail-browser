@@ -11159,7 +11159,7 @@ index 7e0800a..434594f 100644
    // Update the Reload/Stop button's state based on `is_loading`.
    SetReloadStopState(bool is_loading);
  
-@@ -44,6 +98,58 @@ interface Page {
+@@ -44,6 +98,60 @@ interface Page {
    // Closes the side panel, destroys the webview.
    CloseSidePanel();
  
@@ -11193,6 +11193,8 @@ index 7e0800a..434594f 100644
 +
 +  OnLeftEdgeHovered();
 +
++  OnCaptionPointerMoved(gfx.mojom.Point point);
++
 +  OnThemedTitlebarChanged(bool themed);
 +
 +  OnTabSleepChanged(int32 minutes, array<string> exceptions,
@@ -11218,7 +11220,7 @@ index 7e0800a..434594f 100644
    // Notifies the WebUI that fullscreen state has changed.
    // `context` will be present only when `is_fullscreen` is true.
    OnFullscreenModeChanged(bool is_fullscreen, FullscreenContext? context);
-@@ -58,7 +164,7 @@ interface PageHandler {
+@@ -58,7 +166,7 @@ interface PageHandler {
    GetGuestIdForTabId(
        tabs_api.mojom.NodeId tab_id,
        pending_receiver<GuestHandler> handler)
@@ -11227,7 +11229,7 @@ index 7e0800a..434594f 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +199,112 @@ interface PageHandler {
+@@ -93,6 +201,112 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);

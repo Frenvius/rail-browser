@@ -428,6 +428,14 @@ bool HandleFramelessMouseEvent(views::Widget* widget,
     if (component == HTLEFT && page) {
       page->OnLeftEdgeHovered();
     }
+    static HWND caption_hwnd = nullptr;
+    const bool over_caption = component == HTCAPTION;
+    if (page && (over_caption || caption_hwnd == hwnd)) {
+      page->OnCaptionPointerMoved(
+          display::Screen::Get()->GetCursorScreenPoint() -
+          widget->GetClientAreaBoundsInScreen().OffsetFromOrigin());
+    }
+    caption_hwnd = over_caption ? hwnd : nullptr;
     return false;
   }
 

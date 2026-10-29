@@ -246,7 +246,7 @@ function initSidebarPeek(host: HTMLElement) {
   const closeWhenPointerWandersOff = () => {
     stopOutsidePoll();
     const poll = setInterval(async () => {
-      if (!host.hasAttribute(PEEK_ATTRIBUTE)) {
+      if (!host.hasAttribute(PEEK_ATTRIBUTE) && pending !== true) {
         stopOutsidePoll();
         return;
       }
@@ -310,6 +310,28 @@ function initSidebarPeek(host: HTMLElement) {
     }
     openPeek();
     closeWhenPointerWandersOff();
+  });
+  router.onCaptionPointerMoved.addListener(({x, y}: {x: number, y: number}) => {
+    const rect = sidebar.getBoundingClientRect();
+    const overSidebar = x >= rect.left && x < rect.right && y >= rect.top &&
+        y < rect.bottom;
+    if (host.hasAttribute(PEEK_ATTRIBUTE)) {
+      if (overSidebar) {
+        cancel();
+      } else {
+        scheduleClose();
+      }
+      return;
+    }
+    if (!overSidebar || !host.hasAttribute(ICONS_ONLY_ATTRIBUTE) ||
+        !canPeek(host)) {
+      cancel();
+      return;
+    }
+    schedule(true, ICONS_PEEK_OPEN_DELAY_MS);
+    if (!outsidePoll) {
+      closeWhenPointerWandersOff();
+    }
   });
 }
 
