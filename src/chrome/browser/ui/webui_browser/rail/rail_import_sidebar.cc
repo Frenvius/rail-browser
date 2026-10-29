@@ -74,12 +74,16 @@ base::DictValue PinEntry(const std::string& id,
 
 base::DictValue FolderEntry(const std::string& id,
                             const std::string& name,
-                            const std::string& after) {
+                            const std::string& after,
+                            const std::string& parent) {
   base::DictValue folder;
   folder.Set("id", id);
   folder.Set("name", name.empty() ? kDefaultFolderName : name);
   folder.Set("expanded", true);
   folder.Set("after", after);
+  if (!parent.empty()) {
+    folder.Set("parent", parent);
+  }
   return folder;
 }
 

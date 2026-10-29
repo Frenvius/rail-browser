@@ -6271,10 +6271,10 @@ index 0fbaf6c..e58d103 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index a15445b..3cd8ae6 100644
+index a15445b..71dcb5e 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -2,30 +2,219 @@
+@@ -2,30 +2,200 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
  
@@ -6322,8 +6322,9 @@ index a15445b..3cd8ae6 100644
 +  </rail-space-bar>
 +  <div id="scrollArea">
 +  <div id="pinnedList">
-+    ${this.pinnedEntries_.map(entry => entry.kind === 'folder' ? html`
++    ${this.visiblePinnedEntries_().map(entry => entry.kind === 'folder' ? html`
 +          <div class="folder" data-id="${entry.section.folder.id}"
++              style="--rail-folder-level: ${entry.depth}"
 +              ?data-expanded="${entry.section.folder.expanded}">
 +            <div class="folder-row" data-folder="${entry.section.folder.id}"
 +                @mousedown="${this.onTabMousedown_}"
@@ -6342,30 +6343,10 @@ index a15445b..3cd8ae6 100644
 +                <span class="folder-count">${entry.section.rows.length}</span>
 +              `}
 +            </div>
-+            ${entry.section.folder.expanded ||
-+                this.folderHasActive_(entry.section) ? html`
-+              <div class="folder-children">
-+                ${this.folderRows_(entry.section).map(row => html`
-+                  <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
-+                      .tabData="${row.item.tabData}"
-+                      .dragInProgress="${this.dragInProgress_}"
-+                      .pinned="${true}"
-+                      .dormant="${row.dormant}"
-+                      .resettable="${this.hasLeftHome_(row.item.id)}"
-+                      .selected="${this.isSelected_(row.item.id)}"
-+                      @mousedown="${this.onTabMousedown_}"
-+                      @tab-audio-click="${this.onTabAudioClick_}"
-+                      @tab-close-click="${this.onTabCloseClick}"
-+                      @tab-reset-click="${this.onTabResetClick_}"
-+                      @tab-context-menu="${this.onTabContextMenu_}"
-+                      @tab-select="${this.onTabSelect_}">
-+                  </webui-browser-tab>
-+                `)}
-+              </div>
-+            ` : ''}
 +          </div>
 +        ` : html`
 +          <webui-browser-tab id="${this.tabIdToDomId(entry.row.item.id)}"
++              style="--rail-folder-level: ${entry.depth}"
 +              .tabData="${entry.row.item.tabData}"
 +              .dragInProgress="${this.dragInProgress_}"
 +              .pinned="${true}"
@@ -6508,7 +6489,7 @@ index a15445b..3cd8ae6 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..94ea278 100644
+index b7a5099..213d109 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6521,7 +6502,7 @@ index b7a5099..94ea278 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -11,24 +14,54 @@ import '//resources/cr_elements/icons.html.js';
+@@ -11,24 +14,55 @@ import '//resources/cr_elements/icons.html.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
@@ -6551,12 +6532,13 @@ index b7a5099..94ea278 100644
 +import type {PinnedEntry} from '../rail/pinned_tabs.js';
 +import {favoritesKey, isFavorites, PinnedTabs, ReopenHistory} from '../rail/pinned_tabs.js';
 +import type {FolderSection, LooseEntry, PinnedEntryRow, PinnedRow, TidySection} from '../rail/sections.js';
++import {applyPinnedDragSlots, pinnedDragSlots, visiblePinnedLayout} from '../rail/sections.js';
 +import {anchorDroppedGroups, reanchorEmptyGroups, splitSections} from '../rail/sections.js';
 +import type {SidebarState} from '../rail/sidebar_state.js';
 +import {earlierOwnerOf, INCOGNITO, MINI, readSidebarState, SidebarStore, WINDOW_ID} from '../rail/sidebar_state.js';
 +import type {SpaceBarElement, SpaceCommandDetail} from '../rail/space_bar.js';
 +import type {BoardColumn} from '../rail/space_board.js';
-+import {spaceBoard} from '../rail/space_board.js';
++import {placePinnedOnBoard, spaceBoard} from '../rail/space_board.js';
 +import {paintSpaceColors, paintSpaceInk, SpaceSlide} from '../rail/space_slide.js';
 +import {recordSpaceVisit} from '../rail/space_visits.js';
 +import type {Space, SpaceProfile, TabRow} from '../rail/spaces.js';
@@ -7077,7 +7059,7 @@ index b7a5099..94ea278 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +582,2330 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +583,2332 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8127,21 +8109,30 @@ index b7a5099..94ea278 100644
 +  protected onFolderContextmenu_(e: MouseEvent) {
 +    e.preventDefault();
 +    const id = (e.currentTarget as HTMLElement).dataset['folder'] ?? '';
-+    this.openFolderMenu_(id, () => this.startFolderRename_(id));
++    this.openFolderMenu_(id, child => this.startFolderRename_(child));
 +  }
 +
-+  private openFolderMenu_(id: string, rename: () => void) {
++  private openFolderMenu_(id: string, rename: (id: string) => void) {
 +    const folder = this.folders_.byId(id);
 +    if (!folder) {
 +      return;
 +    }
 +    openFolderMenu(folder.name, (command: FolderCommand) => {
 +      if (command === 'rename-folder') {
-+        rename();
++        rename(id);
 +        return;
 +      }
-+      this.pinnedTabs_.clearFolder(id);
-+      this.folders_.remove(id);
++      if (command === 'new-subfolder') {
++        const child = this.folders_.create(folder.space, 'New Folder');
++        this.folders_.setParent(child.id, id);
++        if (!folder.expanded) {
++          this.folders_.toggle(id);
++        }
++        this.refreshSections_();
++        void this.updateComplete.then(() => rename(child.id));
++        return;
++      }
++      this.folders_.deleteTree(id, this.pinnedTabs_, key => this.closeTarget_(key));
 +      this.refreshSections_();
 +    });
 +  }
@@ -8240,6 +8231,10 @@ index b7a5099..94ea278 100644
 +  protected folderHasActive_(section: FolderSection): boolean {
 +    return !section.folder.expanded &&
 +        section.rows.some(row => row.item.id === this.activeTab_);
++  }
++
++  protected visiblePinnedEntries_() {
++    return visiblePinnedLayout(this.pinnedEntries_, row => row.item.id === this.activeTab_);
 +  }
 +
 +  protected folderRows_(section: FolderSection): PinnedRow[] {
@@ -8793,7 +8788,7 @@ index b7a5099..94ea278 100644
 +        return;
 +      case 'folder-menu':
 +        this.openFolderMenu_(
-+            folder, () => this.library_()?.editFolder(folder));
++            folder, child => this.library_()?.editFolder(child));
 +        return;
 +      case 'new-group': {
 +        const group = this.tidyGroups_.create(
@@ -8827,6 +8822,19 @@ index b7a5099..94ea278 100644
 +      case 'group-menu':
 +        this.openTidyGroupMenu_(
 +            folder, () => this.library_()?.editFolder(folder));
++        return;
++      case 'nest-folder':
++      case 'arrange-pinned':
++        placePinnedOnBoard({
++          id: tab, space: to, parent: folder,
++          order: command === 'arrange-pinned' ? ids : undefined,
++          folders: this.folders_, pinned: this.pinnedTabs_,
++          layout: () => spaceBoard(this.items_, this.pinnedTabs_, this.spaces_,
++              this.folders_, this.tidyGroups_)[to]?.pinned ?? [],
++          move: (key, space) => this.moveTabToSpace(key, space),
++          file: (key, space, parent) => this.fileOnBoard_(key, space, parent),
++        });
++        this.refreshSections_();
 +        return;
 +      case 'file':
 +        this.fileOnBoard_(tab, to, folder);
@@ -9286,31 +9294,12 @@ index b7a5099..94ea278 100644
 +    this.refreshSections_();
 +  }
 +
-+  dragSlots(pinned: boolean, groupDrag: boolean): DragSlot[] {
++  dragSlots(pinned: boolean, groupDrag: boolean, moving = ''): DragSlot[] {
 +    if (pinned) {
-+      const pinnedSlots: DragSlot[] = [];
-+      for (const entry of this.pinnedEntries_) {
-+        if (entry.kind === 'row') {
-+          pinnedSlots.push({id: entry.row.item.id, kind: 'tab', group: ''});
-+          continue;
-+        }
-+        const folder = entry.section.folder;
-+        if (groupDrag) {
-+          pinnedSlots.push({id: folder.id, kind: 'group', group: ''});
-+          continue;
-+        }
-+        pinnedSlots.push({
-+          id: folder.id,
-+          kind: 'header',
-+          group: folder.expanded || this.folderHasActive_(entry.section) ?
-+              folder.id :
-+              '',
-+        });
-+        for (const row of entry.section.rows) {
-+          pinnedSlots.push({id: row.item.id, kind: 'tab', group: folder.id});
-+        }
-+      }
-+      return pinnedSlots;
++      return pinnedDragSlots({
++        layout: this.pinnedEntries_, rowId: row => row.item.id,
++        active: row => row.item.id === this.activeTab_, moving, groupDrag,
++      });
 +    }
 +    const slots: DragSlot[] = [];
 +    for (const entry of this.looseEntries_) {
@@ -9341,41 +9330,10 @@ index b7a5099..94ea278 100644
 +
 +  applyDragSlots(slots: DragSlot[], pinned: boolean) {
 +    if (pinned) {
-+      for (const slot of slots) {
-+        if (slot.kind !== 'tab') {
-+          continue;
-+        }
-+        const entry = this.entryFor_(slot.id);
-+        if (!entry || entry.folder === slot.group) {
-+          continue;
-+        }
-+        this.pinnedTabs_.setFolder(entry.key, slot.group);
-+      }
-+      const listed =
-+          new Set(slots.filter(slot => slot.kind === 'tab').map(slot => slot.id));
-+      const ids: string[] = [];
-+      for (const slot of slots) {
-+        if (slot.kind === 'tab') {
-+          ids.push(slot.id);
-+          continue;
-+        }
-+        ids.push(...this.pinnedTabs_.entriesIn(this.spaces_.activeId)
-+                     .filter(entry => entry.folder === slot.id)
-+                     .map(entry => entry.tabId || entry.key)
-+                     .filter(id => !listed.has(id)));
-+      }
-+      let after = '';
-+      for (const slot of slots) {
-+        if (slot.kind === 'tab') {
-+          after = this.entryFor_(slot.id)?.key ?? after;
-+          continue;
-+        }
-+        this.folders_.setAfter(slot.id, after);
-+      }
-+      this.folders_.reorder(
-+          this.spaces_.activeId,
-+          slots.filter(slot => slot.kind !== 'tab').map(slot => slot.id));
-+      this.pinnedTabs_.reorder(this.spaces_.activeId, ids);
++      applyPinnedDragSlots({
++        slots, pinned: this.pinnedTabs_, folders: this.folders_,
++        space: this.spaces_.activeId,
++      });
 +      this.refreshSections_();
 +      return;
 +    }
@@ -9473,7 +9431,20 @@ index b7a5099..94ea278 100644
 +    this.dropTarget_ = visible;
 +  }
 +
++  canSetFolder(id: string, parent: string): boolean {
++    return this.folders_.byId(id) ? this.folders_.canParent(id, parent) : true;
++  }
++
++  folderParent(id: string): string {
++    return this.folders_.byId(id)?.parent ?? '';
++  }
++
 +  setTabFolder(tabId: string, folderId: string) {
++    if (this.folders_.byId(tabId)) {
++      this.folders_.setParent(tabId, folderId);
++      this.refreshSections_();
++      return;
++    }
 +    const entry = this.entryFor_(tabId);
 +    if (!entry || entry.folder === folderId) {
 +      return;
@@ -9525,6 +9496,19 @@ index b7a5099..94ea278 100644
 -    const nodeId = sourceTabIds[0]!;
 -    this.dragDelegate_.onMojoDrop(nodeId, localPoint);
 +  moveTabToSpace(tabId: string, spaceId: string) {
++    if (this.folders_.byId(tabId)) {
++      this.folders_.moveTree({
++        id: tabId, space: spaceId, pinned: this.pinnedTabs_,
++        move: (key, space) => {
++          const target = this.targetFor(key);
++          if (target) {
++            this.moveToSpace_(target, space);
++          }
++        },
++      });
++      this.refreshSections_();
++      return;
++    }
 +    for (const id of this.dragRowIds_(tabId)) {
 +      const target = this.targetFor(id);
 +      if (target) {

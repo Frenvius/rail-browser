@@ -89,6 +89,7 @@ export interface DragSlot {
   id: string;
   kind: DragSlotKind;
   group: string;
+  parent?: string;
 }
 
 export interface PinnedDragRows {
@@ -100,7 +101,9 @@ export interface RailDragHost extends Omit<
     TabDragHost, 'tabDragService'|'commitDrag'|'getDragContainerBounds'> {
   pinnedItemsForDrag: TabStripItem[];
   setPinnedItemsForDrag(items: TabStripItem[]): void;
-  dragSlots(pinned: boolean, groupDrag: boolean): DragSlot[];
+  dragSlots(pinned: boolean, groupDrag: boolean, moving?: string): DragSlot[];
+  canSetFolder(id: string, parent: string): boolean;
+  folderParent(id: string): string;
   applyDragSlots(slots: DragSlot[], pinned: boolean): void;
   dragElementFor(slot: DragSlot): HTMLElement|null;
   moveTabToSpace(tabId: string, spaceId: string): void;
@@ -304,14 +307,16 @@ export class TabDrag {
 
   private hoverFolder_(x: number, y: number) {
     let folder: HTMLElement|null = null;
-    if (this.pinned_ && !this.isGroup_) {
+    if (this.pinned_) {
       const rows = this.host_.shadowRoot?.querySelectorAll<HTMLElement>(
-                       '.folder:not([data-expanded]) > .folder-row') ??
+                       '.folder-row') ??
           [];
       for (const row of rows) {
         const rect = row.getBoundingClientRect();
-        if (x >= rect.left && x <= rect.right && y >= rect.top &&
-            y <= rect.bottom) {
+        if (x >= rect.left && x <= rect.right &&
+            y >= rect.top + rect.height / 4 &&
+            y <= rect.bottom - rect.height / 4 &&
+            this.host_.canSetFolder(this.tabId_, row.dataset['folder'] ?? '')) {
           folder = row;
           break;
         }
@@ -391,7 +396,7 @@ export class TabDrag {
 
   private reorder_() {
     const slots =
-        this.host_.dragSlots(this.pinned_, this.isGroup_)
+        this.host_.dragSlots(this.pinned_, this.isGroup_, this.tabId_)
             .filter(
                 slot => slot.id === this.tabId_ ||
                     this.host_.dragElementFor(slot));
@@ -419,11 +424,23 @@ export class TabDrag {
 
   private regroup_(slots: DragSlot[], index: number): boolean {
     const slot = slots[index];
-    if (this.isGroup_ || !slot) {
+    if (!slot || (this.isGroup_ && !this.pinned_)) {
       return false;
     }
     const previous = slots[index - 1];
     let group = previous ? previous.group : '';
+    if (this.pinned_) {
+      while (group) {
+        const header = this.host_.dragElementFor({id: group, kind: 'header', group});
+        if (!header || this.lastX_ > header.getBoundingClientRect().left + 12) {
+          break;
+        }
+        group = this.host_.folderParent(group);
+      }
+      if (this.isGroup_ && !this.host_.canSetFolder(slot.id, group)) {
+        return false;
+      }
+    }
     if (group && index === slots.length - 1 && this.pulledPastEnd_(slot)) {
       group = '';
     }

@@ -3,7 +3,7 @@ import type {TabStripItem} from '../tab_strip/items.js';
 import type {Folders} from './folders.js';
 import type {PinnedTabs} from './pinned_tabs.js';
 import type {FolderSectionOf, PinnedLayout} from './sections.js';
-import {layoutPinned} from './sections.js';
+import {applyPinnedDragSlots, layoutPinned, pinnedDragSlots} from './sections.js';
 import type {Spaces} from './spaces.js';
 
 export interface BoardTab {
@@ -22,6 +22,38 @@ interface BoardSource {
   url: string;
   title: string;
   favicon: string;
+}
+
+export function placePinnedOnBoard(options: {
+  id: string, space: string, parent: string, order?: string[],
+  folders: Folders, pinned: PinnedTabs,
+  layout: () => Array<PinnedLayout<BoardTab>>,
+  move: (id: string, space: string) => void,
+  file: (id: string, space: string, parent: string) => void,
+}) {
+  const {id, space, parent, order, folders, pinned} = options;
+  if (parent && folders.byId(parent)?.space !== space) {
+    return;
+  }
+  if (folders.byId(id)) {
+    if (folders.subtree(id).some(child => child.id === parent)) {
+      return;
+    }
+    options.move(id, space);
+    folders.setParent(id, parent);
+  } else {
+    options.file(id, space, parent);
+  }
+  if (!order) {
+    return;
+  }
+  const ranks = new Map(order.map((key, index) => [key, index]));
+  const slots = pinnedDragSlots({
+    layout: options.layout(), rowId: row => row.id, active: () => false,
+    moving: id, groupDrag: true,
+  }).sort((one, other) =>
+      (ranks.get(one.id) ?? order.length) - (ranks.get(other.id) ?? order.length));
+  applyPinnedDragSlots({slots, pinned, folders, space});
 }
 
 export function spaceBoard(

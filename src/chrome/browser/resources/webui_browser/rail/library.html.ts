@@ -232,6 +232,7 @@ export function getHtml(this: RailLibraryElement) {
               <div class="board-tab" data-id="${row.tab.id}"
                   data-key="${space.id}/${this.rowKey_(row)}"
                   data-folder="${row.folder}" data-group="${row.group}"
+                  style="--rail-folder-level: ${row.depth ?? 0}"
                   tabindex="0" title="${row.tab.title}" draggable="true"
                   ?nested="${!!(row.folder || row.group)}"
                   ?loose="${row.loose}"
@@ -249,6 +250,10 @@ export function getHtml(this: RailLibraryElement) {
             ` : row.kind === 'folder' ? html`
               <div class="board-folder" data-folder="${row.folder.id}"
                   data-key="${space.id}/${this.rowKey_(row)}"
+                  style="--rail-folder-level: ${row.depth}"
+                  draggable="true" ?dragging="${row.folder.id === this.draggedGroup_}"
+                  @dragstart="${this.onBoardFolderDragstart_}"
+                  @dragend="${this.onBoardTabDragend_}"
                   tabindex="0" title="${row.folder.name}"
                   aria-expanded="${row.folder.expanded}"
                   ?drop-target="${row.folder.id === this.dropFolder_}"

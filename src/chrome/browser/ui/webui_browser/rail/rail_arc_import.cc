@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -53,6 +54,7 @@ struct SpaceBuild {
   SpaceRows rows;
   std::string pinned_above;
   std::string tidy_above = kArcTidyTopAnchor;
+  std::set<std::string> visited_folders;
   int pin_count = 0;
   int tab_count = 0;
 };
@@ -242,15 +244,23 @@ void AddPinnedTab(Walk& walk,
 void AddPinnedFolder(Walk& walk,
                      const std::string& arc_id,
                      const base::DictValue& item,
+                     const std::string& parent,
                      SpaceBuild& build) {
+  if (!build.visited_folders.insert(arc_id).second) {
+    return;
+  }
   const std::string folder_id = StableId(arc_id);
   if (!WasImported(walk, arc_id)) {
     build.rows.folders.Append(FolderEntry(
         folder_id, StringOr(item, "title", kArcDefaultFolderName),
-        build.pinned_above));
+        build.pinned_above, parent));
   }
   for (const auto& [child_id, child] : ChildrenOf(walk.tree, arc_id)) {
-    AddPinnedTab(walk, child_id, *child, folder_id, build);
+    if (IsFolder(*child)) {
+      AddPinnedFolder(walk, child_id, *child, folder_id, build);
+    } else {
+      AddPinnedTab(walk, child_id, *child, folder_id, build);
+    }
   }
 }
 
@@ -275,19 +285,36 @@ void AddTab(Walk& walk,
   build.tidy_above = row->id;
 }
 
+void CollectTidyTabs(Walk& walk,
+                     const std::string& arc_id,
+                     const std::string& group,
+                     SpaceBuild& build) {
+  if (!build.visited_folders.insert(arc_id).second) {
+    return;
+  }
+  for (const auto& [child_id, child] : ChildrenOf(walk.tree, arc_id)) {
+    if (IsFolder(*child)) {
+      CollectTidyTabs(walk, child_id, group, build);
+    } else {
+      AddTab(walk, child_id, *child, group, build);
+    }
+  }
+}
+
 void AddTidyFolder(Walk& walk,
                    const std::string& arc_id,
                    const base::DictValue& item,
                    SpaceBuild& build) {
+  if (build.visited_folders.contains(arc_id)) {
+    return;
+  }
   const std::string folder_id = StableId(arc_id);
   if (!WasImported(walk, arc_id)) {
     build.rows.tidy_groups.Append(FolderEntry(
         folder_id, StringOr(item, "title", kArcDefaultFolderName),
         build.tidy_above));
   }
-  for (const auto& [child_id, child] : ChildrenOf(walk.tree, arc_id)) {
-    AddTab(walk, child_id, *child, folder_id, build);
-  }
+  CollectTidyTabs(walk, arc_id, folder_id, build);
 }
 
 SpaceBuild BuildSpaceRows(Walk& walk, const base::DictValue& space) {
@@ -295,7 +322,7 @@ SpaceBuild BuildSpaceRows(Walk& walk, const base::DictValue& space) {
   for (const auto& [arc_id, item] :
        ChildrenOf(walk.tree, ContainerOf(space, "pinned"))) {
     if (IsFolder(*item)) {
-      AddPinnedFolder(walk, arc_id, *item, build);
+      AddPinnedFolder(walk, arc_id, *item, std::string(), build);
     } else {
       AddPinnedTab(walk, arc_id, *item, std::string(), build);
     }

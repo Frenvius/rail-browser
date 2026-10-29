@@ -1,4 +1,6 @@
 import type {SidebarState, StoredFolder, StoredSpace} from './sidebar_state.js';
+import {normalizeStoredFolders} from './sidebar_state.js';
+import type {PinnedEntry, PinnedTabs} from './pinned_tabs.js';
 
 export interface Folder {
   id: string;
@@ -6,6 +8,7 @@ export interface Folder {
   name: string;
   expanded: boolean;
   after: string;
+  parent: string;
 }
 
 export class Folders {
@@ -27,16 +30,19 @@ export class Folders {
 
   restore(
       state: SidebarState|null,
-      pick: (space: StoredSpace) => StoredFolder[] |
-      undefined = space => space.folders) {
+      pick?: (space: StoredSpace) => StoredFolder[]|undefined) {
     for (const space of state?.spaces ?? []) {
-      for (const stored of pick(space) ?? []) {
+      const storedFolders = pick ?
+          (pick(space) ?? []).map(folder => ({...folder, parent: ''})) :
+          normalizeStoredFolders(space.folders ?? []);
+      for (const stored of storedFolders) {
         this.folders_.push({
           id: stored.id,
           space: space.id,
           name: stored.name,
           expanded: stored.expanded !== false,
           after: stored.after ?? '',
+          parent: stored.parent ?? '',
         });
       }
     }
@@ -44,7 +50,8 @@ export class Folders {
 
   storedIn(spaceId: string): StoredFolder[] {
     return this.in(spaceId).map(
-        ({id, name, expanded, after}) => ({id, name, expanded, after}));
+        ({id, name, expanded, after, parent}) =>
+            ({id, name, expanded, after, parent}));
   }
 
   setAfter(id: string, after: string) {
@@ -64,6 +71,7 @@ export class Folders {
       name,
       expanded: true,
       after: '',
+      parent: '',
     };
     this.folders_.push(folder);
     this.onChange_();
@@ -103,19 +111,86 @@ export class Folders {
     this.onChange_();
   }
 
+  subtree(id: string): Folder[] {
+    const root = this.byId(id);
+    if (!root) {
+      return [];
+    }
+    const ids = new Set([id]);
+    const result = [root];
+    for (let index = 0; index < result.length; index++) {
+      for (const folder of this.in(root.space)) {
+        if (folder.parent === result[index]!.id && !ids.has(folder.id)) {
+          ids.add(folder.id);
+          result.push(folder);
+        }
+      }
+    }
+    return result;
+  }
+
+  entriesIn(id: string, pinned: PinnedTabs): PinnedEntry[] {
+    const folder = this.byId(id);
+    const ids = new Set(this.subtree(id).map(child => child.id));
+    return folder ? pinned.entriesIn(folder.space).filter(entry => ids.has(entry.folder)) : [];
+  }
+
+  canParent(id: string, parent: string): boolean {
+    const folder = this.byId(id);
+    const destination = this.byId(parent);
+    return !!folder && (!parent ||
+        (!!destination && destination.space === folder.space &&
+         !this.subtree(id).some(child => child.id === parent)));
+  }
+
+  setParent(id: string, parent: string) {
+    const folder = this.byId(id);
+    if (!folder || folder.parent === parent || !this.canParent(id, parent)) {
+      return;
+    }
+    folder.parent = parent;
+    folder.after = '';
+    this.onChange_();
+  }
+
   moveTo(id: string, spaceId: string) {
     const folder = this.byId(id);
     if (!folder || folder.space === spaceId) {
       return;
     }
-    folder.space = spaceId;
+    for (const child of this.subtree(id)) {
+      child.space = spaceId;
+    }
+    folder.parent = '';
     folder.after = '';
     this.onChange_();
   }
 
   remove(id: string) {
-    this.folders_ = this.folders_.filter(folder => folder.id !== id);
+    const ids = new Set(this.subtree(id).map(folder => folder.id));
+    this.folders_ = this.folders_.filter(folder => !ids.has(folder.id));
     this.onChange_();
+  }
+
+  deleteTree(id: string, pinned: PinnedTabs, close: (key: string) => void) {
+    for (const entry of this.entriesIn(id, pinned)) {
+      close(entry.key);
+      pinned.remove(entry.key);
+    }
+    this.remove(id);
+  }
+
+  moveTree(options: {
+    id: string, space: string, pinned: PinnedTabs,
+    move: (key: string, space: string) => void,
+  }) {
+    const entries = this.entriesIn(options.id, options.pinned)
+                        .map(entry => ({key: entry.key, folder: entry.folder}));
+    this.moveTo(options.id, options.space);
+    for (const {key, folder} of entries) {
+      options.move(key, options.space);
+      options.pinned.setFolder(key, folder);
+    }
   }
 
   dropSpace(spaceId: string) {

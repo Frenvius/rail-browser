@@ -13,6 +13,7 @@ import {getHtml} from './library.html.js';
 import type {LibraryIcon} from './library_icons.js';
 import {INCOGNITO} from './sidebar_state.js';
 import type {FolderSectionOf, PinnedLayout} from './sections.js';
+import {pinnedDragSlots, visiblePinnedLayout} from './sections.js';
 import type {BoardColumn, BoardTab} from './space_board.js';
 import type {Space, SpaceProfile} from './spaces.js';
 import {DEFAULT_PROFILE_NAME, spaceHex} from './spaces.js';
@@ -21,7 +22,7 @@ import {archivedTabs, archiveHoursFor, groupByDay, matchArchived} from './tab_ar
 
 export type LibrarySection = 'downloads'|'spaces'|'archive';
 
-export type LibrarySpaceCommand = 'arrange'|'clear'|'create'|'file'|
+export type LibrarySpaceCommand = 'arrange'|'arrange-pinned'|'clear'|'create'|'file'|'nest-folder'|
     'folder-menu'|'group-menu'|'group-tab'|'icon'|'menu'|'move'|'move-group'|
     'new-folder'|'new-group'|'open'|'profile'|'rename'|'rename-folder'|
     'rename-group'|'reorder'|'select'|'theme'|'toggle-folder'|'toggle-group';
@@ -45,10 +46,12 @@ export type BoardRow = {
   folder: string,
   group: string,
   loose: boolean,
+  depth?: number,
 }|{
   kind: 'folder',
   folder: Folder,
   count: number,
+  depth: number,
 }|{
   kind: 'group',
   group: Folder,
@@ -205,6 +208,8 @@ export class RailLibraryElement extends CrLitElement {
   private dragSource_ = '';
   private dragFolder_ = '';
   private dragGroup_ = '';
+  private dragPinned_ = false;
+  private dropPinned_ = false;
   private columnDrag_: ColumnDrag|null = null;
   private list_: DownloadList|null = null;
   private stopList_: (() => void)|null = null;
@@ -744,15 +749,23 @@ export class RailLibraryElement extends CrLitElement {
     const today = this.previewToday_(space.id);
     const tabRow = (tab: BoardTab, folder = '', group = '', loose = false) =>
         ({kind: 'tab' as const, tab, folder, group, loose});
-    const rows = pinned.flatMap((entry): BoardRow[] => {
+    const folderOfTab = new Map<string, string>();
+    const visit = (layout: Array<PinnedLayout<BoardTab>>, parent: string) => {
+      for (const entry of layout) {
+        if (entry.kind === 'row') {
+          folderOfTab.set(entry.row.id, parent);
+        } else {
+          visit(entry.section.children ?? [], entry.section.folder.id);
+        }
+      }
+    };
+    visit(pinned, '');
+    const rows = visiblePinnedLayout(pinned).map((entry): BoardRow => {
       if (entry.kind === 'row') {
-        return [tabRow(entry.row)];
+        return {...tabRow(entry.row, folderOfTab.get(entry.row.id) ?? ''), depth: entry.depth};
       }
       const {folder, rows: tabs} = entry.section;
-      return [
-        {kind: 'folder', folder, count: tabs.length},
-        ...folder.expanded ? tabs.map(tab => tabRow(tab, folder.id)) : [],
-      ];
+      return {kind: 'folder', folder, count: tabs.length, depth: entry.depth};
     });
     const loose = today.flatMap((entry): BoardRow[] => {
       if (entry.kind === 'row') {
@@ -767,6 +780,34 @@ export class RailLibraryElement extends CrLitElement {
       ];
     });
     return loose.length ? [...rows, {kind: 'divider'}, ...loose] : rows;
+  }
+
+  private pinnedFolders_(): Map<string, Folder> {
+    const folders = new Map<string, Folder>();
+    const pending = Object.values(this.board).flatMap(column => column.pinned);
+    for (let index = 0; index < pending.length; index++) {
+      const entry = pending[index]!;
+      if (entry.kind === 'folder') {
+        folders.set(entry.section.folder.id, entry.section.folder);
+        pending.push(...entry.section.children ?? []);
+      }
+    }
+    return folders;
+  }
+
+  private acceptsFolder_(parent: string): boolean {
+    if (!this.draggedGroup_) {
+      return true;
+    }
+    const folders = this.pinnedFolders_();
+    let ancestor = parent;
+    while (ancestor) {
+      if (ancestor === this.draggedGroup_) {
+        return false;
+      }
+      ancestor = folders.get(ancestor)?.parent ?? '';
+    }
+    return this.dragPinned_;
   }
 
   private isGroup_(id: string): boolean {
@@ -992,6 +1033,12 @@ export class RailLibraryElement extends CrLitElement {
     this.dragFolder_ = this.folderOf_(e);
     this.dragGroup_ = (e.currentTarget as HTMLElement).dataset['group'] ?? '';
     this.draggedTab_ = id;
+    this.dragPinned_ = !(e.currentTarget as HTMLElement).hasAttribute('loose');
+  }
+
+  protected onBoardFolderDragstart_(e: DragEvent) {
+    this.onBoardGroupDragstart_(e);
+    this.dragPinned_ = true;
   }
 
   protected onBoardGroupDragstart_(e: DragEvent) {
@@ -1005,6 +1052,7 @@ export class RailLibraryElement extends CrLitElement {
     e.dataTransfer.setData(GROUP_DRAG_TYPE, group);
     this.dragSource_ = this.spaceOf_(e);
     this.draggedGroup_ = group;
+    this.dragPinned_ = false;
   }
 
   protected onBoardTabDragend_() {
@@ -1013,6 +1061,8 @@ export class RailLibraryElement extends CrLitElement {
     this.dragGroup_ = '';
     this.draggedTab_ = '';
     this.draggedGroup_ = '';
+    this.dragPinned_ = false;
+    this.dropPinned_ = false;
     this.dropRow_ = '';
     this.dropTarget_ = '';
     this.dropFolder_ = '';
@@ -1032,6 +1082,7 @@ export class RailLibraryElement extends CrLitElement {
       return;
     }
     const accepts = space !== this.dragSource_ ||
+        (this.dragPinned_ && !!this.draggedGroup_) ||
         (!!this.draggedTab_ && (!!this.dragFolder_ || !!this.dragGroup_));
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = accepts ? 'move' : 'none';
@@ -1042,13 +1093,19 @@ export class RailLibraryElement extends CrLitElement {
   }
 
   protected onFolderDragover_(e: DragEvent) {
-    if (!this.draggedTab_) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (e.clientY < rect.top + rect.height / 4 ||
+        e.clientY > rect.bottom - rect.height / 4) {
+      this.onRowDragover_(e);
+      return;
+    }
+    if (!this.draggedTab_ && !this.draggedGroup_) {
       return;
     }
     e.preventDefault();
     e.stopPropagation();
     const folder = this.folderOf_(e);
-    const accepts = folder !== this.dragFolder_;
+    const accepts = folder !== this.dragFolder_ && this.acceptsFolder_(folder);
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = accepts ? 'move' : 'none';
     }
@@ -1058,6 +1115,21 @@ export class RailLibraryElement extends CrLitElement {
   }
 
   protected onFolderDrop_(e: DragEvent) {
+    if (this.dropRow_) {
+      this.onRowDrop_(e);
+      return;
+    }
+    if (this.draggedGroup_ && this.dragPinned_) {
+      e.preventDefault();
+      e.stopPropagation();
+      const folder = this.folderOf_(e);
+      if (this.acceptsFolder_(folder)) {
+        this.fireSpace_('nest-folder', this.spaceOf_(e),
+            {tab: this.draggedGroup_, folder, to: this.spaceOf_(e)});
+      }
+      this.onBoardTabDragend_();
+      return;
+    }
     if (!this.draggedTab_) {
       return;
     }
@@ -1122,6 +1194,36 @@ export class RailLibraryElement extends CrLitElement {
   }
 
   protected onRowDragover_(e: DragEvent) {
+    const element = e.currentTarget as HTMLElement;
+    const pinned = !element.hasAttribute('loose') && !element.classList.contains('board-group');
+    if (pinned) {
+      const target = element.dataset['id'] ?? element.dataset['folder'] ?? '';
+      const parent = element.classList.contains('board-folder') ?
+          this.pinnedFolders_().get(target)?.parent ?? '' : this.folderOf_(e);
+      if ((!this.draggedTab_ && !this.draggedGroup_) ||
+          (this.draggedGroup_ && !this.dragPinned_) ||
+          target === (this.draggedTab_ || this.draggedGroup_) ||
+          !this.acceptsFolder_(target) || !this.acceptsFolder_(parent)) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+      }
+      this.dropPinned_ = true;
+      this.dropSpace_ = this.spaceOf_(e);
+      this.dropHeader_ = element.classList.contains('board-folder');
+      this.dropRow_ = target;
+      this.dropAfter_ = e.clientY > element.getBoundingClientRect().top + element.offsetHeight / 2;
+      this.dropTarget_ = '';
+      this.dropFolder_ = '';
+      return;
+    }
+    if (this.draggedGroup_ && this.dragPinned_) {
+      return;
+    }
+    this.dropPinned_ = false;
     const target = this.rowSlot_(e);
     if ((!this.draggedTab_ && !this.draggedGroup_) || !target ||
         target === this.draggedTab_ || target === this.draggedGroup_ ||
@@ -1165,6 +1267,41 @@ export class RailLibraryElement extends CrLitElement {
   }
 
   private commitArrange_() {
+    if (this.dropPinned_) {
+      const space = this.dropSpace_;
+      const moving = this.draggedTab_ || this.draggedGroup_;
+      const slots = pinnedDragSlots({
+        layout: this.board[space]?.pinned ?? [], rowId: row => row.id,
+        active: () => false, moving, groupDrag: true,
+      }).filter(slot => slot.id !== moving);
+      const at = slots.findIndex(slot => slot.id === this.dropRow_);
+      const target = slots[at];
+      if (target) {
+        const ids = slots.map(slot => slot.id);
+        let index = at;
+        if (this.dropAfter_) {
+          index++;
+          if (target.kind === 'group') {
+            const folders = this.pinnedFolders_();
+            while (index < slots.length) {
+              let parent = slots[index]!.group;
+              while (parent && parent !== target.id) {
+                parent = folders.get(parent)?.parent ?? '';
+              }
+              if (parent !== target.id) {
+                break;
+              }
+              index++;
+            }
+          }
+        }
+        ids.splice(index, 0, moving);
+        this.fireSpace_('arrange-pinned', space,
+            {tab: moving, folder: target.group, to: space, ids});
+      }
+      this.onBoardTabDragend_();
+      return;
+    }
     const space = this.dropSpace_;
     const tab = this.draggedTab_;
     const group = this.draggedGroup_;
@@ -1177,7 +1314,7 @@ export class RailLibraryElement extends CrLitElement {
 
   private previewToday_(space: string): Array<PinnedLayout<BoardTab>> {
     const today = this.board[space]?.today ?? [];
-    if (!this.dropRow_ || this.dropSpace_ !== space) {
+    if (this.dropPinned_ || !this.dropRow_ || this.dropSpace_ !== space) {
       return today;
     }
     const tabs = new Map<string, BoardTab>();
@@ -1307,6 +1444,11 @@ export class RailLibraryElement extends CrLitElement {
     const from = this.dragSource_;
     const filed = !!this.dragFolder_;
     const grouped = !!this.dragGroup_;
+    if (group && this.dragPinned_) {
+      this.fireSpace_('nest-folder', to, {tab: group, folder: '', to});
+      this.onBoardTabDragend_();
+      return;
+    }
     this.onBoardTabDragend_();
     if (group && to && to !== from) {
       this.fireSpace_('move-group', from, {folder: group, to});

@@ -500,6 +500,11 @@ webui-browser-tab {
 }
 
 @container not style(--rail-sidebar-icons: 1) {
+  #pinnedList > .folder,
+  #pinnedList > webui-browser-tab {
+    margin-inline-start: calc(var(--rail-folder-level, 0) * var(--rail-folder-indent, 12px));
+  }
+
   .tidygroup-children > webui-browser-tab {
     margin-inline-start: calc(var(--rail-trail-level, 0) * 12px);
   }

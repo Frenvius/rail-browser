@@ -50,20 +50,6 @@ bool IsUrlNode(const base::DictValue& node) {
   return node.contains("url");
 }
 
-bool HasUrls(const base::DictValue& node) {
-  const base::ListValue* children = node.FindList("children");
-  if (!children) {
-    return false;
-  }
-  for (const base::Value& child : *children) {
-    const base::DictValue* entry = child.GetIfDict();
-    if (entry && (IsUrlNode(*entry) || HasUrls(*entry))) {
-      return true;
-    }
-  }
-  return false;
-}
-
 void AddPin(BookmarkWalk& walk,
             const base::DictValue& node,
             const std::string& folder) {
@@ -80,44 +66,37 @@ void AddPin(BookmarkWalk& walk,
   const std::string title = name && !name->empty() ? *name : *url;
   walk.rows.pinned.Append(PinEntry(id, *url, title, std::string(), folder));
   ++walk.bookmarks;
-  if (folder.empty()) {
-    walk.pinned_above = id;
-  }
+  walk.pinned_above = id;
 }
 
-void CollectPins(BookmarkWalk& walk,
-                 const base::DictValue& node,
-                 const std::string& folder) {
+void AddItem(BookmarkWalk& walk,
+             const base::DictValue& node,
+             const std::string& parent);
+
+void AddFolder(BookmarkWalk& walk,
+               const std::string& id,
+               const std::string& name,
+               const base::DictValue& node,
+               const std::string& parent) {
+  if (!IsImportedId(walk.input, id)) {
+    walk.rows.folders.Append(FolderEntry(id, name, walk.pinned_above, parent));
+  }
   const base::ListValue* children = node.FindList("children");
   if (!children) {
     return;
   }
   for (const base::Value& child : *children) {
-    const base::DictValue* entry = child.GetIfDict();
-    if (!entry) {
-      continue;
-    }
-    if (IsUrlNode(*entry)) {
-      AddPin(walk, *entry, folder);
-    } else {
-      CollectPins(walk, *entry, folder);
+    if (const base::DictValue* entry = child.GetIfDict()) {
+      AddItem(walk, *entry, id);
     }
   }
 }
 
-void AddFolder(BookmarkWalk& walk,
-               const std::string& id,
-               const std::string& name,
-               const base::DictValue& node) {
-  if (!IsImportedId(walk.input, id)) {
-    walk.rows.folders.Append(FolderEntry(id, name, walk.pinned_above));
-  }
-  CollectPins(walk, node, id);
-}
-
-void AddBarItem(BookmarkWalk& walk, const base::DictValue& node) {
+void AddItem(BookmarkWalk& walk,
+             const base::DictValue& node,
+             const std::string& parent) {
   if (IsUrlNode(node)) {
-    AddPin(walk, node, std::string());
+    AddPin(walk, node, parent);
     return;
   }
   const std::optional<std::string> key = KeyOf(node);
@@ -127,18 +106,19 @@ void AddBarItem(BookmarkWalk& walk, const base::DictValue& node) {
   const std::string* name = node.FindString("name");
   AddFolder(walk,
             ImportId(walk.source.source_id, walk.source.dir, *key),
-            name ? *name : std::string(), node);
+            name ? *name : std::string(), node, parent);
 }
 
 void AddRootFolder(BookmarkWalk& walk,
                    const base::DictValue& node,
                    const std::string& key,
                    const std::string& name) {
-  if (!HasUrls(node)) {
+  const base::ListValue* children = node.FindList("children");
+  if (!children || children->empty()) {
     return;
   }
   AddFolder(walk, ImportId(walk.source.source_id, walk.source.dir, key), name,
-            node);
+            node, std::string());
 }
 
 }
@@ -161,7 +141,7 @@ void AddBookmarkSpace(const BookmarkSpaceSource& source,
     if (const base::ListValue* children = bar->FindList("children")) {
       for (const base::Value& child : *children) {
         if (const base::DictValue* entry = child.GetIfDict()) {
-          AddBarItem(walk, *entry);
+          AddItem(walk, *entry, std::string());
         }
       }
     }

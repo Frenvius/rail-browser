@@ -24,6 +24,7 @@ const load = (file: string, name: string, mini = false,
     MINI: mini,
     WINDOW_ID: 'test-window',
     isEarlierRun,
+    normalizeStoredFolders: loadSidebarState('normalizeStoredFolders'),
     ...deps,
   };
   return new Function(...Object.keys(scope),
@@ -789,7 +790,7 @@ test('the space board lists every space with its pinned and today tabs', () => {
   expect(layout(board.a.today))
       .toEqual([['live', 'live now'], ['Research', ['grouped']]]);
   expect(board.b.pinned)
-      .toEqual([{kind: 'folder', section: {folder: empty, rows: []}}]);
+      .toEqual([{kind: 'folder', section: {folder: empty, rows: [], children: []}}]);
   expect(board.b.today.map((one: any) => one.row.url))
       .toEqual(['https://asleep.test/']);
   expect(board.b.today[0].row.id).toBe(spaces.rowsIn('b')[0].key);
@@ -1348,6 +1349,200 @@ test('a tab moved onto its sleeping twin takes the twin\'s group', () => {
   expect(spaces.rowsIn('other')).toHaveLength(1);
   expect(spaces.byTab('live').group).toBe('other-group');
   expect(spaces.keysInGroup('home-group')).toEqual([]);
+});
+
+test('nested folders interleave rows and empty children with scoped anchors', () => {
+  const Folders = load('folders', 'Folders');
+  const layoutPinned = load('sections', 'layoutPinned');
+  const folders = new Folders(() => {});
+  const root = folders.create('s', 'Root', 'root');
+  const child = folders.create('s', 'Child', 'child');
+  const empty = folders.create('s', 'Empty', 'empty');
+  const start = folders.create('s', 'Start', 'start');
+  folders.setParent(child.id, root.id);
+  folders.setParent(empty.id, root.id);
+  folders.setParent(start.id, child.id);
+  folders.setAfter(empty.id, 'b');
+  folders.setAfter(start.id, 'outside');
+  const pins = [{key: 'a', folder: 'root'}, {key: 'b', folder: 'child'},
+    {key: 'c', folder: 'root'}, {key: 'outside', folder: ''}];
+  const layout = layoutPinned(pins, folders.in('s'), (entry: any) => entry.key);
+  const shape = (entries: any[]): any[] => entries.map(entry =>
+      entry.kind === 'row' ? entry.row :
+      [entry.section.folder.id, shape(entry.section.children)]);
+  expect(shape(layout)).toEqual([
+    ['root', ['a', ['child', [['start', []], 'b']], ['empty', []], 'c']], 'outside',
+  ]);
+  expect(layout[0].section.rows).toEqual(['a', 'b', 'c']);
+  root.expanded = false;
+  const visible = load('sections', 'visiblePinnedLayout')(layout, (id: string) => id === 'b');
+  expect(visible.map((entry: any) => entry.kind === 'row' ? entry.row : entry.section.folder.id))
+      .toEqual(['root', 'b', 'outside']);
+  expect(visible[1].depth).toBe(1);
+});
+
+test('folder restore rejects cycles, missing and cross-space parents but keeps valid depth', () => {
+  const Folders = load('folders', 'Folders');
+  const folder = (id: string, parent = '') => ({id, parent, name: id, expanded: true});
+  const saved = {activeSpace: 's', spaces: [
+    {...state.spaces[0], folders: [folder('a', 'b'), folder('b', 'a'),
+      folder('missing', 'gone'), folder('cross', 'other'), folder('root'),
+      folder('child', 'root'), folder('leaf', 'child')],
+      tidyGroups: [folder('tidy', 'root')]},
+    {...state.spaces[0], id: 'other-space', folders: [folder('other')]},
+  ]};
+  const folders = new Folders(() => {});
+  folders.restore(saved);
+  expect(folders.in('s').map((entry: any) => entry.parent))
+      .toEqual(['', '', '', '', '', 'root', 'child']);
+  expect(folders.storedIn('s').find((entry: any) => entry.id === 'leaf').parent).toBe('child');
+  expect(folders.canParent('root', 'leaf')).toBe(false);
+  folders.setParent('root', 'leaf');
+  expect(folders.byId('root').parent).toBe('');
+  const tidy = new Folders(() => {});
+  tidy.restore(saved, (space: any) => space.tidyGroups);
+  expect(tidy.byId('tidy').parent).toBe('');
+});
+
+test('moving and deleting a folder affect its entire subtree only', () => {
+  const Folders = load('folders', 'Folders');
+  const folders = new Folders(() => {});
+  const pinned = new PinnedTabs(() => {});
+  for (const id of ['root', 'child', 'leaf', 'outside']) {
+    folders.create('s', id, id);
+    const entry = pinned.pin(tab(id), 's');
+    pinned.setFolder(entry.key, id);
+  }
+  folders.setParent('child', 'root');
+  folders.setParent('leaf', 'child');
+  folders.moveTree({id: 'root', space: 'other', pinned,
+    move: (key: string, space: string) => pinned.moveTo(key, space)});
+  expect(folders.in('other').map((folder: any) => folder.id)).toEqual(['root', 'child', 'leaf']);
+  expect(pinned.entriesIn('other').map((entry: any) => entry.folder)).toEqual(['root', 'child', 'leaf']);
+  expect(folders.byId('child').parent).toBe('root');
+  const closed: string[] = [];
+  folders.deleteTree('root', pinned, (key: string) => closed.push(pinned.byKey(key).tabId));
+  expect(closed).toEqual(['root', 'child', 'leaf']);
+  expect(pinned.entriesIn('other')).toEqual([]);
+  expect(folders.in('other')).toEqual([]);
+  expect(pinned.entriesIn('s').map((entry: any) => entry.tabId)).toEqual(['outside']);
+});
+
+test('folder drag slots keep subtree membership and collapsed active descendants', () => {
+  const Folders = load('folders', 'Folders');
+  const folders = new Folders(() => {});
+  const pinned = new PinnedTabs(() => {});
+  const layoutPinned = load('sections', 'layoutPinned');
+  const pinnedDragSlots = load('sections', 'pinnedDragSlots');
+  const apply = load('sections', 'applyPinnedDragSlots');
+  const root = folders.create('s', 'Root', 'root');
+  const nested = folders.create('s', 'Nested', 'nested');
+  const other = folders.create('s', 'Other', 'other');
+  folders.setParent(nested.id, root.id);
+  for (const [id, folder] of [['a', root.id], ['b', nested.id], ['c', other.id]]) {
+    const entry = pinned.pin(tab(id!), 's');
+    pinned.setFolder(entry.key, folder!);
+  }
+  const layout = () => layoutPinned(pinned.entriesIn('s'), folders.in('s'), (entry: any) => entry.tabId);
+  let slots = pinnedDragSlots({layout: layout(), rowId: (id: string) => id,
+    active: (id: string) => id === 'b', moving: other.id, groupDrag: true});
+  const moving = slots.splice(slots.findIndex((slot: any) => slot.id === other.id), 1)[0];
+  slots.splice(1, 0, moving);
+  apply({slots, pinned, folders, space: 's'});
+  expect(pinned.entriesIn('s').map((entry: any) => entry.tabId)).toEqual(['a', 'b', 'c']);
+  root.expanded = false;
+  slots = pinnedDragSlots({layout: layout(), rowId: (id: string) => id,
+    active: (id: string) => id === 'b', moving: 'c', groupDrag: false});
+  expect(slots.find((slot: any) => slot.id === 'b').group).toBe(nested.id);
+  apply({slots, pinned, folders, space: 's'});
+  expect(pinned.byTab('b').folder).toBe(nested.id);
+  expect(pinned.entriesIn('s').map((entry: any) => entry.tabId)).toEqual(['a', 'b', 'c']);
+  slots = pinnedDragSlots({layout: layout(), rowId: (id: string) => id,
+    active: () => false, moving: root.id, groupDrag: true});
+  expect(slots.map((slot: any) => slot.id)).not.toContain(nested.id);
+  expect(folders.canParent(root.id, nested.id)).toBe(false);
+  apply({slots: [
+    {id: root.id, kind: 'header', group: '', parent: ''},
+    {id: other.id, kind: 'header', group: other.id, parent: ''},
+    {id: 'c', kind: 'tab', group: other.id},
+    {id: 'b', kind: 'tab', group: other.id},
+  ], pinned, folders, space: 's'});
+  expect(pinned.byTab('b').folder).toBe(other.id);
+  expect(pinned.entriesIn('s').map((entry: any) => entry.tabId)).toEqual(['a', 'c', 'b']);
+});
+
+test('Library reorders live pinned entries by stored keys inside a nested folder', () => {
+  const Folders = load('folders', 'Folders');
+  const folders = new Folders(() => {});
+  const pinned = new PinnedTabs(() => {});
+  folders.create('s', 'Root', 'root');
+  folders.create('s', 'Child', 'child');
+  folders.setParent('child', 'root');
+  const one = pinned.pin(tab('a'), 's');
+  const two = pinned.pin(tab('b'), 's');
+  pinned.setFolder(one.key, 'child');
+  pinned.setFolder(two.key, 'child');
+  const layoutPinned = load('sections', 'layoutPinned');
+  const place = load('space_board', 'placePinnedOnBoard', false, {
+    pinnedDragSlots: load('sections', 'pinnedDragSlots'),
+    applyPinnedDragSlots: load('sections', 'applyPinnedDragSlots'),
+  });
+  place({id: two.key, space: 's', parent: 'child',
+    order: ['root', 'child', two.key, one.key], folders, pinned,
+    layout: () => layoutPinned(pinned.entriesIn('s'), folders.in('s'),
+        (entry: any) => ({id: entry.key})),
+    move: () => {}, file: (key: string, _space: string, parent: string) => pinned.setFolder(key, parent)});
+  expect(pinned.entriesIn('s').map((entry: any) => entry.tabId)).toEqual(['b', 'a']);
+  expect(folders.byId('child').parent).toBe('root');
+});
+
+test('Library renders nested pinned folders and rejects descendant drop targets', () => {
+  const layoutPinned = load('sections', 'layoutPinned');
+  const Folders = load('folders', 'Folders');
+  const folders = new Folders(() => {});
+  const root = folders.create('s', 'Root', 'root');
+  const child = folders.create('s', 'Child', 'child');
+  folders.setParent(child.id, root.id);
+  const layout = layoutPinned([{key: 'tab', folder: child.id}], folders.in('s'),
+      () => ({id: 'tab', title: 'Tab', url: 'https://example.test/', favicon: ''}));
+  const Library = load('library', 'RailLibraryElement', false, {
+    CrLitElement: class {}, customElements: {define: () => {}},
+    visiblePinnedLayout: load('sections', 'visiblePinnedLayout'),
+    pinnedDragSlots: load('sections', 'pinnedDragSlots'),
+  });
+  const events: any[] = [];
+  const library = Object.assign(Object.create(Library.prototype), {
+    board: {s: {pinned: layout, today: []}}, dropRow_: '', draggedGroup_: '',
+    fire: (_name: string, detail: any) => events.push(detail),
+  });
+  expect(library.columnRows_({id: 's'}).map((row: any) => [row.kind, row.depth]))
+      .toEqual([['folder', 0], ['folder', 1], ['tab', 2]]);
+  library.draggedGroup_ = root.id;
+  library.dragPinned_ = true;
+  expect(library.acceptsFolder_(child.id)).toBe(false);
+  expect(library.acceptsFolder_(root.id)).toBe(false);
+  expect(library.acceptsFolder_('')).toBe(true);
+  root.expanded = false;
+  expect(library.columnRows_({id: 's'}).length).toBe(1);
+});
+
+test('import and concurrent merges retain valid folder parents', () => {
+  const mergeImport = loadSidebarState('mergeImport');
+  const folders = [{id: 'root', name: 'Root', expanded: true},
+    {id: 'child', name: 'Child', expanded: true, parent: 'root'},
+    {id: 'orphan', name: 'Orphan', expanded: true, parent: 'absent'}];
+  const imported = {...state, spaces: [{...state.spaces[0], folders}]};
+  const merged = mergeImport(state, imported, []);
+  expect(merged.spaces[0].folders.map((folder: any) => folder.parent)).toEqual(['', 'root', '']);
+  const other = mergeImport({...state, spaces: []}, imported, []);
+  expect(other.spaces[0].folders[2].parent).toBe('');
+  const base = {...state, spaces: [{...state.spaces[0], folders: folders.slice(0, 2)}]};
+  const mine = structuredClone(base);
+  mine.spaces[0].folders[1].parent = '';
+  const theirs = structuredClone(base);
+  theirs.spaces[0].folders[1].name = 'Renamed';
+  expect(mergeState(base, mine, theirs).spaces[0].folders[1])
+      .toMatchObject({parent: '', name: 'Renamed'});
 });
 
 const proxy: {handler: Record<string, (...args: any[]) => unknown>} =

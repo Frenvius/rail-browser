@@ -59,7 +59,8 @@ base::DictValue PinEntry(const std::string& id,
 
 base::DictValue FolderEntry(const std::string& id,
                             const std::string& name,
-                            const std::string& after);
+                            const std::string& after,
+                            const std::string& parent = std::string());
 
 base::DictValue SpaceEntry(const SpaceInfo& info, SpaceRows rows);
 

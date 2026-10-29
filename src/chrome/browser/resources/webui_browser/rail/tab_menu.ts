@@ -22,7 +22,7 @@ export type TabCommand = 'add-to-folder'|'close'|'close-others'|'close-right'|
     'mini-window'|'new-folder'|'new-tab-below'|'new-window'|'pin'|'reload'|
     'remove-from-folder'|'replace-pinned-url'|'route-to-space'|'sleep'|'unpin';
 
-export type FolderCommand = 'delete-folder'|'rename-folder';
+export type FolderCommand = 'delete-folder'|'new-subfolder'|'rename-folder';
 
 export type GroupCommand =
     'close-group'|'rename-group'|'save-group'|'ungroup-group';
@@ -61,6 +61,17 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
   const single = target.count <= 1;
   const filing = target.pinned && !target.favorite;
   const available = folders.filter(folder => folder.id !== target.folder);
+  const folderPath = (folder: Folder): string => {
+    const names = [folder.name];
+    const seen = new Set([folder.id]);
+    let parent = folders.find(candidate => candidate.id === folder.parent);
+    while (parent && !seen.has(parent.id)) {
+      seen.add(parent.id);
+      names.unshift(parent.name);
+      parent = folders.find(candidate => candidate.id === parent!.parent);
+    }
+    return names.join(' / ');
+  };
   const others = spaces.filter(space => space.id !== activeSpace);
   const destinations = menuItems([
     ...others.map(space => ({
@@ -113,7 +124,7 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
       label: 'Add to Folder',
       children: menuItems(available.map(folder => ({
                                           command: `add-to-folder:${folder.id}`,
-                                          label: folder.name,
+                                          label: folderPath(folder),
                                         }))),
     },
     filing && !!target.folder &&
@@ -159,6 +170,7 @@ export function openFolderMenu(
       menuItems([
         {label: name},
         {command: 'rename-folder', label: 'Rename'},
+        {command: 'new-subfolder', label: 'New Subfolder'},
         separator(),
         {command: 'delete-folder', label: 'Delete Folder'},
       ]),

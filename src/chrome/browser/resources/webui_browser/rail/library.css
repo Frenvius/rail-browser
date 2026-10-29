@@ -867,8 +867,17 @@ button.space-name:focus-visible,
   font-size: 12.5px;
 }
 
-.board-tab[nested] {
+.board-tab[nested][loose] {
   padding-inline-start: 24px;
+}
+
+.board-tab:not([loose]),
+.board-folder:not(.board-group) {
+  margin-inline-start: calc(var(--rail-folder-level, 0) * var(--rail-folder-indent, 16px));
+}
+
+.board-folder[dragging] {
+  opacity: .35;
 }
 
 .board-folder {

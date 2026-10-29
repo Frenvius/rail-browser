@@ -40,6 +40,7 @@ export interface StoredFolder {
   name: string;
   expanded: boolean;
   after?: string;
+  parent?: string;
 }
 
 export interface StoredTab {
@@ -279,12 +280,32 @@ function addMissingRows<T extends RowKey>(rows: T[], incoming: T[]): T[] {
   return [...rows, ...incoming.filter(row => !held.has(rowKeyOf(row)))];
 }
 
+export function normalizeStoredFolders(folders: StoredFolder[]): StoredFolder[] {
+  const byId = new Map(folders.map(folder => [folder.id, folder]));
+  return folders.map(folder => {
+    const seen = new Set([folder.id]);
+    let parent = folder.parent ?? '';
+    let ancestor = parent;
+    while (ancestor) {
+      const next = byId.get(ancestor);
+      if (!next || seen.has(ancestor)) {
+        parent = '';
+        break;
+      }
+      seen.add(ancestor);
+      ancestor = next.parent ?? '';
+    }
+    return {...folder, parent};
+  });
+}
+
 function mergeSpaceRows(
     space: StoredSpace, incoming: StoredSpace|undefined): StoredSpace {
   if (!incoming) {
-    return space;
+    return {...space, folders: normalizeStoredFolders(space.folders ?? [])};
   }
-  const folders = addMissingRows(space.folders ?? [], incoming.folders ?? []);
+  const folders = normalizeStoredFolders(
+      addMissingRows(space.folders ?? [], incoming.folders ?? []));
   const tidyGroups =
       addMissingRows(space.tidyGroups ?? [], incoming.tidyGroups ?? []);
   const folderIds = new Set(folders.map(folder => folder.id));
@@ -330,7 +351,11 @@ export function mergeImport(
     spaces: [
       ...current.spaces.map(space => mergeSpaceRows(space, incoming.get(space.id))),
       ...imported.spaces.filter(
-          space => !held.has(space.id) && !retired.has(space.id)),
+          space => !held.has(space.id) && !retired.has(space.id))
+          .map(space => ({
+                 ...space,
+                 folders: normalizeStoredFolders(space.folders ?? []),
+               })),
     ],
     favoritesByProfile: favorites,
   };
