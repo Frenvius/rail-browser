@@ -27,6 +27,7 @@ export interface PinnedEntry {
   homeFavicon: string;
   url: string;
   title: string;
+  name: string;
   favicon: string;
   tabId: string;
   owner: string;
@@ -110,6 +111,7 @@ export class PinnedTabs {
           homeFavicon: pin.homeFavicon ?? pin.favicon,
           url: pin.url,
           title: pin.title,
+          name: pin.name ?? '',
           favicon: pin.favicon,
           tabId: tab ? tab.id : '',
           owner: foreign || parked ? pin.owner ?? '' : '',
@@ -155,7 +157,7 @@ export class PinnedTabs {
     this.onChange_();
   }
 
-  pin(tab: Tab, spaceId: string): PinnedEntry {
+  pin(tab: Tab, spaceId: string, name: string): PinnedEntry {
     return this.add_({
       space: spaceId,
       home: tab.url,
@@ -163,6 +165,7 @@ export class PinnedTabs {
       homeFavicon: tab.favicon.dataUrl,
       url: tab.url,
       title: tab.title,
+      name,
       favicon: tab.favicon.dataUrl,
       tabId: tab.id,
       owner: '',
@@ -180,6 +183,7 @@ export class PinnedTabs {
       homeFavicon: row.favicon,
       url: row.url,
       title: row.title,
+      name: row.name ?? '',
       favicon: row.favicon,
       tabId: '',
       owner: row.remote ? row.owner ?? '' : '',
@@ -293,6 +297,16 @@ export class PinnedTabs {
     entry.space = spaceId;
     entry.folder = '';
     this.onChange_();
+  }
+
+  setName(key: string, name: string): boolean {
+    const entry = this.byKey(key);
+    if (!entry || entry.name === name) {
+      return false;
+    }
+    entry.name = name;
+    this.onChange_();
+    return true;
   }
 
   setFolder(key: string, folderId: string) {
@@ -435,6 +449,7 @@ export interface DormantRow {
   key: string;
   url: string;
   title: string;
+  name?: string;
   favicon: string;
   owner?: string;
   remote?: string;
@@ -450,7 +465,7 @@ export function dormantTabData(entry: DormantRow): Tab {
     isCrashed: false,
     isSelected: false,
     networkState: TabNetworkState.kNone,
-    title: entry.title || entry.url,
+    title: entry.name || entry.title || entry.url,
     url: entry.url,
   };
 }

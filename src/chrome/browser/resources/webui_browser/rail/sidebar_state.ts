@@ -29,6 +29,7 @@ export interface StoredPin {
   homeFavicon?: string;
   url: string;
   title: string;
+  name?: string;
   favicon: string;
   folder?: string;
   owner?: string;
@@ -47,6 +48,7 @@ export interface StoredTab {
   id?: string;
   url: string;
   title: string;
+  name?: string;
   favicon: string;
   group?: string;
   owner?: string;

@@ -313,6 +313,10 @@ export function anchorDroppedGroups(
   }
 }
 
+function named(item: TabItem, name: string): TabItem {
+  return name ? {...item, tabData: {...item.tabData, title: name}} : item;
+}
+
 export function splitSections(
     items: TabStripItem[], pinned: PinnedTabs, spaces: Spaces, folders: Folders,
     tidyGroups: Folders): Sections {
@@ -331,7 +335,7 @@ export function splitSections(
       };
     }
     claimed.add(item.id);
-    return {item, dormant: false};
+    return {item: named(item, entry.name), dormant: false};
   });
 
   const favoriteRows =
@@ -387,7 +391,7 @@ export function splitSections(
           {type: 'tab', id: row.key, tabData: dormantTabData(row)});
     } else if (item && !claimed.has(item.id) && !pinned.byTab(row.tabId)) {
       claimed.add(item.id);
-      collect(row.group, item);
+      collect(row.group, named(item, row.name));
     }
     placeEmpty(row.key);
   }

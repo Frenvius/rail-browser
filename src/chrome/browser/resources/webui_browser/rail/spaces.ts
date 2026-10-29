@@ -276,6 +276,7 @@ export interface TabRow {
   earlierTab: string;
   url: string;
   title: string;
+  name: string;
   favicon: string;
 }
 
@@ -291,6 +292,7 @@ interface RowFields {
   tabId: string;
   url: string;
   title: string;
+  name?: string;
   favicon: string;
   opener?: string;
   group?: string;
@@ -300,7 +302,7 @@ interface RowFields {
 }
 
 export type DormantFields =
-    Pick<RowFields, 'url'|'title'|'favicon'|'owner'|'remote'>;
+    Pick<RowFields, 'url'|'title'|'name'|'favicon'|'owner'|'remote'>;
 
 export function isNewTabUrl(url: string): boolean {
   return !url || url.startsWith('chrome://newtab');
@@ -420,7 +422,8 @@ export class Spaces {
       };
       this.spaces_.push(space);
       for (const entry of stored.tabs ?? []) {
-        const {id, url, title, favicon, group, ...origin} = storedTab(entry);
+        const {id, url, title, name, favicon, group, ...origin} =
+            storedTab(entry);
         const earlier = isEarlierRun(origin.owner);
         const byUrl = earlier && !!adopted && origin.owner === adopted;
         const owner = earlier ? '' : origin.owner ?? '';
@@ -453,6 +456,7 @@ export class Spaces {
           tabId: tab ? tab.id : '',
           url,
           title,
+          name,
           favicon,
           group,
           owner: foreign ? owner : parked ? origin.owner : '',
@@ -500,6 +504,7 @@ export class Spaces {
         tabId: tab.id,
         url: tab.url,
         title: home.title,
+        name: home.name,
         favicon: home.favicon,
         group: home.group,
       });
@@ -964,6 +969,16 @@ export class Spaces {
     this.onChange_();
   }
 
+  setName(id: string, name: string): boolean {
+    const row = this.rowFor(id);
+    if (!row || row.name === name) {
+      return false;
+    }
+    row.name = name;
+    this.onChange_();
+    return true;
+  }
+
   setGroup(key: string, groupId: string) {
     const row = this.rowFor(key);
     if (!row || row.group === groupId) {
@@ -1316,6 +1331,7 @@ export class Spaces {
       tabId: fields.tabId,
       url: fields.url,
       title: fields.title,
+      name: fields.name ?? '',
       favicon: fields.favicon,
     };
     this.rows_.push(row);
@@ -1366,7 +1382,7 @@ function storedBinding({tabId, owner, remote, earlierTab}: Binding):
 }
 
 function storePin(entry: PinnedEntry): StoredPin {
-  const {key, home, homeTitle, homeFavicon, url, title, favicon, folder} =
+  const {key, home, homeTitle, homeFavicon, url, title, name, favicon, folder} =
       entry;
   return {
     id: key,
@@ -1375,6 +1391,7 @@ function storePin(entry: PinnedEntry): StoredPin {
     homeFavicon,
     url,
     title,
+    name: name || undefined,
     favicon,
     folder,
     ...storedBinding(entry),
@@ -1402,6 +1419,7 @@ export function serializeSidebar(
                      id: row.key,
                      url: row.url,
                      title: row.title,
+                     name: row.name || undefined,
                      favicon: row.favicon,
                      group: row.group,
                      ...storedBinding(row),

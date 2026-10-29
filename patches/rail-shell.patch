@@ -4618,7 +4618,7 @@ index 6f872ee..aa86f39 100644
      FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
                                          discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index 8b36341..71a3664 100644
+index 8b36341..35b1a52 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,18 @@ assert(!is_android)
@@ -4641,7 +4641,7 @@ index 8b36341..71a3664 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,60 @@ build_webui("build") {
+@@ -27,6 +38,61 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4690,6 +4690,7 @@ index 8b36341..71a3664 100644
 +    "rail/tab_archive.ts",
 +    "rail/tab_drag.ts",
 +    "rail/tab_menu.ts",
++    "rail/tab_rename.ts",
 +    "rail/tab_selection.ts",
 +    "rail/tab_sleep.ts",
 +    "rail/tidy_tabs.ts",
@@ -4702,7 +4703,7 @@ index 8b36341..71a3664 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -54,6 +119,21 @@ build_webui("build") {
+@@ -54,6 +120,21 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -4724,7 +4725,7 @@ index 8b36341..71a3664 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -67,7 +147,14 @@ build_webui("build") {
+@@ -67,7 +148,14 @@ build_webui("build") {
      # reference import issue.
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
@@ -4739,7 +4740,7 @@ index 8b36341..71a3664 100644
      "$root_gen_dir/components/browser_apis/bookmarks/bookmarks_api.mojom-webui.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/node_id_converter.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/tab_strip_api_types.mojom-converters.ts",
-@@ -79,4 +166,5 @@ build_webui("build") {
+@@ -79,4 +167,5 @@ build_webui("build") {
    mojo_files_deps = [
 +    "//chrome/browser/ui/webui/downloads:mojo_bindings_ts__generator",
      "//chrome/browser/ui/webui_browser:browser_mojo_bindings_ts__generator",
@@ -5126,7 +5127,7 @@ index 5e48dff..1d88d6a 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..41ffb71 100644
+index 922ef29..5799035 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -5472,7 +5473,7 @@ index 922ef29..41ffb71 100644
        this.forwardButtonDisabled_ = !canGoForward;
      } else {
        this.backButtonDisabled_ = true;
-@@ -327,32 +455,104 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -327,32 +455,105 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -5564,6 +5565,7 @@ index 922ef29..41ffb71 100644
 +      hasTab: tab !== null,
 +      pinned: tab?.pinned === true,
 +      favorite: tab?.favorite === true,
++      named: tab?.named === true,
 +      hasOthers: tab?.hasOthers === true,
 +      hasRight: tab?.hasRight === true,
 +      spaceColor: document.documentElement.style.getPropertyValue(
@@ -5595,7 +5597,7 @@ index 922ef29..41ffb71 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -371,6 +571,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -371,6 +572,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -5612,7 +5614,7 @@ index 922ef29..41ffb71 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -400,9 +610,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -400,9 +611,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -5954,13 +5956,13 @@ index 2038cab..0ded2ee 100644
 -        transparent 12px, var(--color-tab-background-active-frame-inactive) 13px);
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
-index dd460df..7d6c078 100644
+index dd460df..9d7061a 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab.html.ts
-@@ -4,19 +4,49 @@
- 
+@@ -4,19 +4,59 @@
+
  import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
- 
+
 +import {tabTitle} from '../rail/tab_alerts.js';
 +
  import type {TabElement} from './tab.js';
@@ -5974,7 +5976,17 @@ index dd460df..7d6c078 100644
      <div id="favicon"></div>
    </div>
 -  <span id="title">${this.tabData.title}</span>
-+  <span id="title">${tabTitle(this.tabData.title, this.tabData.networkState)}</span>
++  ${this.rename.editing ? html`
++    <input id="titleInput" spellcheck="false" aria-label="Tab name"
++        @mousedown="${this.rename.onInputPointer}"
++        @click="${this.rename.onInputPointer}"
++        @dblclick="${this.rename.onInputPointer}"
++        @contextmenu="${this.rename.onInputPointer}"
++        @keydown="${this.rename.onInputKeydown}"
++        @blur="${this.rename.onInputBlur}">
++  ` : html`
++    <span id="title">${tabTitle(this.tabData.title, this.tabData.networkState)}</span>
++  `}
 +  <div id="alert" kind="${this.alertKind_()}" ?hidden="${!this.alertKind_()}"
 +      title="${this.alertLabel_()}">
 +    <svg viewBox="0 0 24 24" ?hidden="${this.alertKind_() !== 'record'}">
@@ -6011,12 +6023,12 @@ index dd460df..7d6c078 100644
    </cr-icon-button>
    <div id="bottomCorners" ?hidden="${!this.tabData.isActive}">
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab.ts b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
-index d1e297c..5ef8fd9 100644
+index d1e297c..a478f2d 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab.ts
-@@ -3,14 +3,14 @@
+@@ -3,14 +3,15 @@
  // found in the LICENSE file.
- 
+
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
 +import '../icons.html.js';
  
@@ -6029,11 +6041,12 @@ index d1e297c..5ef8fd9 100644
 -import {TabNetworkState} from '../tabs.mojom-webui.js';
 +import type {AlertBadge} from '../rail/tab_alerts.js';
 +import {alertBadge, isLoading, tabTooltip} from '../rail/tab_alerts.js';
++import {TabRename} from '../rail/tab_rename.js';
 +import {TabAlertState, TabNetworkState} from '../tabs.mojom-webui.js';
- 
+
  import {getCss} from './tab.css.js';
  import {getHtml} from './tab.html.js';
-@@ -39,10 +39,37 @@ export class TabElement extends CrLitElement {
+@@ -39,10 +40,38 @@ export class TabElement extends CrLitElement {
          type: Boolean,
          reflect: true,
        },
@@ -6071,9 +6084,10 @@ index d1e297c..5ef8fd9 100644
          reflect: true,
 -        attribute: 'inactive-frame',
        },
++      rename: {type: Object},
      };
    }
-@@ -53,6 +80,7 @@ export class TabElement extends CrLitElement {
+@@ -53,6 +82,7 @@ export class TabElement extends CrLitElement {
      id: '',
      isActive: false,
      isBlocked: false,
@@ -6081,7 +6095,7 @@ index d1e297c..5ef8fd9 100644
      isSelected: false,
      networkState: TabNetworkState.kNone,
      title: '',
-@@ -61,37 +89,109 @@ export class TabElement extends CrLitElement {
+@@ -61,37 +91,111 @@ export class TabElement extends CrLitElement {
  
    protected accessor dragInProgress = false;
    protected accessor active = false;
@@ -6102,14 +6116,16 @@ index d1e297c..5ef8fd9 100644
 +  protected accessor loading = false;
 +  protected accessor blocked = false;
 +  protected accessor crashed = false;
- 
++  accessor rename: TabRename = new TabRename(this);
+
    override connectedCallback() {
      super.connectedCallback();
- 
+
 +    this.addEventListener('click', this.onClick_.bind(this));
      this.addEventListener('contextmenu', this.onContextMenu_.bind(this));
 +    this.addEventListener('auxclick', this.onAuxClick_.bind(this));
 +    this.addEventListener('mousedown', this.onMouseDown_.bind(this));
++    this.addEventListener('dblclick', this.rename.onRowDblClick);
 +  }
 +
 +  private onClick_(e: MouseEvent) {
@@ -6204,7 +6220,7 @@ index d1e297c..5ef8fd9 100644
      }
    }
  
-@@ -115,9 +215,15 @@ export class TabElement extends CrLitElement {
+@@ -115,9 +219,15 @@ export class TabElement extends CrLitElement {
      return matrix.m41;
    }
  
@@ -6271,10 +6287,10 @@ index 0fbaf6c..e58d103 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index a15445b..71dcb5e 100644
+index a15445b..c7b3dd3 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -2,30 +2,200 @@
+@@ -2,30 +2,203 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
  
@@ -6357,6 +6373,7 @@ index a15445b..71dcb5e 100644
 +              @tab-audio-click="${this.onTabAudioClick_}"
 +              @tab-close-click="${this.onTabCloseClick}"
 +              @tab-reset-click="${this.onTabResetClick_}"
++              @tab-rename="${this.onTabRename_}"
 +              @tab-context-menu="${this.onTabContextMenu_}"
 +              @tab-select="${this.onTabSelect_}">
 +          </webui-browser-tab>
@@ -6376,6 +6393,7 @@ index a15445b..71dcb5e 100644
 +              @mousedown="${this.onTabMousedown_}"
 +              @tab-audio-click="${this.onTabAudioClick_}"
 +              @tab-close-click="${this.onTabCloseClick}"
++              @tab-rename="${this.onTabRename_}"
 +              @tab-context-menu="${this.onTabContextMenu_}"
 +              @tab-select="${this.onTabSelect_}">
            </webui-browser-tab>
@@ -6436,6 +6454,7 @@ index a15445b..71dcb5e 100644
 +                      @mousedown="${this.onTabMousedown_}"
 +                      @tab-audio-click="${this.onTabAudioClick_}"
 +                      @tab-close-click="${this.onTabCloseClick}"
++                      @tab-rename="${this.onTabRename_}"
 +                      @tab-context-menu="${this.onTabContextMenu_}"
 +                      @tab-select="${this.onTabSelect_}">
 +                  </webui-browser-tab>
@@ -6489,7 +6508,7 @@ index a15445b..71dcb5e 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..213d109 100644
+index b7a5099..dd33fc2 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,9 @@
@@ -6502,7 +6521,7 @@ index b7a5099..213d109 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -11,24 +14,55 @@ import '//resources/cr_elements/icons.html.js';
+@@ -11,24 +14,57 @@ import '//resources/cr_elements/icons.html.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
@@ -6548,6 +6567,8 @@ index b7a5099..213d109 100644
 +import {mergeItemOrder, nativeTabMoves, TabDrag} from '../rail/tab_drag.js';
 +import type {FolderCommand, GroupCommand, TabCommand, TabCommandDetail, TabMenuTarget} from '../rail/tab_menu.js';
 +import {openFolderMenu, openGroupMenu, openTabMenu} from '../rail/tab_menu.js';
++import type {TabRenameDetail} from '../rail/tab_rename.js';
++import {tabName} from '../rail/tab_rename.js';
 +import {actsOnSelection, TabSelection} from '../rail/tab_selection.js';
 +import type {ArchiveCandidate, ArchivedGroup, ArchiveHours} from '../rail/tab_archive.js';
 +import {archivedTabs, restoreArchivedRows, TabArchive} from '../rail/tab_archive.js';
@@ -7059,7 +7080,7 @@ index b7a5099..213d109 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +583,2332 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +585,2362 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7559,6 +7580,22 @@ index b7a5099..213d109 100644
 +    this.closeTarget_(e.detail.id);
 +  }
 +
++  protected onTabRename_(e: CustomEvent<TabRenameDetail>) {
++    this.renameTab_(e.detail.id, e.detail.text);
++  }
++
++  private renameTab_(id: string, text: string) {
++    const entry = this.entryFor_(id);
++    const pageTitle = entry?.title ?? this.spaces_.rowFor(id)?.title ?? '';
++    const name = tabName(text, pageTitle);
++    const renamed = entry ? this.pinnedTabs_.setName(entry.key, name) :
++                            this.spaces_.setName(id, name);
++    if (renamed) {
++      this.getTabElement_(id)?.rename.playTitleEnter();
++      this.refreshSections_();
++    }
++  }
++
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -7771,6 +7808,13 @@ index b7a5099..213d109 100644
 +        break;
 +      case 'replace-pinned-url':
 +        this.replacePinnedUrl_(target.id);
++        break;
++      case 'rename':
++        void this.updateComplete.then(
++            () => this.getTabElement_(target.id)?.rename.begin());
++        break;
++      case 'reset-name':
++        this.renameTab_(target.id, '');
 +        break;
 +      case 'favorite':
 +        this.toggleFavorite_(target);
@@ -8036,8 +8080,9 @@ index b7a5099..213d109 100644
 +    if (!item) {
 +      return undefined;
 +    }
-+    const entry =
-+        this.pinnedTabs_.pin(item.tabData, this.spaces_.spaceOf(tabId));
++    const entry = this.pinnedTabs_.pin(
++        item.tabData, this.spaces_.spaceOf(tabId),
++        this.spaces_.byTab(tabId)?.name ?? '');
 +    if (refresh) {
 +      this.refreshSections_();
 +    }
@@ -8053,10 +8098,12 @@ index b7a5099..213d109 100644
 +    const rows = [
 +      ...this.spaces_.rowsIn(sourceId)
 +          .filter(row => !isNewTabUrl(row.url))
-+          .map(({key, url, title, favicon}) => ({key, url, title, favicon})),
++          .map(({key, url, title, name, favicon}) =>
++                   ({key, url, title, name, favicon})),
 +      ...this.pinnedTabs_.entriesIn(sourceId)
 +          .filter(entry => !entry.tabId)
-+          .map(({key, url, title, favicon}) => ({key, url, title, favicon})),
++          .map(({key, url, title, name, favicon}) =>
++                   ({key, url, title, name, favicon})),
 +    ];
 +    if (!rows.length) {
 +      return;
@@ -8563,10 +8610,13 @@ index b7a5099..213d109 100644
 +    }
 +    this.pinnedTabs_.unpin(entry.key);
 +    let rowId = entry.tabId;
-+    if (!entry.tabId) {
++    if (entry.tabId) {
++      this.spaces_.setName(entry.tabId, entry.name);
++    } else {
 +      rowId = this.spaces_.addDormant(entry.space || this.spaces_.activeId, {
 +        url: entry.url,
 +        title: entry.title,
++        name: entry.name,
 +        favicon: entry.favicon,
 +        owner: entry.owner,
 +        remote: entry.remote,
@@ -9176,6 +9226,7 @@ index b7a5099..213d109 100644
 +      favorite: entry !== undefined && isFavorites(entry.space),
 +      folder: entry?.folder ?? '',
 +      dormant: sleeping !== undefined || (entry !== undefined && !entry.tabId),
++      named: !!(entry ? entry.name : this.spaces_.rowFor(id)?.name),
 +      muted: item !== undefined &&
 +          item.tabData.alertStates.includes(TabAlertState.kAudioMuting),
 +      hasOthers: loose.some(other => other !== id),

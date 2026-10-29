@@ -1709,3 +1709,59 @@ test('entering a space focuses the tab it was left on, never another space\'s', 
   strip.focusSpace_();
   expect(log).toEqual(['activate:b']);
 });
+
+const tabName = load('tab_rename', 'tabName');
+const dormantTabData = load('pinned_tabs', 'dormantTabData', false,
+    {TabNetworkState: {kNone: 0}});
+
+test('a tab name equal to the page title or blank is no name', () => {
+  expect(tabName('  Mail  ', 'Inbox')).toBe('Mail');
+  expect(tabName(' Inbox ', 'Inbox')).toBe('');
+  expect(tabName('   ', 'Inbox')).toBe('');
+});
+
+test('tab names survive a save and restore', () => {
+  const spaces = spacesWith(['a', 'b']);
+  const pins = new PinnedTabs(() => {});
+  expect(spaces.setName('a', 'Mail')).toBe(true);
+  expect(spaces.setName('a', 'Mail')).toBe(false);
+  pins.pin(tab('b'), 's', 'Docs');
+  const noFolders = {storedIn: () => []};
+  const saved = load('spaces', 'serializeSidebar')(
+      spaces, pins, noFolders, noFolders);
+  expect(saved.spaces[0].tabs.map((row: {name?: string}) => row.name))
+      .toEqual(['Mail']);
+  expect(saved.spaces[0].pinned[0].name).toBe('Docs');
+
+  const restored = spacesWith(['a', 'b'], saved);
+  const restoredPins = new PinnedTabs(() => {});
+  restoredPins.restore(saved, [tab('a'), tab('b')], new Set());
+  expect(restored.rowFor('a').name).toBe('Mail');
+  expect(restoredPins.byTab('b').name).toBe('Docs');
+});
+
+test('a cleared name is not saved', () => {
+  const spaces = spacesWith(['a']);
+  spaces.setName('a', 'Mail');
+  spaces.setName('a', '');
+  const none = {entriesIn: () => [], byTab: () => undefined,
+    favoriteProfiles: () => []};
+  const noFolders = {storedIn: () => []};
+  const saved = load('spaces', 'serializeSidebar')(
+      spaces, none, noFolders, noFolders);
+  expect('name' in saved.spaces[0].tabs[0] &&
+      saved.spaces[0].tabs[0].name !== undefined).toBe(false);
+});
+
+test('a sleeping row keeps its name when pinned and shows it', () => {
+  const spaces = new Spaces(() => {});
+  spaces.restore(state, [], new Set());
+  const row = spaces.addDormant('s', {url: 'https://mail.test/',
+    title: 'Inbox', name: 'Mail', favicon: ''});
+  const pins = new PinnedTabs(() => {});
+  const entry = pins.pinDormant(row, 's');
+  expect(entry.name).toBe('Mail');
+  expect(dormantTabData(entry).title).toBe('Mail');
+  pins.setName(entry.key, '');
+  expect(dormantTabData(entry).title).toBe('Inbox');
+});

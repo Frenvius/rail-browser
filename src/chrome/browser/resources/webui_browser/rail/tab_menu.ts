@@ -11,6 +11,7 @@ export interface TabMenuTarget {
   favorite: boolean;
   folder: string;
   dormant: boolean;
+  named: boolean;
   muted: boolean;
   hasOthers: boolean;
   hasRight: boolean;
@@ -20,7 +21,8 @@ export interface TabMenuTarget {
 export type TabCommand = 'add-to-folder'|'close'|'close-others'|'close-right'|
     'copy-link'|'duplicate'|'favorite'|'move-to-space'|'move-to-window'|'mute'|
     'mini-window'|'new-folder'|'new-tab-below'|'new-window'|'pin'|'reload'|
-    'remove-from-folder'|'replace-pinned-url'|'route-to-space'|'sleep'|'unpin';
+    'remove-from-folder'|'rename'|'replace-pinned-url'|'reset-name'|
+    'route-to-space'|'sleep'|'unpin';
 
 export type FolderCommand = 'delete-folder'|'new-subfolder'|'rename-folder';
 
@@ -103,6 +105,9 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
     },
     separator(),
     single && {command: 'new-tab-below', label: 'New Tab Below'},
+    single && !target.favorite && {command: 'rename', label: 'Rename...'},
+    single && target.named &&
+        {command: 'reset-name', label: 'Reset Tab Name'},
     {command: 'duplicate', label: 'Duplicate'},
     !target.dormant && {command: 'sleep', label: `Sleep ${noun(target)}`},
     destinations.length > 0 &&

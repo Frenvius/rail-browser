@@ -80,6 +80,22 @@ export const COMMANDS: Command[] = [
     run: onActiveTab('duplicate'),
   },
   {
+    id: 'rename-tab',
+    label: 'Rename Tab',
+    hint: '',
+    keywords: 'title label name',
+    enabled: tab => tab !== null && !tab.favorite,
+    run: onActiveTab('rename'),
+  },
+  {
+    id: 'reset-tab-name',
+    label: 'Reset Tab Name',
+    hint: '',
+    keywords: 'title label original',
+    enabled: tab => tab?.named === true,
+    run: onActiveTab('reset-name'),
+  },
+  {
     id: 'new-tab-below',
     label: 'New Tab Below',
     hint: '',
