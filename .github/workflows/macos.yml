@@ -24,19 +24,7 @@ jobs:
     outputs:
       assets: ${{ steps.package.outputs.assets }}
     steps:
-      - name: Verify shared checkout
-        shell: bash
-        env:
-          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
-        run: |
-          set -euo pipefail
-          cd "$RAIL_REPO_DIR"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git diff --quiet
-          git diff --cached --quiet
-          test -f build/src/BUILD.gn
-      - name: Verify release tag and branding
-        if: inputs.version != ''
+      - name: Sync shared checkout
         shell: bash
         env:
           RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
@@ -44,10 +32,42 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RAIL_REPO_DIR"
-          [[ "$RAIL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$(git rev-parse "v$RAIL_VERSION^{commit}")" = "$GITHUB_SHA"
-          grep -qx 'MAC_BUNDLE_ID=com.frenvius.rail' build/src/chrome/app/theme/chromium/BRANDING
+          git diff --quiet
+          git diff --cached --quiet
+          test -f build/src/BUILD.gn
+          remote="https://github.com/$GITHUB_REPOSITORY.git"
+          git -c fetch.unpackLimit=1 fetch -q --no-tags "$remote" "$GITHUB_SHA"
+          target="$GITHUB_SHA"
+          if [[ -n "$RAIL_VERSION" ]]; then
+            [[ "$RAIL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            git -c fetch.unpackLimit=1 fetch -q --no-tags "$remote" "refs/tags/v$RAIL_VERSION"
+            target="$(git rev-parse "FETCH_HEAD^{commit}")"
+            git merge-base --is-ancestor "$target" "$GITHUB_SHA"
+          fi
+          applied="$(git rev-parse HEAD)"
+          if ! git diff --quiet "$applied" "$target" -- ungoogled-chromium patches \
+              ':(exclude)patches/rail-shell.patch'; then
+            echo "::error::patch layers below rail-shell.patch changed since $applied; prepare a fresh tree"
+            exit 1
+          fi
+          previous="$RUNNER_TEMP/applied-rail-shell.patch"
+          git show "$applied:patches/rail-shell.patch" > "$previous"
+          git checkout -q --detach "$target"
+          if ! .venv/bin/python platform/update_rail_patch.py --tree build/src \
+              --previous "$previous" --current patches/rail-shell.patch; then
+            git checkout -q --detach "$applied"
+            exit 1
+          fi
           git -C build/src apply --reverse --check "$RAIL_REPO_DIR/patches/rail-shell.patch"
+      - name: Verify release branding
+        if: inputs.version != ''
+        shell: bash
+        env:
+          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
+        run: |
+          set -euo pipefail
+          grep -qx 'MAC_BUNDLE_ID=com.frenvius.rail' \
+            "$RAIL_REPO_DIR/build/src/chrome/app/theme/chromium/BRANDING"
       - name: Build Rail
         if: inputs.version == ''
         shell: bash

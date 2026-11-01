@@ -70,14 +70,9 @@ jobs:
             $previous = Join-Path $env:RUNNER_TEMP 'applied-rail-shell.patch'
             cmd /c "git show ${applied}:patches/rail-shell.patch > `"$previous`""
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
-            git -C build\src apply --reverse $previous
+            .\.venv\Scripts\python.exe platform\update_rail_patch.py --tree build\src `
+              --previous $previous --current patches\rail-shell.patch
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
-            git -C build\src apply "$env:RAIL_REPO_DIR\patches\rail-shell.patch"
-            if ($LASTEXITCODE) {
-              git -C build\src apply $previous
-              Write-Error 'rail-shell.patch does not apply over the prepared tree; restored the previous one'
-              exit 1
-            }
           }
           [IO.File]::WriteAllText($env:RAIL_APPLIED_SHA, $env:GITHUB_SHA)
 
@@ -131,6 +126,7 @@ jobs:
     runs-on: [self-hosted, rail-builder]
     timeout-minutes: 30
     permissions:
+      actions: write
       contents: write
     defaults:
       run:
@@ -145,4 +141,12 @@ jobs:
           $files = (Get-ChildItem $env:RAIL_ASSETS -File).FullName
           gh release create $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --verify-tag --latest `
             --title "Rail $env:RAIL_VERSION" --generate-notes @files
+          exit $LASTEXITCODE
+
+      - name: Start macOS build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAIL_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh workflow run macos.yml --repo $env:GITHUB_REPOSITORY --ref master -f version=$env:RAIL_VERSION
           exit $LASTEXITCODE
