@@ -805,7 +805,8 @@ test('the space board lists every space with its pinned and today tabs', () => {
 });
 
 test('space shortcuts address spaces by position', () => {
-  const runCommand = load('command_registry', 'runCommand');
+  const runCommand = load('command_registry', 'runCommand', false,
+      {shortcut: (hint: string) => hint});
   const picked: number[] = [];
   const host = {selectSpaceAt: (index: number) => picked.push(index)};
   runCommand('select-space:0', host);

@@ -87,7 +87,7 @@ function openWindow(
   const sidebar = new Function('loadTimeData', 'location', 'browserProxyFactory',
       'crypto', 'setTimeout', 'clearTimeout',
       `${SOURCES.state}\nreturn {SidebarStore, isEarlierRun, earlierOwnerOf, ` +
-          'WINDOW_ID, parseSidebarState};')(
+          'WINDOW_ID, parseSidebarState, normalizeStoredFolders};')(
       loadTimeData, {search: ''}, {getInstance: () => ({handler})}, crypto,
       later, () => {});
   const shared = {
@@ -97,6 +97,7 @@ function openWindow(
     TabNetworkState: {},
     WINDOW_ID: sidebar.WINDOW_ID,
     isEarlierRun: sidebar.isEarlierRun,
+    normalizeStoredFolders: sidebar.normalizeStoredFolders,
     crypto,
   };
   const module = (source: string, names: string) => new Function(
