@@ -1,48 +1,51 @@
 import {TabAlertState, TabNetworkState} from '../tabs.mojom-webui.js';
 
+export type AlertKind =
+    'screen'|'camera'|'mic'|'bluetooth'|'usb'|'headset'|'pip';
+
 export interface AlertBadge {
-  kind: 'record'|'device'|'pip';
+  kind: AlertKind;
   label: string;
 }
 
 const BADGES = new Map<TabAlertState, AlertBadge>([
   [
     TabAlertState.kDesktopCapturing,
-    {kind: 'record', label: 'Sharing your screen'},
+    {kind: 'screen', label: 'Sharing your screen'},
   ],
-  [TabAlertState.kTabCapturing, {kind: 'record', label: 'Sharing this tab'}],
+  [TabAlertState.kTabCapturing, {kind: 'screen', label: 'Sharing this tab'}],
   [
     TabAlertState.kMediaRecording,
-    {kind: 'record', label: 'Using your camera or microphone'},
+    {kind: 'camera', label: 'Using your camera or microphone'},
   ],
   [
     TabAlertState.kAudioRecording,
-    {kind: 'record', label: 'Using your microphone'},
+    {kind: 'mic', label: 'Using your microphone'},
   ],
-  [TabAlertState.kVideoRecording, {kind: 'record', label: 'Using your camera'}],
+  [TabAlertState.kVideoRecording, {kind: 'camera', label: 'Using your camera'}],
   [
     TabAlertState.kBluetoothConnected,
-    {kind: 'device', label: 'Connected to a Bluetooth device'},
+    {kind: 'bluetooth', label: 'Connected to a Bluetooth device'},
   ],
   [
     TabAlertState.kBluetoothScanActive,
-    {kind: 'device', label: 'Scanning for Bluetooth devices'},
+    {kind: 'bluetooth', label: 'Scanning for Bluetooth devices'},
   ],
   [
     TabAlertState.kUsbConnected,
-    {kind: 'device', label: 'Connected to a USB device'},
+    {kind: 'usb', label: 'Connected to a USB device'},
   ],
   [
     TabAlertState.kHidConnected,
-    {kind: 'device', label: 'Connected to a HID device'},
+    {kind: 'usb', label: 'Connected to a HID device'},
   ],
   [
     TabAlertState.kSerialConnected,
-    {kind: 'device', label: 'Connected to a serial port'},
+    {kind: 'usb', label: 'Connected to a serial port'},
   ],
   [
     TabAlertState.kVrPresentingInHeadset,
-    {kind: 'device', label: 'Presenting in a headset'},
+    {kind: 'headset', label: 'Presenting in a headset'},
   ],
   [
     TabAlertState.kPipPlaying,
