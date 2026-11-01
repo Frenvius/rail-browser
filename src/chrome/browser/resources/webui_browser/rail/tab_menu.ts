@@ -118,6 +118,7 @@ function buildItems(context: TabMenuContext): NativeMenuItem[] {
     {
       command: target.pinned ? 'unpin' : 'pin',
       label: `${target.pinned ? 'Unpin' : 'Pin'} ${noun(target)}`,
+      accelerator: single ? 'Ctrl+D' : undefined,
     },
     {
       command: 'favorite',

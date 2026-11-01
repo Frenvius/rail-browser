@@ -49,6 +49,7 @@ constexpr Binding kBindings[] = {
     {ui::VKEY_S, kSidebarModifier, "toggle-sidebar"},
     {ui::VKEY_J, kDownloadsModifier, "show-downloads"},
     {ui::VKEY_OEM_COMMA, kPrimaryModifier, "settings"},
+    {ui::VKEY_D, kPrimaryModifier, "toggle-pin"},
     {ui::VKEY_M, kMiniWindowModifier, "mini-window"},
     {ui::VKEY_1, kSelectSpaceModifier, "select-space:0"},
     {ui::VKEY_2, kSelectSpaceModifier, "select-space:1"},

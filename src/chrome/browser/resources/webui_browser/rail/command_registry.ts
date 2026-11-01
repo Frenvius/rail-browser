@@ -138,7 +138,7 @@ const commands: Command[] = [
   {
     id: 'pin-tab',
     label: 'Pin Tab',
-    hint: '',
+    hint: 'Ctrl+D',
     keywords: 'keep stick',
     enabled: tab => tab !== null && !tab.pinned,
     run: onActiveTab('pin'),
@@ -146,7 +146,7 @@ const commands: Command[] = [
   {
     id: 'unpin-tab',
     label: 'Unpin Tab',
-    hint: '',
+    hint: 'Ctrl+D',
     keywords: 'release',
     enabled: tab => tab?.pinned === true,
     run: onActiveTab('unpin'),
@@ -322,6 +322,7 @@ export function matchCommands(
 
 const SELECT_TAB = 'select-tab:';
 const SELECT_SPACE = 'select-space:';
+const TOGGLE_PIN = 'toggle-pin';
 
 function ordinal(id: string, prefix: string): number {
   const which = id.slice(prefix.length);
@@ -335,6 +336,13 @@ export function runCommand(id: string, host: CommandBarHost) {
   }
   if (id.startsWith(SELECT_SPACE)) {
     host.selectSpaceAt(ordinal(id, SELECT_SPACE));
+    return;
+  }
+  if (id === TOGGLE_PIN) {
+    const target = host.activeTab();
+    if (target) {
+      host.runTabCommand(target.pinned ? 'unpin' : 'pin', target);
+    }
     return;
   }
   COMMANDS.find(command => command.id === id)?.run(host);
