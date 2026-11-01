@@ -2,6 +2,7 @@ import '//resources/cr_elements/cr_icon/cr_icon.js';
 import '//resources/cr_elements/icons.html.js';
 
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+import {isMac} from '//resources/js/platform.js';
 
 import type {SpacePanelRequest} from '../browser.mojom-webui.js';
 import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
@@ -13,6 +14,7 @@ import {
   backdropSettings,
   hexToHsl,
   hslToHex,
+  MAC_WINDOW_BASE,
   MAX_GRADIENT_COLORS,
   MIN_STRENGTH,
   spaceHex,
@@ -152,6 +154,11 @@ export class RailSpacePanelElement extends CrLitElement {
     this.kind_ = request.kind;
     document.documentElement.style.setProperty(
         '--rail-space-color', this.colors_[0]!);
+    if (isMac) {
+      document.documentElement.style.setProperty(
+          '--rail-mac-panel-background',
+          `color-mix(in srgb, var(--rail-space-color) 22%, ${MAC_WINDOW_BASE})`);
+    }
     await this.updateComplete;
     this.shadowRoot.querySelector<HTMLInputElement>('#iconSearch, #profileName')
         ?.focus();
@@ -401,7 +408,7 @@ export class RailSpacePanelElement extends CrLitElement {
   }
 
   protected materials_(): ReadonlyArray<readonly[SystemBackdropMaterial, string]> {
-    return BACKDROP_MATERIALS;
+    return isMac ? [] : BACKDROP_MATERIALS;
   }
 
   protected onMaterialClick_(e: Event) {

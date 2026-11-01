@@ -2,6 +2,7 @@ import {html} from '//resources/lit/v3_0/lit.rollup.js';
 
 import {libraryIcon} from './library_icons.js';
 import {INCOGNITO} from './sidebar_state.js';
+import {shortcut} from './shortcut.js';
 import type {SpaceBarElement} from './space_bar.js';
 
 export function getHtml(this: SpaceBarElement) {
@@ -72,7 +73,7 @@ ${this.variant === 'title' ? html`
   ` : ''}
   <rail-update-badge></rail-update-badge>
   <div id="bar">
-    <button id="library" title="Library (Ctrl+J)" aria-label="Library"
+    <button id="library" title="Library (${shortcut('Ctrl+J')})" aria-label="Library"
         @click="${this.onLibraryClick_}"
         @pointerenter="${this.onLibraryPointerenter_}"
         @pointerleave="${this.onLibraryPointerleave_}">

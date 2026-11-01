@@ -1,10 +1,17 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_arc_data.h"
 
-#include <windows.h>
+#include "build/build_config.h"
 
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
 #include <wincrypt.h>
+#else
+#include "chrome/browser/ui/webui_browser/rail/rail_import_crypto_mac.h"
+#include "crypto/aes_cbc.h"
+#endif
 
 #include <algorithm>
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -15,6 +22,7 @@
 #include <vector>
 
 #include "base/base64.h"
+#include "base/command_line.h"
 #include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
@@ -29,6 +37,7 @@
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "components/history/core/browser/history_backend.h"
 #include "crypto/aead.h"
 #include "crypto/sha2.h"
 #include "net/cookies/canonical_cookie.h"
@@ -45,10 +54,12 @@ namespace {
 constexpr char kImportDatabaseTag[] = "ArcImport";
 constexpr std::string_view kV10Prefix = "v10";
 constexpr std::string_view kV20Prefix = "v20";
+#if BUILDFLAG(IS_WIN)
 constexpr std::string_view kDpapiPrefix = "DPAPI";
 constexpr size_t kKeyLength = 32;
 constexpr size_t kNonceLength = 12;
 constexpr size_t kTagLength = 16;
+#endif
 constexpr int kHostHashVersion = 24;
 constexpr char kCookiesVersionQuery[] =
     "SELECT value FROM meta WHERE key = 'version'";
@@ -58,11 +69,14 @@ constexpr char kCookiesQuery[] =
     "encrypted_value, samesite, source_scheme, source_port, last_update_utc, "
     "source_type, has_cross_site_ancestor FROM cookies";
 constexpr char kCookiesCountQuery[] =
-    "SELECT COUNT(*) FROM cookies WHERE substr(encrypted_value, 1, 3) != "
-    "CAST('v20' AS BLOB)";
+    "SELECT COUNT(*) FROM cookies WHERE length(encrypted_value) = 0 OR "
+    "substr(encrypted_value, 1, 3) != CAST('v20' AS BLOB)";
 constexpr char kCookiesLockedCountQuery[] =
     "SELECT COUNT(*) FROM cookies WHERE substr(encrypted_value, 1, 3) = "
     "CAST('v20' AS BLOB)";
+constexpr char kCookiesEncryptedCountQuery[] =
+    "SELECT COUNT(*) FROM cookies WHERE length(encrypted_value) > 0 AND "
+    "substr(encrypted_value, 1, 3) != CAST('v20' AS BLOB)";
 constexpr char kLoginsQuery[] =
     "SELECT origin_url, action_url, username_element, username_value, "
     "password_element, password_value, submit_element, signon_realm, "
@@ -80,6 +94,7 @@ constexpr char kFaviconsQuery[] =
 struct CookieCounts {
   int total = 0;
   int locked = 0;
+  int encrypted = 0;
 };
 
 struct LoginIndex {
@@ -105,6 +120,7 @@ base::FilePath FaviconsPath(const base::FilePath& profile_dir) {
   return profile_dir.AppendASCII("Favicons");
 }
 
+#if BUILDFLAG(IS_WIN)
 std::optional<std::string> Unprotect(const std::string& blob) {
   std::vector<BYTE> input(blob.begin(), blob.end());
   DATA_BLOB in;
@@ -163,6 +179,27 @@ std::optional<std::string> DecryptV10(const std::string& key,
   }
   return std::string(plain->begin(), plain->end());
 }
+#else
+std::optional<std::string> ReadKey(const base::FilePath& user_data) {
+  return ReadMacImportKey(user_data);
+}
+
+std::optional<std::string> DecryptV10(const std::string& key,
+                                      std::string_view encrypted) {
+  if (key.size() != 16 || !base::StartsWith(encrypted, kV10Prefix)) {
+    return std::nullopt;
+  }
+  constexpr std::array<uint8_t, 16> iv = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
+                                          ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+  std::optional<std::vector<uint8_t>> plain = crypto::aes_cbc::Decrypt(
+      base::as_byte_span(key), iv,
+      base::as_byte_span(encrypted.substr(kV10Prefix.size())));
+  if (!plain) {
+    return std::nullopt;
+  }
+  return std::string(plain->begin(), plain->end());
+}
+#endif
 
 std::optional<std::string> StripHostHash(const std::string& domain,
                                          std::string plain) {
@@ -289,6 +326,10 @@ void ReadCookies(sql::Database& db,
       ++data.cookies_locked;
       continue;
     }
+    if (key.empty() && !statement.ColumnString(11).empty()) {
+      ++data.cookies_locked;
+      continue;
+    }
     std::unique_ptr<net::CanonicalCookie> cookie =
         CookieOf(statement, key, hashed);
     if (cookie) {
@@ -335,7 +376,11 @@ void ReadLogins(sql::Database& db,
       continue;
     }
     std::optional<std::string> plain = DecryptV10(key, encrypted);
-    if (!plain || plain->empty()) {
+    if (!plain) {
+      ++data.passwords_locked;
+      continue;
+    }
+    if (plain->empty()) {
       continue;
     }
     login.password = std::move(*plain);
@@ -343,9 +388,19 @@ void ReadLogins(sql::Database& db,
   }
 }
 
+int64_t OldestImportableVisit(int64_t watermark) {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch("keep-old-history")) {
+    return watermark;
+  }
+  return std::max(watermark,
+                  (base::Time::Now() - base::Days(
+                       history::HistoryBackend::kExpireDaysThreshold))
+                      .ToInternalValue());
+}
+
 void ReadHistory(sql::Database& db, int64_t watermark, ProfileStores& data) {
   sql::Statement statement(db.GetUniqueStatement(kHistoryQuery));
-  statement.BindInt64(0, watermark);
+  statement.BindInt64(0, OldestImportableVisit(watermark));
   while (statement.Step()) {
     const GURL url(statement.ColumnString(0));
     if (!url.is_valid() || !url.SchemeIsHTTPOrHTTPS()) {
@@ -466,6 +521,7 @@ CookieCounts ReadCookieCounts(const base::FilePath& source,
   if (OpenCopy(source, temp_dir, db)) {
     counts.total = CountRows(db, kCookiesCountQuery);
     counts.locked = CountRows(db, kCookiesLockedCountQuery);
+    counts.encrypted = CountRows(db, kCookiesEncryptedCountQuery);
   }
   return counts;
 }
@@ -552,27 +608,33 @@ std::string ImportedLoginKey(const ImportedLogin& login) {
             login.signon_realm})))});
 }
 
-ProfileStoreCounts CountProfileStores(const base::FilePath& profile_dir,
+ProfileStoreCounts CountProfileStores(const base::FilePath& user_data,
+                                      const base::FilePath& profile_dir,
                                       const ProfileMarks& marks) {
   ProfileStoreCounts counts;
   const CookieCounts cookies =
       CachedFor(CookieCache(), CookiesPath(profile_dir), &ReadCookieCounts);
-  counts.cookies = cookies.total;
-  counts.locked_cookies = cookies.locked;
 
   const LoginIndex logins =
       CachedFor(LoginCache(), LoginsPath(profile_dir), &ReadLoginIndex);
-  counts.passwords = static_cast<int>(std::count_if(
+  const int passwords = static_cast<int>(std::count_if(
       logins.keys.begin(), logins.keys.end(), [&marks](const std::string& key) {
         return !marks.imported_logins.contains(key);
       }));
-  counts.locked_passwords = logins.locked;
+  const bool has_key =
+      (cookies.encrypted == 0 && passwords == 0) ||
+      ReadKey(user_data).has_value();
+  counts.cookies = cookies.total - (has_key ? 0 : cookies.encrypted);
+  counts.locked_cookies = cookies.locked + (has_key ? 0 : cookies.encrypted);
+  counts.passwords = has_key ? passwords : 0;
+  counts.locked_passwords = logins.locked + (has_key ? 0 : passwords);
 
   const VisitTimes visits =
       CachedFor(HistoryCache(), HistoryPath(profile_dir), &ReadVisitTimes);
+  const int64_t oldest = OldestImportableVisit(marks.watermark);
   counts.urls = static_cast<int>(std::count_if(
       visits.begin(), visits.end(),
-      [&marks](int64_t visit) { return visit > marks.watermark; }));
+      [oldest](int64_t visit) { return visit > oldest; }));
   return counts;
 }
 

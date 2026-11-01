@@ -9,9 +9,12 @@
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
+#include "build/build_config.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_system_backdrop_controller.h"
+#if BUILDFLAG(IS_WIN)
 #include "ui/aura/env.h"
 #include "ui/aura/env_observer.h"
+#endif
 #include "ui/gfx/geometry/point.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
@@ -24,7 +27,11 @@ namespace rail {
 
 inline constexpr int kMenuMaxWidth = 456;
 
-class MenuSkin : public views::WidgetObserver, public aura::EnvObserver {
+class MenuSkin : public views::WidgetObserver
+#if BUILDFLAG(IS_WIN)
+               , public aura::EnvObserver
+#endif
+{
  public:
   MenuSkin(views::Widget* parent,
            views::MenuItemView* root,
@@ -44,7 +51,9 @@ class MenuSkin : public views::WidgetObserver, public aura::EnvObserver {
                              const gfx::Rect& new_bounds) override;
   void OnWidgetVisibilityChanged(views::Widget* widget, bool visible) override;
   void OnWidgetDestroying(views::Widget* widget) override;
+#if BUILDFLAG(IS_WIN)
   void OnHostInitialized(aura::WindowTreeHost* host) override;
+#endif
 
  private:
   void StyleShown(views::Widget* widget);
@@ -61,7 +70,9 @@ class MenuSkin : public views::WidgetObserver, public aura::EnvObserver {
   std::set<views::Widget*> revealed_;
   base::ScopedMultiSourceObservation<views::Widget, views::WidgetObserver>
       observations_{this};
+#if BUILDFLAG(IS_WIN)
   base::ScopedObservation<aura::Env, aura::EnvObserver> env_observation_{this};
+#endif
   base::WeakPtrFactory<MenuSkin> weak_factory_{this};
 };
 

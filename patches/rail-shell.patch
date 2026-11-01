@@ -1,3 +1,259 @@
+diff --git a/chrome/browser/app_controller_mac.h b/chrome/browser/app_controller_mac.h
+--- a/chrome/browser/app_controller_mac.h
++++ b/chrome/browser/app_controller_mac.h
+@@ -123,6 +123,9 @@
+ - (IBAction)orderFrontStandardAboutPanel:(id)sender;
+ - (IBAction)orderFrontStandardAboutPanelForProfile:(Profile*)profile;
+ 
++- (IBAction)checkRailUpdates:(id)sender;
++- (IBAction)showRailImport:(id)sender;
++
+ // Toggles the "Confirm to Quit" preference.
+ - (IBAction)toggleConfirmToQuit:(id)sender;
+ 
+diff --git a/chrome/browser/app_controller_mac.mm b/chrome/browser/app_controller_mac.mm
+--- a/chrome/browser/app_controller_mac.mm
++++ b/chrome/browser/app_controller_mac.mm
+@@ -82,6 +82,8 @@
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+ #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_import_ui.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "chrome/browser/ui/browser_window/public/profile_browser_collection.h"
+ #include "chrome/browser/ui/chrome_pages.h"
+@@ -110,6 +112,8 @@
+ #include "chrome/browser/ui/ui_features.h"
+ #include "chrome/browser/ui/views/color_provider_browser_helper.h"
+ #include "chrome/browser/ui/webui/util/webui_util_desktop.h"
++#include "chrome/browser/ui/webui_browser/browser_elements_webui_browser.h"
++#include "chrome/browser/ui/webui_browser/webui_browser_window.h"
+ #include "chrome/browser/web_applications/web_app_helpers.h"
+ #include "chrome/common/channel_info.h"
+ #include "chrome/common/chrome_features.h"
+@@ -1663,6 +1667,10 @@
+     enable = canOpenNewBrowser;
+   } else if (action == @selector(orderFrontStandardAboutPanel:)) {
+     enable = canOpenNewBrowser;
++  } else if (action == @selector(checkRailUpdates:)) {
++    enable = canOpenNewBrowser;
++  } else if (action == @selector(showRailImport:)) {
++    enable = canOpenNewBrowser && ![self keyWindowIsModal];
+   } else if (action == @selector(toggleConfirmToQuit:)) {
+     [self updateConfirmToQuitPrefMenuItem:static_cast<NSMenuItem*>(item)];
+     enable = [self shouldEnableConfirmToQuitPrefMenuItem];
+@@ -2099,6 +2107,11 @@
+   }
+   // Re-use an existing browser, or create a new one.
+   if (BrowserWindowInterface* browser = ActivateBrowser(profile)) {
++    if (BrowserElementsWebUiBrowser::From(browser)) {
++      static_cast<WebUIBrowserWindow*>(browser->GetWindow())
++          ->OpenRailSettings("");
++      return;
++    }
+     chrome::ShowSettings(browser);
+   } else {
+     chrome::OpenOptionsWindow(profile);
+@@ -2119,12 +2132,44 @@
+     // Failed to load profile, show Profile Picker instead.
+     return;
+   }
+-  // Re-use an existing browser, or create a new one.
+-  if (BrowserWindowInterface* browser = ActivateBrowser(profile)) {
+-    chrome::ShowAboutChrome(browser);
+-  } else {
+-    chrome::OpenAboutWindow(profile);
+-  }
++  BrowserWindowInterface* browser = ActivateOrCreateBrowser(profile);
++  if (BrowserElementsWebUiBrowser::From(browser)) {
++    static_cast<WebUIBrowserWindow*>(browser->GetWindow())
++        ->OpenRailSettings("about");
++    return;
++  }
++  chrome::ShowAboutChrome(browser);
++}
++
++- (IBAction)checkRailUpdates:(id)sender {
++  app_controller_mac::RunInLastProfileSafely(
++      base::BindOnce(^(Profile* profile) {
++        if (!profile) {
++          return;
++        }
++        [self orderFrontStandardAboutPanelForProfile:profile];
++        if (rail::Updater* updater = rail::Updater::Get()) {
++          updater->CheckNow();
++        }
++      }),
++      app_controller_mac::kShowProfilePickerOnFailure);
++}
++
++- (IBAction)showRailImport:(id)sender {
++  app_controller_mac::RunInLastProfileSafely(
++      base::BindOnce(^(Profile* profile) {
++        if (!profile) {
++          return;
++        }
++        BrowserWindowInterface* browser = ActivateOrCreateBrowser(profile);
++        if (BrowserElementsWebUiBrowser::From(browser)) {
++          static_cast<WebUIBrowserWindow*>(browser->GetWindow())
++              ->OpenRailImport(GURL(rail::kRailImportURL));
++          return;
++        }
++        chrome::ShowImportDialog(browser);
++      }),
++      app_controller_mac::kShowProfilePickerOnFailure);
+ }
+ 
+ - (IBAction)toggleConfirmToQuit:(id)sender {
+diff --git a/chrome/browser/ui/cocoa/main_menu_builder.mm b/chrome/browser/ui/cocoa/main_menu_builder.mm
+--- a/chrome/browser/ui/cocoa/main_menu_builder.mm
++++ b/chrome/browser/ui/cocoa/main_menu_builder.mm
+@@ -72,6 +72,10 @@
+                   .tag(IDC_ABOUT)
+                   .target(app_delegate)
+                   .action(@selector(orderFrontStandardAboutPanel:)),
++              Item(IDS_COMPONENTS_CHECK_FOR_UPDATE)
++                  .target(app_delegate)
++                  .action(@selector(checkRailUpdates:))
++                  .remove_if(is_pwa),
+               Item().is_separator(),
+               Item(IDS_PREFERENCES)
+                   .tag(IDC_OPTIONS)
+@@ -86,7 +90,8 @@
+                   .command_id(IDC_CLEAR_BROWSING_DATA)
+                   .remove_if(is_pwa),
+               Item(IDS_IMPORT_SETTINGS_MENU_MAC)
+-                  .command_id(IDC_IMPORT_SETTINGS)
++                  .target(app_delegate)
++                  .action(@selector(showRailImport:))
+                   .remove_if(is_pwa),
+               Item().is_separator(),
+               Item(IDS_SERVICES_MAC)
+diff --git a/chrome/browser/global_keyboard_shortcuts_mac.mm b/chrome/browser/global_keyboard_shortcuts_mac.mm
+index 1bbe4c5fab..814873f685 100644
+--- a/chrome/browser/global_keyboard_shortcuts_mac.mm
++++ b/chrome/browser/global_keyboard_shortcuts_mac.mm
+@@ -116,10 +116,9 @@ const std::vector<KeyboardShortcutData>& GetShortcutsNotPresentInMainMenu() {
+     // ---    -----  -----  ------ --------               -------
+       {true,  true,  false, false, kVK_ANSI_RightBracket, IDC_SELECT_NEXT_TAB},
+       {true,  true,  false, false, kVK_ANSI_LeftBracket,  IDC_SELECT_PREVIOUS_TAB},
++      {true,  false, false, false, kVK_ANSI_K,            IDC_FOCUS_SEARCH},
+       {false, false, true,  false, kVK_PageDown,          IDC_SELECT_NEXT_TAB},
+       {false, false, true,  false, kVK_PageUp,            IDC_SELECT_PREVIOUS_TAB},
+-      {true,  false, false, true,  kVK_RightArrow,        IDC_SELECT_NEXT_TAB},
+-      {true,  false, false, true,  kVK_LeftArrow,         IDC_SELECT_PREVIOUS_TAB},
+       {false, true,  true,  false, kVK_PageDown,          IDC_MOVE_TAB_NEXT},
+       {false, true,  true,  false, kVK_PageUp,            IDC_MOVE_TAB_PREVIOUS},
+ 
+diff --git a/chrome/browser/ui/webui_browser/webui_browser_window_mac.mm b/chrome/browser/ui/webui_browser/webui_browser_window_mac.mm
+index 7188576c05..4f45edc061 100644
+--- a/chrome/browser/ui/webui_browser/webui_browser_window_mac.mm
++++ b/chrome/browser/ui/webui_browser/webui_browser_window_mac.mm
+@@ -15,6 +15,9 @@
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #import "chrome/browser/ui/cocoa/browser_window_command_handler.h"
+ #import "chrome/browser/ui/cocoa/chrome_command_dispatcher_delegate.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_accelerators.h"
++#include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
+ #include "components/input/native_web_keyboard_event.h"
+ #import "components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h"
+ #include "ui/base/accelerators/global_accelerator_listener/global_accelerator_listener.h"
+@@ -73,13 +76,13 @@ bool WebUIBrowserWindow::HandleKeyboardEvent(
+ // Note that the logic here is often derived from BrowserNativeWidgetMac.
+ class WebUIBrowserNativeWidgetMac : public views::NativeWidgetMac {
+  public:
+-  WebUIBrowserNativeWidgetMac(BrowserWindowInterface* browser,
+-                              views::Widget* widget)
+-      : NativeWidgetMac(widget), browser_(browser) {}
++  WebUIBrowserNativeWidgetMac(WebUIBrowserWindow* window, views::Widget* widget)
++      : NativeWidgetMac(widget), window_(window), browser_(window->browser()) {}
+ 
+  private:
+   // views::NativeWidgetMac implementation:
+   void OnWidgetDestroyed(views::Widget* widget) override {
++    window_ = nullptr;
+     browser_ = nullptr;
+     NativeWidgetMac::OnWidgetDestroyed(widget);
+   }
+@@ -90,7 +93,8 @@ class WebUIBrowserNativeWidgetMac : public views::NativeWidgetMac {
+     CHECK(browser_);
+     // This allows menu items like "Close Tabs" to be enabled when the browser
+     // has open tabs, which in turn enables the "Close Tabs" keyboard shortcut.
+-    result->enable = chrome::IsCommandEnabled(browser_, command);
++    result->enable = !rail::IsCommandDisabledInShell(command) &&
++                     chrome::IsCommandEnabled(browser_, command);
+   }
+ 
+   // For our ValidateUserInterfaceItem() to be called we must register the
+@@ -147,8 +151,32 @@ class WebUIBrowserNativeWidgetMac : public views::NativeWidgetMac {
+       return false;
+     }
+ 
+-    // Actually Execute the specific command with |browser_|.
+-    // This facilitates commands initiated from keyboard shortcuts.
++    if (rail::IsCommandDisabledInShell(command)) {
++      return true;
++    }
++    if (command == IDC_NEW_TAB) {
++      window_->OpenRailCommandBar(true, false);
++      return true;
++    }
++    if (command == IDC_FOCUS_LOCATION) {
++      window_->OpenRailCommandBar(false, true);
++      return true;
++    }
++    if (command == IDC_FOCUS_SEARCH) {
++      window_->OpenRailCommandBar(true, false);
++      return true;
++    }
++    if ((command == IDC_CLOSE_TAB || command == IDC_CLOSE_WINDOW) &&
++        browser_->GetTabStripModel()->empty()) {
++      window_->Close();
++      return true;
++    }
++    if (const char* rail_command = rail::RailCommandForBrowserCommand(command)) {
++      if (auto* page = window_->GetWebUIBrowserUI()->page()) {
++        page->RunRailCommand(rail_command);
++        return true;
++      }
++    }
+     chrome::ExecuteCommandWithDisposition(browser_, command,
+                                           window_open_disposition);
+     return true;
+@@ -180,9 +208,10 @@ class WebUIBrowserNativeWidgetMac : public views::NativeWidgetMac {
+     *titlebar_height = 40;
+   }
+ 
++  raw_ptr<WebUIBrowserWindow> window_;
+   raw_ptr<BrowserWindowInterface> browser_;
+ };
+ 
+ views::NativeWidget* WebUIBrowserWindow::CreateNativeWidget() {
+-  return new WebUIBrowserNativeWidgetMac(browser_.get(), widget_.get());
++  return new WebUIBrowserNativeWidgetMac(this, widget_.get());
+ }
+diff --git a/build/config/mac/BUILD.gn b/build/config/mac/BUILD.gn
+index 7114fd817a..b97886d879 100644
+--- a/build/config/mac/BUILD.gn
++++ b/build/config/mac/BUILD.gn
+@@ -7,4 +7,5 @@ import("//build/config/apple/symbols.gni")
+ import("//build/config/c++/c++.gni")
++import("//build/config/compiler/compiler.gni")
+ import("//build/config/mac/mac_sdk.gni")
+ import("//build/config/sysroot.gni")
+ import("//build/toolchain/rbe.gni")
+@@ -35,6 +36,9 @@ config("compiler") {
+   cflags = common_mac_flags
+ 
+   ldflags = common_mac_flags
++  if (!use_lld) {
++    ldflags += [ "-Wl,-no_compact_unwind" ]
++  }
+ 
+   if (save_unstripped_output) {
+     ldflags += [ "-Wcrl,unstripped," + rebase_path(root_out_dir) ]
 diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
 index a8c5e14..44abfc6 100644
 --- a/chrome/BUILD.gn
@@ -3849,7 +4105,8 @@ index f8363d5..101252d 100644
 +PRODUCT_INSTALLER_FULLNAME=Rail Installer
 +PRODUCT_INSTALLER_SHORTNAME=Rail Installer
  COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Chromium Authors. All rights reserved.
- MAC_BUNDLE_ID=org.chromium.Chromium
+-MAC_BUNDLE_ID=org.chromium.Chromium
++MAC_BUNDLE_ID=com.frenvius.rail
  MAC_CREATOR_CODE=Cr24
 diff --git a/chrome/browser/autocomplete/tab_matcher_desktop.cc b/chrome/browser/autocomplete/tab_matcher_desktop.cc
 index 0adad2c..8e91931 100644
@@ -4641,7 +4898,7 @@ index 8b36341..35b1a52 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,61 @@ build_webui("build") {
+@@ -27,6 +38,62 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -4672,6 +4929,7 @@ index 8b36341..35b1a52 100644
 +    "rail/sections.ts",
 +    "rail/settings.html.ts",
 +    "rail/settings.ts",
++    "rail/shortcut.ts",
 +    "rail/side_panel_resize.ts",
 +    "rail/sidebar_resize.ts",
 +    "rail/sidebar_state.ts",
@@ -4971,17 +5229,22 @@ diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser
 index 5e48dff..1d88d6a 100644
 --- a/chrome/browser/resources/webui_browser/app.html.ts
 +++ b/chrome/browser/resources/webui_browser/app.html.ts
-@@ -5,6 +5,7 @@
+@@ -5,6 +5,11 @@
  import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
++import {isMac} from '//resources/js/platform.js';
 
  import type {WebuiBrowserAppElement} from './app.js';
++import {shortcut} from './rail/shortcut.js';
++// <if expr="not is_macosx">
 +import {captionGlyph} from './rail/window_controls.js';
++// </if>
 
  export function getHtml(this: WebuiBrowserAppElement) {
    // clang-format off
-@@ -11,34 +12,13 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -11,34 +14,13 @@ export function getHtml(this: WebuiBrowserAppElement) {
    return html`<!--_html_template_start_-->
- <div id="rootContainer">
+-<div id="rootContainer">
++<div id="rootContainer" ?mac="${isMac}">
    <div id="topContainer">
 -    <div class="titlebarDiv" @mousedown="${this.onTabDragMousedown_}">
 -      <div class="tabstripDiv" style="margin-left:${this.tabStripInset_}px">
@@ -4994,8 +5257,8 @@ index 5e48dff..1d88d6a 100644
 -        </webui-browser-tab-strip>
 +    <div class="titlebarDiv">
 +      <div id="railLogoHit">
-+        <div id="railLogo" @click="${this.onRailLogoClick_}"></div>
-+        <button id="sidebarToggle" title="Toggle sidebar (Ctrl+S)"
++        ${isMac ? '' : html`<div id="railLogo" @click="${this.onRailLogoClick_}"></div>`}
++        <button id="sidebarToggle" title="Toggle sidebar (${shortcut('Ctrl+S')})"
 +          aria-label="Toggle sidebar"
 +          @click="${this.onSidebarToggleClick_}"></button>
        </div>
@@ -5020,7 +5283,7 @@ index 5e48dff..1d88d6a 100644
        <cr-icon-button id="backButton" iron-icon="cr:arrow-back"
          ?disabled="${this.backButtonDisabled_}"
          @click="${this.onBackClick_}"
-@@ -50,37 +30,90 @@ export function getHtml(this: WebuiBrowserAppElement) {
+@@ -50,37 +31,90 @@ export function getHtml(this: WebuiBrowserAppElement) {
        <cr-icon-button class="${this.reloadOrStopIcon_}"
          title="${this.reloadOrStopTooltip_()}"
          @click="${this.onReloadOrStopClick_}"></cr-icon-button>
@@ -5048,7 +5311,7 @@ index 5e48dff..1d88d6a 100644
 +          @click="${this.onMiniAdoptClick_}">
 +          <span class="miniAdoptLabel">Move into</span>
 +          <span class="miniSpace">${this.miniSpace_}</span>
-+          <span class="miniKey">Ctrl+O</span>
++          <span class="miniKey">${shortcut('Ctrl+O')}</span>
 +        </cr-button>
 +        <cr-button id="miniAdoptPick" type="button" title="Choose space"
 +          @click="${this.onMiniPickSpaceClick_}">
@@ -5115,7 +5378,7 @@ index 5e48dff..1d88d6a 100644
 +        <cr-icon icon="cr:add"></cr-icon>
 +        <span>$i18n{tooltipNewTab}</span>
 +      </button>
-+      <span id="emptyHint">Ctrl+T</span>
++      <span id="emptyHint">${shortcut('Ctrl+T')}</span>
 +    </div>
 +    <div id="sidePanelResizer"></div>
      <side-panel id="sidePanel" @side-panel-closed="${this.onSidePanelClosed_}">
@@ -9014,7 +9277,7 @@ index b7a5099..dd33fc2 100644
 +    this.syncSelection_();
 +    paintSpaceColors(
 +        spaceHex(this.spaces_.active.color), this.spaces_.active.color,
-+        this.spaces_.active.grain);
++        this.spaces_.active.grain, this.spaces_.active.gradient);
 +    this.pushBackdrop_();
 +    this.fire('space-content-changed', {hasContent: this.hasActiveContent});
 +    this.fire(
@@ -10928,13 +11191,11 @@ index ffbd17c..4097a2d 100644
      "//content/public/browser",
      "//ui/base/unowned_user_data",
      "//ui/color",
-@@ -57,6 +97,63 @@ source_set("impl") {
+@@ -57,6 +97,60 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
 +    "rail/rail_accelerators.cc",
-+    "rail/rail_acrylic.cc",
-+    "rail/rail_arc_data.cc",
 +    "rail/rail_arc_extensions.cc",
 +    "rail/rail_arc_import.cc",
 +    "rail/rail_arc_writer.cc",
@@ -10943,7 +11204,6 @@ index ffbd17c..4097a2d 100644
 +    "rail/rail_import_bookmarks.cc",
 +    "rail/rail_import_mojo.cc",
 +    "rail/rail_import_sidebar.cc",
-+    "rail/rail_import_sources.cc",
 +    "rail/rail_import_ui.cc",
 +    "rail/rail_import_window.cc",
 +    "rail/rail_webui_browser.cc",
@@ -10992,14 +11252,24 @@ index ffbd17c..4097a2d 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -80,6 +177,17 @@ source_set("impl") {
+@@ -80,6 +174,27 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
++    sources += [
++      "rail/rail_acrylic_mac.cc",
++      "rail/rail_arc_data.cc",
++      "rail/rail_import_crypto_mac.h",
++      "rail/rail_import_crypto_mac.mm",
++      "rail/rail_import_sources_mac.mm",
++    ]
    }
  
 +  if (is_win) {
 +    sources += [
++      "rail/rail_acrylic.cc",
++      "rail/rail_arc_data.cc",
 +      "rail/rail_capture_region.cc",
 +      "rail/rail_capture_region.h",
++      "rail/rail_import_sources.cc",
 +      "rail/rail_system_backdrop_controller.cc",
 +      "rail/rail_system_backdrop_controller.h",
 +      "rail/rail_window_frame.cc",
@@ -11089,7 +11359,8 @@ index ffbd17c..4097a2d 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +307,33 @@ source_set("impl") {
+@@ -159,17 +307,34 @@ source_set("impl") {
++      "//chrome/browser/webshare",
        "//ui/base/accelerators/global_accelerator_listener",
      ]
    }
@@ -11588,7 +11859,7 @@ index 5e6d29d..76021ae 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index cb0e145..7fa164f 100644
+index cb0e145..599d70d 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,8 @@
@@ -11640,11 +11911,14 @@ index cb0e145..7fa164f 100644
  #include "ui/views/controls/menu/menu_model_adapter.h"
  #include "ui/views/controls/menu/menu_runner.h"
  #include "ui/views/interaction/element_tracker_views.h"
-@@ -199,12 +221,12 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -198,19 +220,20 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+     tab = maybe_tab_handle->Get();
    }
- 
-   if (!tab) {
+
+-  if (!tab) {
 -    mojo::ReportBadMessage("Invalid tab id");
++  WebUIBrowserWindow* window = GetBrowserWindow();
++  if (!tab || !window) {
 +    std::move(callback).Run(std::nullopt);
      return;
    }
@@ -11654,19 +11928,92 @@ index cb0e145..7fa164f 100644
 +    std::move(callback).Run(std::nullopt);
      return;
    }
- 
-@@ -290,7 +312,114 @@ void WebUIBrowserPageHandler::Close() {
-   GetBrowserWindow()->Close();
+
+   // The RenderFrameHost takes ownership of this object via the DocumentService.
+   new WebUIBrowserGuestHandler(render_frame_host(), std::move(receiver),
+-                               tab_contents, GetBrowserWindow());
++                               tab_contents, window);
+
+   guest_contents::GuestContentsHandle::CreateForWebContents(tab_contents);
+   auto* guest_handle =
+@@ -240,21 +263,24 @@ void WebUIBrowserPageHandler::ShowTabSearchBubble(
+
+ void WebUIBrowserPageHandler::OpenAppMenu() {
+   menu_.reset();
++  WebUIBrowserWindow* window = GetBrowserWindow();
++  if (!window) {
++    return;
++  }
+
+   ui::TrackedElement* app_menu_button =
+       BrowserElements::From(GetBrowser())
+           ->GetElement(kToolbarAppMenuButtonElementId);
+   CHECK(app_menu_button) << "App menu button not found";
+   menu_model_ =
+-      std::make_unique<AppMenuModel>(GetBrowserWindow(), GetBrowser());
++      std::make_unique<AppMenuModel>(window, GetBrowser());
+   menu_model_->Init();
+   menu_ = std::make_unique<AppMenu>(
+       GetBrowser(), menu_model_.get(), views::MenuRunner::NO_FLAGS,
+       // The WebUI browser architecture doesn't currently use BrowserView or
+       // an AppMenuControl that needs to be notified when the menu closes.
+       base::DoNothing());
+-  menu_->RunMenu(GetBrowserWindow()->widget(),
+-                 app_menu_button->GetScreenBounds());
++  menu_->RunMenu(window->widget(), app_menu_button->GetScreenBounds());
  }
- 
+
+ void WebUIBrowserPageHandler::OpenProfileMenu() {
+@@ -271,30 +297,171 @@ void WebUIBrowserPageHandler::LaunchDevToolsForBrowser() {
+ }
+
+ void WebUIBrowserPageHandler::OnSidePanelClosed() {
+-  GetBrowserWindow()->GetWebUIBrowserSidePanelUI()->OnSidePanelClosed();
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->GetWebUIBrowserSidePanelUI()->OnSidePanelClosed();
++  }
+ }
+
+ void WebUIBrowserPageHandler::Minimize() {
+-  GetBrowserWindow()->Minimize();
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->Minimize();
++  }
+ }
+
+ void WebUIBrowserPageHandler::Maximize() {
+-  GetBrowserWindow()->Maximize();
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->Maximize();
++  }
+ }
+
+ void WebUIBrowserPageHandler::Restore() {
+-  GetBrowserWindow()->Restore();
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->Restore();
++  }
+ }
+
+ void WebUIBrowserPageHandler::Close() {
+-  GetBrowserWindow()->Close();
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->Close();
++  }
++}
++
 +void WebUIBrowserPageHandler::ShowRailMenu(
 +    std::vector<webui_browser::mojom::RailMenuItemPtr> items) {
++  WebUIBrowserWindow* window = GetBrowserWindow();
++  if (!window) {
++    return;
++  }
 +  rail_menu_ = std::make_unique<rail::RailMenu>(
 +      base::BindRepeating(&WebUIBrowserPageHandler::OnRailMenuCommand,
 +                          weak_factory_.GetWeakPtr()),
 +      base::BindRepeating(&WebUIBrowserPageHandler::OnRailMenuClosed,
 +                          weak_factory_.GetWeakPtr()));
-+  rail_menu_->ShowAtCursor(GetBrowserWindow()->widget(), items);
++  rail_menu_->ShowAtCursor(window->widget(), items);
 +}
 +
 +void WebUIBrowserPageHandler::IsDefaultBrowser(
@@ -11684,32 +12031,44 @@ index cb0e145..7fa164f 100644
 +
 +void WebUIBrowserPageHandler::SetRailCommandContext(
 +    rail_command::mojom::CommandContextPtr context) {
-+  GetBrowserWindow()->SetRailCommandContext(std::move(context));
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->SetRailCommandContext(std::move(context));
++  }
 +}
 +
 +void WebUIBrowserPageHandler::OpenRailCommandBar(bool new_tab_mode,
 +                                                 bool select_all) {
-+  GetBrowserWindow()->OpenRailCommandBar(new_tab_mode, select_all);
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->OpenRailCommandBar(new_tab_mode, select_all);
++  }
 +}
 +
 +void WebUIBrowserPageHandler::OpenRailSpacePanel(
 +    webui_browser::mojom::SpacePanelRequestPtr request,
 +    const gfx::Point& anchor) {
-+  GetBrowserWindow()->OpenRailSpacePanel(std::move(request), anchor);
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->OpenRailSpacePanel(std::move(request), anchor);
++  }
 +}
 +
 +void WebUIBrowserPageHandler::OpenRailSitePanel(
 +    const gfx::Point& anchor,
 +    const std::string& space_color) {
-+  GetBrowserWindow()->OpenRailSitePanel(anchor, space_color);
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->OpenRailSitePanel(anchor, space_color);
++  }
 +}
 +
 +void WebUIBrowserPageHandler::OpenRailSettings() {
-+  GetBrowserWindow()->OpenRailSettings(std::string());
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->OpenRailSettings(std::string());
++  }
 +}
 +
 +void WebUIBrowserPageHandler::OpenRailImport() {
-+  GetBrowserWindow()->OpenRailImport(GURL(rail::kRailImportURL));
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->OpenRailImport(GURL(rail::kRailImportURL));
++  }
 +}
 +
 +void WebUIBrowserPageHandler::GetRailUpdate(GetRailUpdateCallback callback) {
@@ -11727,7 +12086,9 @@ index cb0e145..7fa164f 100644
 +  if (rail::Updater* updater = rail::Updater::Get()) {
 +    updater->CheckNow();
 +  }
-+  GetBrowserWindow()->OpenRailSettings("about");
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->OpenRailSettings("about");
++  }
 +}
 +
 +void WebUIBrowserPageHandler::ApplyRailUpdate() {
@@ -11748,29 +12109,39 @@ index cb0e145..7fa164f 100644
 +
 +void WebUIBrowserPageHandler::SetSystemBackdrop(
 +    webui_browser::mojom::SystemBackdropSettingsPtr settings) {
-+  GetBrowserWindow()->SetSystemBackdrop(std::move(settings));
++  if (WebUIBrowserWindow* window = GetBrowserWindow()) {
++    window->SetSystemBackdrop(std::move(settings));
++  }
 +}
 +
 +void WebUIBrowserPageHandler::OnRailMenuCommand(const std::string& command) {
-+  if (webui_browser::mojom::Page* page =
-+          GetBrowserWindow()->GetWebUIBrowserUI()->page()) {
++  if (webui_browser::mojom::Page* page = controller_ ? controller_->page()
++                                                     : nullptr) {
 +    page->OnRailMenuCommand(command);
 +  }
 +}
 +
 +void WebUIBrowserPageHandler::OnRailMenuClosed() {
-+  if (webui_browser::mojom::Page* page =
-+          GetBrowserWindow()->GetWebUIBrowserUI()->page()) {
++  if (webui_browser::mojom::Page* page = controller_ ? controller_->page()
++                                                     : nullptr) {
 +    page->OnRailMenuClosed();
 +  }
-+}
-+
+ }
+
  void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
 +  back_forward_menu_skin_.reset();
    back_forward_menu_runner_.reset();
    back_forward_menu_model_adapter_.reset();
    back_forward_menu_model_.reset();
-@@ -314,12 +443,20 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
+
++  WebUIBrowserWindow* window = GetBrowserWindow();
++  if (!window) {
++    return;
++  }
+   content::WebContents* web_contents =
+       GetBrowser()->GetTabStripModel()->GetActiveWebContents();
+   if (!web_contents) {
+@@ -314,12 +481,19 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
                              : BackForwardMenuModel::ModelType::kForward);
    back_forward_menu_model_adapter_ =
        std::make_unique<views::MenuModelAdapter>(back_forward_menu_model_.get());
@@ -11783,18 +12154,17 @@ index cb0e145..7fa164f 100644
 +      std::move(menu), views::MenuRunner::HAS_MNEMONICS);
 +  const gfx::Rect button_bounds = button_element->GetScreenBounds();
 +  back_forward_menu_skin_ = std::make_unique<rail::MenuSkin>(
-+      GetBrowserWindow()->widget(), menu_view, button_bounds.bottom_left(),
-+      false);
++      window->widget(), menu_view, button_bounds.bottom_left(), false);
 +  back_forward_menu_skin_->Attach();
    back_forward_menu_runner_->RunMenuAt(
 -      GetBrowserWindow()->widget(), nullptr, button_element->GetScreenBounds(),
-+      GetBrowserWindow()->widget(), nullptr, button_bounds,
++      window->widget(), nullptr, button_bounds,
        views::MenuAnchorPosition::kTopLeft, ui::mojom::MenuSourceType::kMouse);
 +  back_forward_menu_skin_->Style(menu_view);
  }
  
  // static
-@@ -337,6 +474,407 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +511,409 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -11830,15 +12200,17 @@ index cb0e145..7fa164f 100644
 +void WebUIBrowserPageHandler::GetPointerDistanceOutsideWindow(
 +    GetPointerDistanceOutsideWindowCallback callback) {
 +#if BUILDFLAG(IS_WIN)
++  WebUIBrowserWindow* window = GetBrowserWindow();
 +  std::move(callback).Run(
-+      rail::PointerDistanceOutsideWidget(GetBrowserWindow()->widget()));
++      window ? rail::PointerDistanceOutsideWidget(window->widget()) : -1);
 +#else
 +  std::move(callback).Run(-1);
 +#endif
 +}
 +
 +void WebUIBrowserPageHandler::IsMaximized(IsMaximizedCallback callback) {
-+  std::move(callback).Run(GetBrowserWindow()->IsMaximized());
++  WebUIBrowserWindow* window = GetBrowserWindow();
++  std::move(callback).Run(window && window->IsMaximized());
 +}
 +
 +void WebUIBrowserPageHandler::OnSidebarIconsOnlyChanged() {
@@ -12202,7 +12574,7 @@ index cb0e145..7fa164f 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +882,64 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +921,64 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -12652,7 +13024,7 @@ index f0b2bca..08637f7 100644
  
  namespace content {
  class BrowserContext;
-@@ -92,6 +95,9 @@ class WebUIBrowserUI : public ui::MojoWebUIController,
+@@ -92,8 +95,11 @@ class WebUIBrowserUI : public ui::MojoWebUIController,
    void BookmarkBarStateChanged(BookmarkBar::AnimateChangeType change_type);
    void ShowSidePanel(SidePanelEntryKey side_panel_entry_key);
    void CloseSidePanel();
@@ -12662,6 +13034,9 @@ index f0b2bca..08637f7 100644
  
    BrowserWindowInterface* browser() { return browser_; }
    WebUIBrowserWindow* browser_window() {
+-    return WebUIBrowserWindow::FromBrowser(browser_);
++    return WebUIBrowserWindow::FromWebShellWebContents(web_ui()->GetWebContents());
+   }
 @@ -107,6 +113,9 @@ class WebUIBrowserUI : public ui::MojoWebUIController,
      return realbox_handler_.get();
    }
@@ -12719,11 +13094,12 @@ index 0a49a8e..99073f8 100644
  #include "chrome/browser/ui/tabs/tab_strip_model.h"
  #include "content/public/browser/navigation_controller.h"
  #include "ui/base/window_open_disposition.h"
-@@ -40,12 +42,20 @@
+@@ -40,12 +42,21 @@
  #include "chrome/browser/ui/web_applications/app_browser_controller.h"
  #include "chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.h"
  #include "chrome/browser/ui/webui_browser/browser_elements_webui_browser.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_accelerators.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_bundled_extensions.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_command_bubble.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_mini_window.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_import_window.h"
@@ -12779,6 +13155,17 @@ index 0a49a8e..99073f8 100644
  
   private:
    raw_ptr<WebUIBrowserWindow> browser_window_;
+@@ -149,6 +175,10 @@ WebUIBrowserWindow::WebUIBrowserWindow(BrowserWindowInterface* browser)
+     CHECK(is_development_build || is_canary_or_test_build);
+   }
+
++#if BUILDFLAG(IS_MAC)
++  rail::EnsureBundledExtensions(browser_->GetProfile());
++#endif
++
+   location_bar_ = std::make_unique<WebUIStubLocationBar>(this);
+   web_contents_delegate_ =
+       std::make_unique<WebUIBrowserWebContentsDelegate>(this);
 @@ -163,11 +188,21 @@ WebUIBrowserWindow::WebUIBrowserWindow(BrowserWindowInterface* browser)
                                             &params.show_state);
    params.delegate = widget_delegate_.get();
@@ -12866,13 +13253,18 @@ index 0a49a8e..99073f8 100644
    widget_.reset();
  }
  
-@@ -318,6 +376,11 @@ void WebUIBrowserWindow::Show() {
+@@ -318,6 +376,16 @@ void WebUIBrowserWindow::Show() {
  // The code about Browser's activation state is copied from
  // BrowserView::PaintAsActiveChanged().
  void WebUIBrowserWindow::PaintAsActiveChanged() {
 +#if BUILDFLAG(IS_WIN)
 +  if (backdrop_controller_) {
 +    backdrop_controller_->SetActive(widget_->ShouldPaintAsActive());
++  }
++#endif
++#if BUILDFLAG(IS_MAC)
++  if (browser_->IsDeleteScheduled()) {
++    return;
 +  }
 +#endif
    if (widget_->ShouldPaintAsActive()) {
@@ -15004,3 +15396,153 @@ index 0420bd5..f35a064 100644
  }
  
  :host-context([has-secondary-side]):host-context([can-show-secondary-side]) .container:not(.actions) {
+diff --git a/chrome/installer/mac/signing/driver.py b/chrome/installer/mac/signing/driver.py
+index 1c95371f92..6df663fced 100644
+--- a/chrome/installer/mac/signing/driver.py
++++ b/chrome/installer/mac/signing/driver.py
+@@ -14,7 +14,7 @@ from signing import config_factory, commands, invoker, logger, model, pipeline
+ 
+ 
+ def _create_config(
+-    config_args, development, embed_development_provisioning_profile
++    config_args, development, embed_development_provisioning_profile, ad_hoc=False
+ ):
+     """Creates the |model.CodeSignConfig| for the signing operations.
+ 
+@@ -40,6 +40,10 @@ def _create_config(
+     if development:
+ 
+         class DevelopmentCodeSignConfig(config_class):
++            @property
++            def ad_hoc(self):
++                return ad_hoc
++
+             @property
+             def codesign_requirements_basic(self):
+                 return ''
+@@ -63,7 +67,7 @@ def _create_config(
+ 
+             @property
+             def inject_get_task_allow_entitlement(self):
+-                return True
++                return not ad_hoc
+ 
+             @property
+             def main_executable_pinned_geometry(self):
+@@ -112,6 +116,10 @@ def main(args):
+         help='The specified identity is for development. Certain codesign '
+         'requirements will be omitted.',
+     )
++    parser.add_argument(
++        '--ad-hoc', action='store_true',
++        help='Sign ad hoc without the debug entitlement or Gatekeeper assessment.',
++    )
+     parser.add_argument(
+         '--input',
+         required=True,
+@@ -183,6 +191,11 @@ def main(args):
+ 
+     args = parser.parse_args(args)
+ 
++    if args.ad_hoc:
++        if args.identity != '-':
++            parser.error('--ad-hoc requires --identity -')
++        args.development = True
++
+     if args.development and args.embed_development_provisioning_profile is None:
+         # Default to not embedding provisioning profiles for development signing
+         # for compatibility with environments that use self-signed identities.
+@@ -217,6 +230,7 @@ def main(args):
+         config_args,
+         args.development,
+         args.embed_development_provisioning_profile,
++        args.ad_hoc,
+     )
+     paths = model.Paths(args.input, args.output, None)
+ 
+diff --git a/chrome/installer/mac/signing/driver_test.py b/chrome/installer/mac/signing/driver_test.py
+index fb09737fdb..7ebcdf80fb 100644
+--- a/chrome/installer/mac/signing/driver_test.py
++++ b/chrome/installer/mac/signing/driver_test.py
+@@ -132,6 +132,23 @@ class TestCommandLine(unittest.TestCase):
+         self.assertTrue(config.inject_get_task_allow_entitlement)
+         self.assertFalse(sign_all.call_args.kwargs['disable_packaging'])
+ 
++    def test_ad_hoc(self, sign_all, **kwargs):
++        driver.main(
++            [
++                '--input',
++                '/in',
++                '--output',
++                '/out',
++                '--identity',
++                '-',
++                '--ad-hoc',
++            ]
++        )
++        config = sign_all.call_args.args[1]
++        self.assertFalse(config.run_spctl_assess)
++        self.assertFalse(config.inject_get_task_allow_entitlement)
++        self.assertTrue(config.ad_hoc)
++
+     def test_config_arguments(self, sign_all, **kwargs):
+         driver.main(
+             [
+diff --git a/chrome/installer/mac/signing/signing.py b/chrome/installer/mac/signing/signing.py
+index eb02fb7ba9..a6c44da90b 100644
+--- a/chrome/installer/mac/signing/signing.py
++++ b/chrome/installer/mac/signing/signing.py
+@@ -10,7 +10,7 @@ import asyncio
+ import os.path
+ import re
+ 
+-from signing import commands, invoker, logger
++from signing import commands, invoker, logger, model
+ 
+ 
+ class InvalidLipoArchCountException(ValueError):
+@@ -33,9 +33,15 @@ class Invoker(invoker.Base):
+         reqs = product.requirements_string(config)
+         if reqs:
+             command.extend(['--requirements', '=' + reqs])
+-        if product.options:
++        options = product.options
++        if options and getattr(config, 'ad_hoc', False):
++            options &= ~(
++                model.CodeSignOptions.LIBRARY_VALIDATION
++                | model.CodeSignOptions.HARDENED_RUNTIME
++            )
++        if options:
+             command.extend(
+-                ['--options', product.options.to_comma_delimited_string()]
++                ['--options', options.to_comma_delimited_string()]
+             )
+         if product.entitlements:
+             command.extend(
+diff --git a/chrome/installer/mac/signing/signing_test.py b/chrome/installer/mac/signing/signing_test.py
+index 222232f79c..483b985a6a 100644
+--- a/chrome/installer/mac/signing/signing_test.py
++++ b/chrome/installer/mac/signing/signing_test.py
+@@ -276,6 +276,22 @@ class TestSignPart(unittest.TestCase):
+             ]
+         )
+ 
++    def test_ad_hoc_omits_library_validation(self, run_command):
++        class AdHocConfig(test_config.TestConfig):
++            ad_hoc = True
++
++        part = model.CodeSignedProduct(
++            'Test.app', 'test.signing.app',
++            options=model.CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
++        )
++        signing.sign_part(self.paths, AdHocConfig(identity='-'), part)
++        run_command.assert_called_once_with(
++            [
++                'codesign', '--sign', '-', '--timestamp', '--options',
++                'kill,restrict', '/$W/Test.app',
++            ]
++        )
++
+     def test_sign_part_with_requirement_and_options(self, run_command):
+         config = test_config.TestConfig(codesign_requirements_basic='or false')
+         part = model.CodeSignedProduct(

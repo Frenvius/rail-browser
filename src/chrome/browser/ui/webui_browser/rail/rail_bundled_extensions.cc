@@ -1,5 +1,6 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_bundled_extensions.h"
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -13,6 +14,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/one_shot_event.h"
 #include "base/path_service.h"
+#include "base/supports_user_data.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
 #include "base/version.h"
@@ -101,6 +103,13 @@ void ReadAndInstallBundled(base::WeakPtr<Profile> profile) {
 }
 
 void EnsureBundledExtensions(Profile* profile) {
+  static int scheduled_key;
+  if (!profile || profile->IsOffTheRecord() ||
+      profile->GetUserData(&scheduled_key)) {
+    return;
+  }
+  profile->SetUserData(
+      &scheduled_key, std::make_unique<base::SupportsUserData::Data>());
   extensions::ExtensionSystem::Get(profile)->ready().Post(
       FROM_HERE, base::BindOnce(&ReadAndInstallBundled, profile->GetWeakPtr()));
 }

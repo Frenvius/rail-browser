@@ -4,6 +4,7 @@ import '//resources/cr_elements/icons.html.js';
 
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
+import {isMac} from '//resources/js/platform.js';
 
 import type {ProfileDetail, SettingsProfile, SiteRoute} from '../rail_settings.mojom-webui.js';
 import {browserProxyFactory, UpdateStatus} from '../rail_settings.mojom-webui.js';
@@ -210,6 +211,7 @@ export class RailSettingsElement extends CrLitElement {
 
   override connectedCallback() {
     super.connectedCallback();
+    this.toggleAttribute('mac', navigator.userAgent.includes('Macintosh'));
     this.addEventListener('keydown', e => this.onKeydown_(e), true);
     const router = browserProxyFactory.getInstance().callbackRouter;
     router.onUpdateStatusChanged.addListener(
@@ -657,6 +659,9 @@ export class RailSettingsElement extends CrLitElement {
       case UpdateStatus.kUpToDate:
         return 'Rail is up to date.';
       case UpdateStatus.kReady:
+        if (isMac) {
+          return `Rail ${this.readyVersion_} is the latest release.`;
+        }
         return `Rail ${this.readyVersion_} is ready. ` +
             'Restart Rail to finish updating.';
       case UpdateStatus.kFailed:
@@ -676,7 +681,7 @@ export class RailSettingsElement extends CrLitElement {
       case UpdateStatus.kDownloading:
         return 'Downloading...';
       case UpdateStatus.kReady:
-        return 'Restart to Update';
+        return isMac ? 'View Release' : 'Restart to Update';
       case UpdateStatus.kFailed:
         return 'Try Again';
       default:
@@ -700,6 +705,11 @@ export class RailSettingsElement extends CrLitElement {
   protected onUpdateClick_() {
     const handler = browserProxyFactory.getInstance().handler;
     if (this.isUpdateReady_()) {
+      if (isMac) {
+        handler.openUrl(
+            `https://github.com/Frenvius/rail-browser/releases/tag/v${this.readyVersion_}`);
+        return;
+      }
       handler.applyUpdate();
       return;
     }

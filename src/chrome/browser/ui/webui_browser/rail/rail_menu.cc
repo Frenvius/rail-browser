@@ -8,6 +8,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
+#include "build/build_config.h"
 #include "cc/paint/paint_flags.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_menu_skin.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -61,7 +62,11 @@ bool ParseAccelerator(const std::string& value, ui::Accelerator* out) {
   for (const std::string& part : parts) {
     if (part == "Ctrl") {
       modifiers |= ui::EF_CONTROL_DOWN;
+    } else if (part == "Cmd") {
+      modifiers |= ui::EF_COMMAND_DOWN;
     } else if (part == "Alt") {
+      modifiers |= ui::EF_ALT_DOWN;
+    } else if (part == "Option") {
       modifiers |= ui::EF_ALT_DOWN;
     } else if (part == "Shift") {
       modifiers |= ui::EF_SHIFT_DOWN;
@@ -74,6 +79,10 @@ bool ParseAccelerator(const std::string& value, ui::Accelerator* out) {
     code = static_cast<ui::KeyboardCode>(ui::VKEY_A + (key[0] - 'A'));
   } else if (key == ",") {
     code = ui::VKEY_OEM_COMMA;
+  } else if (key == "[") {
+    code = ui::VKEY_OEM_4;
+  } else if (key == "]") {
+    code = ui::VKEY_OEM_6;
   } else if (key == "Left") {
     code = ui::VKEY_LEFT;
   } else if (key == "Right") {
@@ -81,7 +90,11 @@ bool ParseAccelerator(const std::string& value, ui::Accelerator* out) {
   } else if (key == "Esc") {
     code = ui::VKEY_ESCAPE;
   } else if (key == "Delete") {
+#if BUILDFLAG(IS_MAC)
+    code = ui::VKEY_BACK;
+#else
     code = ui::VKEY_DELETE;
+#endif
   } else if (key.size() >= 2 && key[0] == 'F') {
     int number = 0;
     if (!base::StringToInt(key.substr(1), &number) || number < 1 ||
@@ -260,6 +273,16 @@ void RailMenu::ShowAtCursor(
   }
   Fill(model_.get(), items);
 
+#if BUILDFLAG(IS_MAC)
+  runner_ = std::make_unique<views::MenuRunner>(
+      model_.get(), views::MenuRunner::CONTEXT_MENU,
+      base::BindRepeating(&RailMenu::OnClosed, weak_factory_.GetWeakPtr()));
+  runner_->RunMenuAt(parent, nullptr,
+                     gfx::Rect(display::Screen::Get()->GetCursorScreenPoint(),
+                               gfx::Size()),
+                     views::MenuAnchorPosition::kTopLeft,
+                     ui::mojom::MenuSourceType::kMouse);
+#else
   adapter_ = std::make_unique<Adapter>(
       model_.get(),
       base::BindRepeating(&RailMenu::OnClosed, weak_factory_.GetWeakPtr()));
@@ -277,6 +300,7 @@ void RailMenu::ShowAtCursor(
                      ui::mojom::MenuSourceType::kMouse);
 
   skin_->Style(root_);
+#endif
 }
 
 void RailMenu::OnClosed() {

@@ -1,6 +1,8 @@
 import type {RailMenuItem} from '../browser.mojom-webui.js';
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
+import {shortcut} from './shortcut.js';
+
 export interface NativeMenuItem {
   command?: string;
   label?: string;
@@ -21,7 +23,7 @@ function toMojo(item: NativeMenuItem): RailMenuItem {
   return {
     command: item.command ?? '',
     label: item.label ?? '',
-    accelerator: item.accelerator ?? '',
+    accelerator: shortcut(item.accelerator ?? ''),
     separator: item.separator ?? false,
     danger: item.danger ?? false,
     checked: item.checked ?? false,

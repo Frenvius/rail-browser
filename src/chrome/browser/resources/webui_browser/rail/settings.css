@@ -16,6 +16,10 @@
   overflow: hidden;
 }
 
+:host([mac]) {
+  background: #23292b;
+}
+
 #titlebar {
   app-region: drag;
   -webkit-app-region: drag;

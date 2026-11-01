@@ -266,7 +266,9 @@ void RailSpacePanel::ShowUI() {
     shadow_ = CreateAcrylicShadow(window_->widget(), widget_.get());
   }
   widget_->Show();
-  shadow_->ShowInactive();
+  if (shadow_) {
+    shadow_->ShowInactive();
+  }
   RevealAcrylic(widget_.get(), shadow_.get(), backdrop_.get(),
                 -kPanelSlideDistance);
   widget_->Activate();

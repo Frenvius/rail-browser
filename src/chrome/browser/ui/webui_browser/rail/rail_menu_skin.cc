@@ -7,13 +7,15 @@
 #include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_acrylic.h"
 #include "third_party/skia/include/core/SkColor.h"
+#if BUILDFLAG(IS_WIN)
 #include "ui/aura/window_tree_host.h"
+#include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
+#endif
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_scroll_view_container.h"
 #include "ui/views/controls/menu/submenu_view.h"
-#include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
 
 namespace rail {
 
@@ -21,7 +23,9 @@ namespace {
 
 constexpr int kSlideAnchorSlack = 4;
 constexpr int kMenuMinWidth = 240;
+#if BUILDFLAG(IS_WIN)
 constexpr char kMenuHostName[] = "MenuHost";
+#endif
 
 void ApplyMinimumWidth(views::MenuItemView* item) {
   views::SubmenuView* submenu = item->GetSubmenu();
@@ -66,9 +70,11 @@ MenuSkin::~MenuSkin() {
 }
 
 void MenuSkin::Attach() {
+#if BUILDFLAG(IS_WIN)
   if (!env_observation_.IsObserving()) {
     env_observation_.Observe(aura::Env::GetInstance());
   }
+#endif
 }
 
 void MenuSkin::Style(views::MenuItemView* item) {
@@ -81,7 +87,9 @@ void MenuSkin::Style(views::MenuItemView* item) {
   if (!menu_widget) {
     return;
   }
+#if BUILDFLAG(IS_WIN)
   container->SetBackground(views::CreateSolidBackground(SK_ColorTRANSPARENT));
+#endif
   if (!backdrops_.count(menu_widget)) {
     backdrops_[menu_widget] =
         ApplyAcrylicBackdrop(menu_widget, container->outside_border_insets());
@@ -129,7 +137,9 @@ void MenuSkin::Style(views::MenuItemView* item) {
 }
 
 void MenuSkin::Release() {
+#if BUILDFLAG(IS_WIN)
   env_observation_.Reset();
+#endif
   observations_.RemoveAllObservations();
   for (const auto& [widget, backdrop] : backdrops_) {
     ConcealMenuWindow(widget);
@@ -193,6 +203,7 @@ void MenuSkin::OnWidgetDestroying(views::Widget* widget) {
   }
 }
 
+#if BUILDFLAG(IS_WIN)
 void MenuSkin::OnHostInitialized(aura::WindowTreeHost* host) {
   views::DesktopNativeWidgetAura* native_widget =
       views::DesktopNativeWidgetAura::ForWindow(host->window());
@@ -208,5 +219,6 @@ void MenuSkin::OnHostInitialized(aura::WindowTreeHost* host) {
     observations_.AddObservation(widget);
   }
 }
+#endif
 
 }

@@ -1,4 +1,5 @@
 import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+import {isMac} from '//resources/js/platform.js';
 
 import {browserProxyFactory} from '../browser.mojom-webui.js';
 
@@ -53,6 +54,10 @@ export class UpdateBadgeElement extends CrLitElement {
   }
 
   protected onClick_() {
+    if (isMac) {
+      browserProxyFactory.getInstance().handler.checkRailUpdate();
+      return;
+    }
     this.applying_ = true;
     browserProxyFactory.getInstance().handler.applyRailUpdate();
   }

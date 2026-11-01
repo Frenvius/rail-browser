@@ -60,10 +60,25 @@ export class RailImportElement extends CrLitElement {
 
   protected accessor flow_: Flow = EMPTY_FLOW;
   protected accessor sources_: ImportSource[] = [];
+  private sourcePoll_: number|undefined;
+  private loadingSources_ = false;
+  private readonly onWindowFocus_ = () => {
+    if (this.flow_.screen === 'pick') {
+      this.loadSources_();
+    }
+  };
 
   override connectedCallback() {
     super.connectedCallback();
+    window.addEventListener('focus', this.onWindowFocus_);
     this.loadSources_();
+  }
+
+  override disconnectedCallback() {
+    window.removeEventListener('focus', this.onWindowFocus_);
+    window.clearInterval(this.sourcePoll_);
+    this.sourcePoll_ = undefined;
+    super.disconnectedCallback();
   }
 
   protected selectedSource_(): ImportSource|undefined {
@@ -197,17 +212,41 @@ export class RailImportElement extends CrLitElement {
   }
 
   private async loadSources_() {
+    if (this.loadingSources_) {
+      return;
+    }
+    this.loadingSources_ = true;
     const handler = browserProxyFactory.getInstance().handler;
-    const {sources} = await handler.listImportSources();
-    this.sources_ = sources.filter(source => source.installed);
-    const usable = this.sources_.find(
-        source => !source.running && source.profiles.length > 0);
-    this.flow_ = {...this.flow_, sourceId: usable?.id ?? ''};
+    try {
+      const {sources} = await handler.listImportSources();
+      if (!this.isConnected || this.flow_.screen !== 'pick') {
+        return;
+      }
+      this.sources_ = sources.filter(source => source.installed);
+      const usable = this.sources_.find(source =>
+          source.id === this.flow_.sourceId && !source.running &&
+          source.profiles.length > 0) ??
+          this.sources_.find(
+              source => !source.running && source.profiles.length > 0);
+      this.flow_ = {...this.flow_, sourceId: usable?.id ?? ''};
+      if (this.sources_.some(source => source.running)) {
+        this.sourcePoll_ ??= window.setInterval(() => {
+          if (this.flow_.screen === 'pick') {
+            this.loadSources_();
+          }
+        }, 3000);
+      } else {
+        window.clearInterval(this.sourcePoll_);
+        this.sourcePoll_ = undefined;
+      }
+    } finally {
+      this.loadingSources_ = false;
+    }
   }
 
   private continuePick_() {
     const source = this.selectedSource_();
-    if (!source || source.profiles.length === 0) {
+    if (!source || source.running || source.profiles.length === 0) {
       return;
     }
     if (source.profiles.length > 1) {

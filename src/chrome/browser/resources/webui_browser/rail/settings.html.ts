@@ -1,14 +1,17 @@
 import {html, nothing} from '//resources/lit/v3_0/lit.rollup.js';
 
 import type {RailSettingsElement} from './settings.js';
+import {shortcut} from './shortcut.js';
 
 export function getHtml(this: RailSettingsElement) {
   return html`<!--_html_template_start_-->
+<if expr="not is_macosx">
 <div id="titlebar">
   <button id="close" title="Close" @click="${this.onCloseClick_}">
     <cr-icon icon="cr:close"></cr-icon>
   </button>
 </div>
+</if>
 <div id="segments" role="tablist">
   ${this.sections_.map(section => html`
     <button class="segment" role="tab" data-section="${section.id}"
@@ -23,7 +26,7 @@ ${this.section_ === 'general' ? html`
     <div class="item">
       <div class="rowtext">
         <span class="cardtitle">When collapsed</span>
-        <span class="cardhint">Ctrl+S or the sidebar button collapses it</span>
+        <span class="cardhint">${shortcut('Ctrl+S')} or the sidebar button collapses it</span>
       </div>
       <select id="sidebarcollapse" @change="${this.onSidebarCollapseChange_}">
         <option value="hidden" ?selected="${!this.sidebarIconsOnly_}">

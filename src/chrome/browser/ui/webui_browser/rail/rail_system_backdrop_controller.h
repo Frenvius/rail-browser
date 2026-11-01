@@ -73,6 +73,17 @@ class SystemBackdropController {
 
 }  // namespace rail
 
+#else
+
+namespace rail {
+
+class SystemBackdropController {
+ public:
+  void UpdateClip() {}
+};
+
+}
+
 #endif
 
 #endif

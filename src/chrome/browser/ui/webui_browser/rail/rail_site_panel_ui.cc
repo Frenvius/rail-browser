@@ -46,6 +46,10 @@
 #include "ui/webui/webui_util.h"
 #include "url/gurl.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "chrome/browser/webshare/mac/sharing_service_operation.h"
+#endif
+
 #if BUILDFLAG(IS_WIN)
 #include <windows.applicationmodel.datatransfer.h>
 #include <windows.foundation.h>
@@ -262,7 +266,7 @@ rail_site_panel::mojom::SiteStatePtr RailSitePanelUI::BuildState() {
   state->space_color = space_color_;
   state->security = security_;
   state->security_summary = security_summary_;
-#if BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
   state->can_share = url.SchemeIsHTTPOrHTTPS();
 #endif
 
@@ -418,6 +422,16 @@ void RailSitePanelUI::Share() {
       views::HWNDForWidget(window->widget()));
   share_operation_->Run(base::BindOnce(&PutShareData, contents->GetTitle(),
                                        contents->GetLastCommittedURL()));
+#elif BUILDFLAG(IS_MAC)
+  content::WebContents* contents = Target();
+  if (!contents) {
+    return;
+  }
+  share_operation_ = std::make_unique<webshare::SharingServiceOperation>(
+      base::UTF16ToUTF8(contents->GetTitle()), std::string(),
+      contents->GetLastCommittedURL(),
+      std::vector<blink::mojom::SharedFilePtr>(), contents);
+  share_operation_->Share(base::DoNothing());
 #endif
 }
 

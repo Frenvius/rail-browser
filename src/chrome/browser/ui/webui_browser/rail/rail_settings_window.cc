@@ -23,7 +23,9 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkRegion.h"
+#if BUILDFLAG(IS_WIN)
 #include "ui/aura/window.h"
+#endif
 #include "ui/base/hit_test.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -118,6 +120,13 @@ class RailSettingsWindow::ClientView : public views::ClientView {
 
   void SetDraggableRegion(const SkRegion& region) { draggable_region_ = region; }
 
+#if BUILDFLAG(IS_MAC)
+  views::CloseRequestResult OnWindowCloseRequested() override {
+    GetWidget()->Hide();
+    return views::CloseRequestResult::kCannotClose;
+  }
+#endif
+
   void AddedToWidget() override {
     views::ClientView::AddedToWidget();
 #if BUILDFLAG(IS_WIN)
@@ -203,6 +212,7 @@ RailSettingsWindow::~RailSettingsWindow() {
     web_view_->SetWebContents(nullptr);
     web_view_ = nullptr;
   }
+  client_view_ = nullptr;
 #if BUILDFLAG(IS_WIN)
   backdrop_.reset();
 #endif
@@ -241,7 +251,7 @@ void RailSettingsWindow::CreateWidget() {
   delegate_->SetCanMaximize(false);
   delegate_->SetCanFullscreen(false);
   delegate_->SetTitle(u"Rail Settings");
-  delegate_->SetShowTitle(false);
+  delegate_->SetShowTitle(BUILDFLAG(IS_MAC));
   delegate_->SetClientViewFactory(base::BindOnce(
       [](RailSettingsWindow* owner, views::Widget* widget,
          views::View* contents_view) -> std::unique_ptr<views::ClientView> {
@@ -251,16 +261,20 @@ void RailSettingsWindow::CreateWidget() {
         return client;
       },
       base::Unretained(this)));
+#if !BUILDFLAG(IS_MAC)
   delegate_->SetFrameViewFactory(base::BindRepeating(
       [](views::Widget* widget) -> std::unique_ptr<views::FrameView> {
         return std::make_unique<FramelessFrameView>();
       }));
+#endif
 
   views::Widget::InitParams params(
       views::Widget::InitParams::CLIENT_OWNS_WIDGET,
       views::Widget::InitParams::TYPE_WINDOW);
+#if !BUILDFLAG(IS_MAC)
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.remove_standard_frame = true;
+#endif
   params.activatable = views::Widget::InitParams::Activatable::kYes;
   params.delegate = delegate_.get();
   params.context = parent->GetNativeWindow();
@@ -274,10 +288,16 @@ void RailSettingsWindow::CreateWidget() {
   widget_ = std::make_unique<views::Widget>();
   widget_->Init(std::move(params));
 
+#if BUILDFLAG(IS_WIN)
   MakeShellContentsTransparent(contents_->web_contents());
+#endif
   if (content::RenderWidgetHostView* view =
           contents_->web_contents()->GetRenderWidgetHostView()) {
+#if BUILDFLAG(IS_MAC)
+    view->SetBackgroundColor(SkColorSetRGB(0x23, 0x29, 0x2b));
+#else
     view->SetBackgroundColor(SK_ColorTRANSPARENT);
+#endif
   }
 
 #if BUILDFLAG(IS_WIN)
@@ -355,6 +375,7 @@ void RailSettingsWindow::OnWidgetActivationChanged(views::Widget* widget,
 void RailSettingsWindow::OnWidgetDestroying(views::Widget* widget) {
   observation_.Reset();
   client_view_ = nullptr;
+  web_view_ = nullptr;
 }
 
 }

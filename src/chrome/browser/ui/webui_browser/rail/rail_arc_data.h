@@ -64,7 +64,8 @@ struct ProfileMarks {
 
 std::string ImportedLoginKey(const ImportedLogin& login);
 
-ProfileStoreCounts CountProfileStores(const base::FilePath& profile_dir,
+ProfileStoreCounts CountProfileStores(const base::FilePath& user_data,
+                                      const base::FilePath& profile_dir,
                                       const ProfileMarks& marks);
 
 ProfileStores ReadProfileStores(const base::FilePath& user_data,

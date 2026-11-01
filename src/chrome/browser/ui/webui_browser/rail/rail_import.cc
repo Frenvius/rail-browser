@@ -249,7 +249,7 @@ SourcePlan PlanProfiles(const ImportSourceSpec& spec,
     planned.profile = profile;
     planned.counts = plan.sidebar.counts[profile.dir];
     const ProfileStoreCounts stores = CountProfileStores(
-        profile.path,
+        spec.root, profile.path,
         ProfileMarks{
             .watermark = WatermarkOf(marks, MarkKey(spec.id, profile.dir)),
             .imported_logins = marks.imported,

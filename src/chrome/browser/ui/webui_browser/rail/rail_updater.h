@@ -12,6 +12,7 @@
 #include "base/types/expected.h"
 #include "base/values.h"
 #include "base/version.h"
+#include "build/build_config.h"
 #include "url/gurl.h"
 
 class ChromeBrowserMainExtraParts;
@@ -90,7 +91,9 @@ class Updater {
 
   base::OneShotTimer check_timer_;
   std::unique_ptr<network::SimpleURLLoader> loader_;
+#if BUILDFLAG(IS_WIN)
   bool relaunch_ = false;
+#endif
   Status status_ = Status::kIdle;
   std::optional<std::string> ready_version_;
   base::FilePath ready_installer_;

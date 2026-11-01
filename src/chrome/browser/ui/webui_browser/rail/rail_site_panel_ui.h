@@ -35,6 +35,11 @@ namespace webshare {
 class ShowShareUIForWindowOperation;
 }
 #endif
+#if BUILDFLAG(IS_MAC)
+namespace webshare {
+class SharingServiceOperation;
+}
+#endif
 
 namespace rail {
 
@@ -117,6 +122,8 @@ class RailSitePanelUI : public TopChromeWebUIController,
 
 #if BUILDFLAG(IS_WIN)
   std::unique_ptr<webshare::ShowShareUIForWindowOperation> share_operation_;
+#elif BUILDFLAG(IS_MAC)
+  std::unique_ptr<webshare::SharingServiceOperation> share_operation_;
 #endif
 
   mojo::Receiver<rail_site_panel::mojom::PageHandlerFactory>

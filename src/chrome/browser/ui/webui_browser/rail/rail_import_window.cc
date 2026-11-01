@@ -23,7 +23,9 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkRegion.h"
+#if BUILDFLAG(IS_WIN)
 #include "ui/aura/window.h"
+#endif
 #include "ui/base/hit_test.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -116,6 +118,13 @@ class RailImportWindow::ClientView : public views::ClientView {
 
   void SetDraggableRegion(const SkRegion& region) { draggable_region_ = region; }
 
+#if BUILDFLAG(IS_MAC)
+  views::CloseRequestResult OnWindowCloseRequested() override {
+    GetWidget()->Hide();
+    return views::CloseRequestResult::kCannotClose;
+  }
+#endif
+
   void AddedToWidget() override {
     views::ClientView::AddedToWidget();
 #if BUILDFLAG(IS_WIN)
@@ -201,6 +210,7 @@ RailImportWindow::~RailImportWindow() {
     web_view_->SetWebContents(nullptr);
     web_view_ = nullptr;
   }
+  client_view_ = nullptr;
 #if BUILDFLAG(IS_WIN)
   backdrop_.reset();
 #endif
@@ -258,6 +268,9 @@ void RailImportWindow::CreateWidget() {
       views::Widget::InitParams::TYPE_WINDOW);
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.remove_standard_frame = true;
+#if BUILDFLAG(IS_MAC)
+  params.rounded_corners = gfx::RoundedCornersF(12);
+#endif
   params.activatable = views::Widget::InitParams::Activatable::kYes;
   params.delegate = delegate_.get();
   params.context = parent->GetNativeWindow();
@@ -271,7 +284,9 @@ void RailImportWindow::CreateWidget() {
   widget_ = std::make_unique<views::Widget>();
   widget_->Init(std::move(params));
 
+#if BUILDFLAG(IS_WIN)
   MakeShellContentsTransparent(contents_->web_contents());
+#endif
   if (content::RenderWidgetHostView* view =
           contents_->web_contents()->GetRenderWidgetHostView()) {
     view->SetBackgroundColor(SK_ColorTRANSPARENT);
@@ -348,6 +363,7 @@ void RailImportWindow::OnWidgetActivationChanged(views::Widget* widget,
 void RailImportWindow::OnWidgetDestroying(views::Widget* widget) {
   observation_.Reset();
   client_view_ = nullptr;
+  web_view_ = nullptr;
 }
 
 }

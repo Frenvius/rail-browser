@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "base/functional/bind.h"
+#include "build/build_config.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 
 namespace rail {
@@ -82,7 +83,11 @@ void RailSearchboxHandler::OpenAutocompleteMatch(
     bool via_keyboard) {
   if (open_in_new_tab_) {
     auto new_tab = searchbox::mojom::ActionModifiers::New();
+#if BUILDFLAG(IS_MAC)
+    new_tab->meta_key = true;
+#else
     new_tab->ctrl_key = true;
+#endif
     new_tab->shift_key = true;
     ContextualSearchboxHandler::OpenAutocompleteMatch(
         result_sequence_id, line, url, are_matches_showing, 0,

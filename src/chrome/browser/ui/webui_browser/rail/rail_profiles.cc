@@ -151,6 +151,9 @@ void OnFallbackToShell(base::WeakPtr<BrowserWindowInterface> browser,
   if (!profile && browser) {
     profile = browser->GetProfile();
   }
+  if (profile) {
+    EnsureBundledExtensions(profile);
+  }
   std::move(callback).Run(profile);
 }
 
@@ -238,6 +241,7 @@ void ResolveProfile(BrowserWindowInterface* browser,
   }
 
   if (Profile* loaded = manager->GetProfileByPath(path)) {
+    EnsureBundledExtensions(loaded);
     std::move(callback).Run(loaded);
     return;
   }

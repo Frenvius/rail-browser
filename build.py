@@ -60,11 +60,11 @@ def _snapshot_ninja_state(build_dir, backup_dir):
 
 
 def _link_overlay(source_tree):
-    """Junction the first-party overlay into the Chromium checkout.
+    """Link the first-party overlay into the Chromium checkout.
 
     Overlay sources live in <root>/src and are versioned by this repository.
-    They are junctioned instead of copied so an edit needs no sync step, and
-    junctioning keeps the in-checkout path identical, which the build cache
+    They are linked instead of copied so an edit needs no sync step, and
+    linking keeps the in-checkout path identical, which the build cache
     depends on.
     """
     overlay_root = _ROOT_DIR / 'src'
@@ -75,16 +75,20 @@ def _link_overlay(source_tree):
             continue
         relative = Path(current).relative_to(overlay_root)
         link = source_tree / relative
-        if link.exists():
-            if not _is_junction(link):
+        if link.exists() or link.is_symlink():
+            linked = _is_junction(link) if sys.platform.startswith('win') else link.is_symlink()
+            if not linked:
                 raise RuntimeError(
                     'Overlay target is a real directory, refusing to replace: {}'.format(link))
             subdirs.clear()
             continue
         link.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(Path(current))],
-                       check=True,
-                       stdout=subprocess.DEVNULL)
+        if sys.platform.startswith('win'):
+            subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(Path(current))],
+                           check=True,
+                           stdout=subprocess.DEVNULL)
+        else:
+            link.symlink_to(Path(current), target_is_directory=True)
         get_logger().info('Linked overlay %s', relative)
         subdirs.clear()
 

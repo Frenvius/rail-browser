@@ -1,0 +1,118 @@
+name: macOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: Parallel compile jobs
+        default: '6'
+      version:
+        description: Rail release version (empty for a development build)
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rail-macos
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, rail-macos]
+    timeout-minutes: 900
+    outputs:
+      assets: ${{ steps.package.outputs.assets }}
+    steps:
+      - name: Verify shared checkout
+        shell: bash
+        env:
+          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --quiet
+          git diff --cached --quiet
+          test -f build/src/BUILD.gn
+      - name: Verify release tag and branding
+        if: inputs.version != ''
+        shell: bash
+        env:
+          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
+          RAIL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          [[ "$RAIL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(git rev-parse "v$RAIL_VERSION^{commit}")" = "$GITHUB_SHA"
+          grep -qx 'MAC_BUNDLE_ID=com.frenvius.rail' build/src/chrome/app/theme/chromium/BRANDING
+          git -C build/src apply --reverse --check "$RAIL_REPO_DIR/patches/rail-shell.patch"
+      - name: Build Rail
+        if: inputs.version == ''
+        shell: bash
+        env:
+          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
+          BUILD_JOBS: ${{ inputs.jobs }}
+        run: |
+          cd "$RAIL_REPO_DIR"
+          .venv/bin/python platform/macos/build.py --regenerate -j "$BUILD_JOBS"
+      - name: Build release
+        if: inputs.version != ''
+        shell: bash
+        env:
+          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
+          BUILD_JOBS: ${{ inputs.jobs }}
+          RAIL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          .venv/bin/python platform/macos/build.py --release --regenerate \
+            --rail-version "$RAIL_VERSION" --target chrome \
+            --target chrome/installer/mac:mac -j "$BUILD_JOBS"
+      - name: Package ad hoc release
+        if: inputs.version != ''
+        id: package
+        shell: bash
+        env:
+          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
+          RAIL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          .venv/bin/python platform/macos/package.py --version "$RAIL_VERSION" \
+            --repository "$GITHUB_REPOSITORY"
+          echo "assets=$RAIL_REPO_DIR/build/release/mac/$RAIL_VERSION" >> "$GITHUB_OUTPUT"
+
+  publish:
+    if: inputs.version != ''
+    needs: build
+    runs-on: [self-hosted, rail-macos]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Attach macOS release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAIL_VERSION: ${{ inputs.version }}
+          RAIL_ASSETS: ${{ needs.build.outputs.assets }}
+        run: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:$PATH"
+          test -f "$RAIL_ASSETS/Rail-$RAIL_VERSION-macos-arm64.dmg"
+          test -f "$RAIL_ASSETS/macos-appcast.xml"
+          test -f "$RAIL_ASSETS/INSTALL-macOS.txt"
+          test -f "$RAIL_ASSETS/SHA256SUMS-macos"
+          gh release view "v$RAIL_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null
+          source_archive=("$RAIL_ASSETS"/uBlock-*-source.tar.gz)
+          test -f "${source_archive[0]}"
+          gh release view "v$RAIL_VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets[].name' | grep -qx "$(basename "${source_archive[0]}")"
+          gh release upload "v$RAIL_VERSION" \
+            "$RAIL_ASSETS/Rail-$RAIL_VERSION-macos-arm64.dmg" \
+            "$RAIL_ASSETS/macos-appcast.xml" \
+            "$RAIL_ASSETS/INSTALL-macOS.txt" \
+            "$RAIL_ASSETS/SHA256SUMS-macos" \
+            --repo "$GITHUB_REPOSITORY"

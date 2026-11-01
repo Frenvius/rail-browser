@@ -1,6 +1,8 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_command_bubble.h"
 
+#if BUILDFLAG(IS_WIN)
 #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <string_view>
@@ -307,7 +309,9 @@ void RailCommandBubble::ShowUI() {
   RevealAcrylic(widget_.get(), shadow_.get(), backdrop_.get(),
                 -kAcrylicSlideDistance, false);
   widget_->Show();
-  shadow_->ShowInactive();
+  if (shadow_) {
+    shadow_->ShowInactive();
+  }
   widget_->Activate();
   if (web_view_) {
     web_view_->RequestFocus();
@@ -389,6 +393,7 @@ void RailCommandBubble::HideUnlessOtherAppActive() {
   if (!widget_ || widget_->IsActive()) {
     return;
   }
+#if BUILDFLAG(IS_WIN)
   DWORD foreground_process = 0;
   if (HWND foreground = ::GetForegroundWindow()) {
     ::GetWindowThreadProcessId(foreground, &foreground_process);
@@ -396,6 +401,9 @@ void RailCommandBubble::HideUnlessOtherAppActive() {
   if (foreground_process == ::GetCurrentProcessId()) {
     Hide();
   }
+#else
+  Hide();
+#endif
 }
 
 void RailCommandBubble::OnWidgetDestroying(views::Widget* widget) {

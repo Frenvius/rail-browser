@@ -17,6 +17,7 @@
 #include "base/process/process.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/thread_pool.h"
+#include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chrome_browser_main_extra_parts.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -44,15 +45,21 @@ namespace {
 
 constexpr char kDefaultFeedUrl[] =
     "https://github.com/Frenvius/rail-browser/releases/latest/download/"
+#if BUILDFLAG(IS_MAC)
+    "macos-appcast.xml";
+#else
     "appcast.xml";
+#endif
 constexpr char kFeedUrlSwitch[] = "rail-update-feed-url";
 constexpr base::FilePath::CharType kDownloadHelper[] =
     FILE_PATH_LITERAL("rail_update.exe");
 constexpr char kPublicKey[] = "rx3nRriYut1fS5rA73ajbOg7x54sJRj1jBHm4/UQcbQ=";
 constexpr char kSparkleNamespace[] =
     "http://www.andymatuschak.org/xml-namespaces/sparkle";
+#if BUILDFLAG(IS_WIN)
 constexpr char kRailNamespace[] =
     "https://github.com/Frenvius/rail-browser/xml-namespaces/update";
+#endif
 constexpr base::FilePath::CharType kUpdateDirectory[] =
     FILE_PATH_LITERAL("Rail Update");
 constexpr base::TimeDelta kFirstCheckDelay = base::Minutes(1);
@@ -94,13 +101,19 @@ base::FilePath UpdateDirectory() {
 
 std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
   std::string prefix;
+#if BUILDFLAG(IS_WIN)
   std::string rail_prefix;
+#endif
   if (!data_decoder::GetXmlElementNamespacePrefix(rss, kSparkleNamespace,
-                                                  &prefix) ||
-      !data_decoder::GetXmlElementNamespacePrefix(rss, kRailNamespace,
+                                                  &prefix)) {
+    return std::nullopt;
+  }
+#if BUILDFLAG(IS_WIN)
+  if (!data_decoder::GetXmlElementNamespacePrefix(rss, kRailNamespace,
                                                   &rail_prefix)) {
     return std::nullopt;
   }
+#endif
   const base::Value* item =
       data_decoder::FindXmlElementPath(rss, {"rss", "channel", "item"},
                                        nullptr);
@@ -116,15 +129,28 @@ std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
       !data_decoder::GetXmlElementText(*version, &version_text)) {
     return std::nullopt;
   }
+  const std::string os = data_decoder::GetXmlElementAttribute(
+      *enclosure, data_decoder::GetXmlQualifiedName(prefix, "os"));
+#if BUILDFLAG(IS_MAC)
+  if (os != "macos") {
+    return std::nullopt;
+  }
+#else
+  if (os != "windows") {
+    return std::nullopt;
+  }
+#endif
 
   Updater::Release release;
   release.version = base::Version(version_text);
   release.url = GURL(data_decoder::GetXmlElementAttribute(*enclosure, "url"));
+#if BUILDFLAG(IS_WIN)
   release.signature = data_decoder::GetXmlElementAttribute(
       *enclosure, data_decoder::GetXmlQualifiedName(prefix, "edSignature"));
   release.release_signature = data_decoder::GetXmlElementAttribute(
       *enclosure,
       data_decoder::GetXmlQualifiedName(rail_prefix, "releaseSignature"));
+#endif
   if (!release.version.IsValid() || !release.url.SchemeIsHTTPOrHTTPS() ||
       !base::StringToInt64(
           data_decoder::GetXmlElementAttribute(*enclosure, "length"),
@@ -201,9 +227,11 @@ bool DownloadInstaller(const GURL& url,
 class UpdaterMainParts : public ChromeBrowserMainExtraParts {
  public:
   void PostBrowserStart() override {
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
     if (CurrentVersion().IsValid()) {
       updater_ = std::make_unique<Updater>();
     }
+#endif
   }
 
   void PostMainMessageLoopRun() override {
@@ -259,15 +287,18 @@ void Updater::CheckNow() {
 }
 
 void Updater::Apply() {
+#if BUILDFLAG(IS_WIN)
   if (!ready_version_) {
     return;
   }
   relaunch_ = true;
   g_browser_process->local_state()->SetBoolean(prefs::kWasRestarted, true);
   chrome::AttemptExit();
+#endif
 }
 
 void Updater::LaunchPendingInstaller() {
+#if BUILDFLAG(IS_WIN)
   if (!ready_version_ || browser_shutdown::GetShutdownType() ==
                              browser_shutdown::ShutdownType::kEndSession) {
     return;
@@ -283,6 +314,7 @@ void Updater::LaunchPendingInstaller() {
   base::LaunchOptions options;
   options.current_directory = ready_installer_.DirName();
   base::LaunchProcess(command, options);
+#endif
 }
 
 void Updater::ScheduleCheck(base::TimeDelta delay) {
@@ -333,6 +365,16 @@ void Updater::OnFeedParsed(base::expected<base::Value, std::string> result) {
     Finish(Status::kFailed);
     return;
   }
+#if BUILDFLAG(IS_MAC)
+  if (release->version <= CurrentVersion()) {
+    ready_version_.reset();
+    Finish(Status::kUpToDate);
+    return;
+  }
+  ready_version_ = release->version.GetString();
+  ready_callbacks_.Notify(*ready_version_);
+  Finish(Status::kReady);
+#else
   if (release->version <= CurrentVersion()) {
     base::ThreadPool::PostTask(
         FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
@@ -352,6 +394,7 @@ void Updater::OnFeedParsed(base::expected<base::Value, std::string> result) {
       base::BindOnce(&PrepareInstaller, installer, *release),
       base::BindOnce(&Updater::OnInstallerPrepared, weak_factory_.GetWeakPtr(),
                      *release, installer));
+#endif
 }
 
 void Updater::OnInstallerPrepared(Release release,

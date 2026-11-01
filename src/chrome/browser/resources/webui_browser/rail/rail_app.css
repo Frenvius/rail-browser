@@ -14,9 +14,10 @@
   flex-direction: column;
   font-size: 13px;
   height: 100%;
+  isolation: isolate;
   margin: 0;
   padding: 0;
-  background-color: transparent;
+  background: var(--rail-mac-window-background, transparent);
   color: var(--rail-text);
   position: relative; /* Needed for absolute positioning of controls */
   overflow: hidden;
@@ -42,7 +43,7 @@
 }
 
 #topContainer {
-  background: var(--rail-chrome);
+  background: var(--rail-mac-chrome, var(--rail-chrome));
   grid-row: 1;
   min-width: 0;
 }
@@ -430,7 +431,7 @@ webui-browser-tab-strip {
   display: flex;
   flex-direction: row;
   flex: 1;
-  background: var(--rail-chrome);
+  background: var(--rail-mac-chrome, var(--rail-chrome));
   min-height: 0;
   padding: 0 6px 6px 0;
   position: relative;
@@ -638,6 +639,10 @@ webui-browser-tab-strip {
   justify-content: space-between;
   padding-inline: 10px;
   width: var(--rail-library-nav-width);
+}
+
+:host([library-open]) #sidebarToggle {
+  display: none;
 }
 
 @starting-style {
@@ -918,6 +923,19 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   height: auto;
   bottom: 0;
   top: 6px;
+}
+
+#rootContainer[mac] #railLogoHit {
+  bottom: auto;
+  height: 100%;
+  left: 79px;
+  padding: 0;
+  top: 0;
+  width: auto;
+}
+
+:host([sidebar-collapsed]) #rootContainer[mac] .titlebarDiv {
+  padding-left: 116px;
 }
 
 :host([titlebar-themed]:not([library-wide]))

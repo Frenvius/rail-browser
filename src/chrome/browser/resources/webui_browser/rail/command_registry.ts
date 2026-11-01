@@ -5,6 +5,7 @@ import {adoptMiniWindow} from './mini_window.js';
 import {archivedTabs} from './tab_archive.js';
 import type {TabCommand, TabMenuTarget} from './tab_menu.js';
 import {isWebUrl} from './tab_menu.js';
+import {shortcut} from './shortcut.js';
 
 export interface CommandBarHost {
   activeTab(): TabMenuTarget|null;
@@ -55,7 +56,7 @@ function page(label: string, keywords: string, url: string): Command {
   return {id: url, label, hint: url, keywords, run: host => host.openUrl(url)};
 }
 
-export const COMMANDS: Command[] = [
+const commands: Command[] = [
   {
     id: 'close-tab',
     label: 'Close Tab',
@@ -294,6 +295,9 @@ export const COMMANDS: Command[] = [
   page('Downloads Page', 'files saved', 'chrome://downloads'),
   page('Extensions', 'addons plugins', 'chrome://extensions'),
 ];
+
+export const COMMANDS: Command[] =
+    commands.map(command => ({...command, hint: shortcut(command.hint)}));
 
 export function matchCommands(
     query: string, tab: TabMenuTarget|null): CommandBarRow[] {

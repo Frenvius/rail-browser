@@ -22,27 +22,47 @@ struct Binding {
   const char* command;
 };
 
+#if BUILDFLAG(IS_MAC)
+constexpr int kPrimaryModifier = ui::EF_COMMAND_DOWN;
+constexpr int kSpaceModifier = ui::EF_COMMAND_DOWN | ui::EF_ALT_DOWN;
+constexpr int kNewSpaceModifier = kSpaceModifier | ui::EF_SHIFT_DOWN;
+constexpr int kMiniWindowModifier = kSpaceModifier | ui::EF_SHIFT_DOWN;
+constexpr int kSidebarModifier = kPrimaryModifier | ui::EF_SHIFT_DOWN;
+constexpr int kDownloadsModifier = kPrimaryModifier | ui::EF_SHIFT_DOWN;
+constexpr int kSelectSpaceModifier = ui::EF_CONTROL_DOWN;
+constexpr int kAdoptMiniModifier = kPrimaryModifier | ui::EF_ALT_DOWN;
+#else
+constexpr int kPrimaryModifier = ui::EF_CONTROL_DOWN;
+constexpr int kSpaceModifier = ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN;
+constexpr int kNewSpaceModifier = kSpaceModifier;
+constexpr int kMiniWindowModifier = kSpaceModifier;
+constexpr int kSidebarModifier = kPrimaryModifier;
+constexpr int kDownloadsModifier = kPrimaryModifier;
+constexpr int kSelectSpaceModifier = ui::EF_ALT_DOWN;
+constexpr int kAdoptMiniModifier = kPrimaryModifier;
+#endif
+
 constexpr Binding kBindings[] = {
-    {ui::VKEY_RIGHT, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "next-space"},
-    {ui::VKEY_LEFT, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "previous-space"},
-    {ui::VKEY_N, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "new-space"},
-    {ui::VKEY_S, ui::EF_CONTROL_DOWN, "toggle-sidebar"},
-    {ui::VKEY_J, ui::EF_CONTROL_DOWN, "show-downloads"},
-    {ui::VKEY_OEM_COMMA, ui::EF_CONTROL_DOWN, "settings"},
-    {ui::VKEY_M, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN, "mini-window"},
-    {ui::VKEY_1, ui::EF_ALT_DOWN, "select-space:0"},
-    {ui::VKEY_2, ui::EF_ALT_DOWN, "select-space:1"},
-    {ui::VKEY_3, ui::EF_ALT_DOWN, "select-space:2"},
-    {ui::VKEY_4, ui::EF_ALT_DOWN, "select-space:3"},
-    {ui::VKEY_5, ui::EF_ALT_DOWN, "select-space:4"},
-    {ui::VKEY_6, ui::EF_ALT_DOWN, "select-space:5"},
-    {ui::VKEY_7, ui::EF_ALT_DOWN, "select-space:6"},
-    {ui::VKEY_8, ui::EF_ALT_DOWN, "select-space:7"},
-    {ui::VKEY_9, ui::EF_ALT_DOWN, "select-space:last"},
+    {ui::VKEY_RIGHT, kSpaceModifier, "next-space"},
+    {ui::VKEY_LEFT, kSpaceModifier, "previous-space"},
+    {ui::VKEY_N, kNewSpaceModifier, "new-space"},
+    {ui::VKEY_S, kSidebarModifier, "toggle-sidebar"},
+    {ui::VKEY_J, kDownloadsModifier, "show-downloads"},
+    {ui::VKEY_OEM_COMMA, kPrimaryModifier, "settings"},
+    {ui::VKEY_M, kMiniWindowModifier, "mini-window"},
+    {ui::VKEY_1, kSelectSpaceModifier, "select-space:0"},
+    {ui::VKEY_2, kSelectSpaceModifier, "select-space:1"},
+    {ui::VKEY_3, kSelectSpaceModifier, "select-space:2"},
+    {ui::VKEY_4, kSelectSpaceModifier, "select-space:3"},
+    {ui::VKEY_5, kSelectSpaceModifier, "select-space:4"},
+    {ui::VKEY_6, kSelectSpaceModifier, "select-space:5"},
+    {ui::VKEY_7, kSelectSpaceModifier, "select-space:6"},
+    {ui::VKEY_8, kSelectSpaceModifier, "select-space:7"},
+    {ui::VKEY_9, kSelectSpaceModifier, "select-space:last"},
 };
 
 constexpr Binding kMiniBindings[] = {
-    {ui::VKEY_O, ui::EF_CONTROL_DOWN, "adopt-mini-window"},
+    {ui::VKEY_O, kAdoptMiniModifier, "adopt-mini-window"},
 };
 
 constexpr std::pair<std::string_view, int> kMenuBrowserCommands[] = {
@@ -98,8 +118,10 @@ bool IsCommandDisabledInShell(int command_id) {
 const char* RailCommandForBrowserCommand(int command_id) {
   switch (command_id) {
     case IDC_SELECT_NEXT_TAB:
+    case IDC_CYCLE_TO_NEXT_TAB:
       return "next-tab";
     case IDC_SELECT_PREVIOUS_TAB:
+    case IDC_CYCLE_TO_PREV_TAB:
       return "previous-tab";
     case IDC_SELECT_TAB_0:
       return "select-tab:0";
@@ -123,6 +145,12 @@ const char* RailCommandForBrowserCommand(int command_id) {
       return "close-tab";
     case IDC_BACK:
       return "back";
+    case IDC_FORWARD:
+      return "forward";
+    case IDC_SHOW_DOWNLOADS:
+      return "show-downloads";
+    case IDC_OPTIONS:
+      return "settings";
     case IDC_RESTORE_TAB:
       return "reopen-tab";
     default:

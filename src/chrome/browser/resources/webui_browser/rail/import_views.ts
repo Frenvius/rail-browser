@@ -114,8 +114,8 @@ function stepList(this: RailImportElement): TemplateResult {
 function pickScreen(this: RailImportElement): TemplateResult {
   return html`
     <h1>Import from another browser</h1>
-    <p class="lede">Your spaces, tabs, history, cookies, passwords and
-      extensions come along. Nothing already in Rail is replaced.</p>
+    <p class="lede">Your spaces, tabs, recent history (up to 90 days), cookies,
+      passwords and extensions come along. Nothing already in Rail is replaced.</p>
     <div class="list" role="radiogroup" aria-label="Browsers">
       ${this.sources_.map(source => sourceRow.bind(this)(source))}
     </div>

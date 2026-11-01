@@ -2,12 +2,13 @@
   <img width="64" height="64" src="logo-icon.svg" alt="Rail logo">
   <h1>Rail</h1>
   <p>A sidebar-first desktop browser built on Chromium.</p>
-  <p><a href="https://railbrowser.app">railbrowser.app</a> · <a href="https://railbrowser.app/download">Download for Windows</a></p>
+  <p><a href="https://railbrowser.app">railbrowser.app</a> · <a href="https://railbrowser.app/download">Download for Windows</a> · <a href="https://github.com/Frenvius/rail-browser/releases/latest">Download for macOS</a></p>
 </div>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-11-0078D4" alt="Windows 11">
-  <img src="https://img.shields.io/badge/macOS%20%26%20Linux-later-lightgrey" alt="macOS and Linux later">
+  <img src="https://img.shields.io/badge/macOS-Apple%20silicon-000000" alt="macOS on Apple silicon">
+  <img src="https://img.shields.io/badge/Linux-later-lightgrey" alt="Linux later">
   <img src="https://img.shields.io/badge/Chromium-155-4285F4" alt="Chromium 155">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-BSD--3--Clause-green" alt="BSD-3-Clause"></a>
 </p>
@@ -17,10 +18,12 @@
 </p>
 
 > [!NOTE]
-> Rail is early and Windows-first. macOS and Linux come later; the build is
-> already split per platform so a second host only adds a directory.
+> Rail is early. Every release ships for Windows 11 and for macOS on Apple
+> silicon; Linux comes later. The macOS build is ad hoc signed and not
+> notarized, so Gatekeeper asks for confirmation on first launch: see
+> `INSTALL-macOS.txt` on the release page.
 
-Yet another Arc-like browser. At least this one is Windows-first.
+Yet another Arc-like browser. At least this one started on Windows.
 
 ## What Rail is
 
@@ -37,7 +40,7 @@ accessibility, extensions, and process management stay on Chromium's native
 paths. It is not Electron, CEF, or a WebView wrapper.
 
 ```text
-Native Views/Win32 window
+Native Views window (Win32 / Cocoa)
 └── WebUIBrowserWindow
     ├── chrome://webui-browser/     privileged product shell (the rail)
     └── content region
@@ -61,6 +64,7 @@ Native Views/Win32 window
 | **Mini window** | Links opened from other apps land in a small window first and become a tab only if you want. |
 | **Content blocking** | uBlock Origin ships preinstalled. |
 | **Windows native** | Mica and acrylic backdrops, system-style window controls. |
+| **macOS native** | Command-key shortcuts, the macOS app menu, Keychain-backed import and the system share sheet. |
 
 ## Privacy
 
@@ -95,6 +99,14 @@ python -m venv .venv
 
 The first build takes hours. Later builds are incremental.
 
+On macOS (Apple silicon, Xcode and the macOS 15.4 SDK), from a prepared tree:
+
+```sh
+.venv/bin/python platform/macos/build.py -j 6
+```
+
+`docs/BUILDING.md` covers both hosts.
+
 ## Layout
 
 ```text
@@ -110,14 +122,18 @@ platform/windows/             everything that only matters on Windows
   downloads.ini, revision.txt   pinned Chromium version
   pruning.list, domain_substitution.list
   clone.py, package.py
+platform/macos/               everything that only matters on macOS
+  build.py                      build driver for the Apple silicon host
+  flags.gn, flags.release.gn    GN config for development and release
+  package.py                    ad hoc signed DMG, macOS update feed, checksums
 scripts/run.ps1               launch the local build
 ungoogled-chromium/           submodule: core ungoogled patch set
 build/                        untracked: Chromium checkout and build output
 ```
 
 Patches apply in three layers: the ungoogled submodule set, then
-`platform/<host>/patches`, then `patches/`. A second platform adds a
-`platform/<name>/` directory and nothing else moves.
+`platform/<host>/patches`, then `patches/`. macOS was added as
+`platform/macos/` without moving anything; Linux will follow the same way.
 
 The path `build/src` is frozen. Relocating the project directory invalidates the
 entire build cache and costs a full rebuild.

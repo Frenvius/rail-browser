@@ -92,13 +92,13 @@ ${this.isProfile_() ? html`
         </div>
       </div>
     </div>
-    <div id="materials">
+    ${this.materials_().length ? html`<div id="materials">
       ${this.materials_().map(([value, label]) => html`
         <button class="material" data-material="${value}"
           ?selected="${value === this.material_}"
           @click="${this.onMaterialClick_}">${label}</button>
       `)}
-    </div>
+    </div>` : ''}
   </div>
 ` : html`
   <div id="picker">

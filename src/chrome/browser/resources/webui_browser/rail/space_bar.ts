@@ -13,6 +13,7 @@ import {downloadStatus, DownloadState, fileIconUrl, isMoving, onDownloadsRebound
 import type {NativeMenuItem} from './native_menu.js';
 import {menuItems, separator, showNativeMenu} from './native_menu.js';
 import {INCOGNITO} from './sidebar_state.js';
+import {shortcut} from './shortcut.js';
 import {getCss} from './space_bar.css.js';
 import {getHtml} from './space_bar.html.js';
 import type {SpaceMenuContext, SpaceMenuDetail} from './space_menu.js';
@@ -549,7 +550,7 @@ export class SpaceBarElement extends CrLitElement {
     const key = index < SPACE_KEYS       ? index + 1 :
         index === this.spaces.length - 1 ? SPACE_KEYS + 1 :
                                            0;
-    return key ? `${space.name} (Alt+${key})` : space.name;
+    return key ? `${space.name} (${shortcut(`Alt+${key}`)})` : space.name;
   }
 
   protected onDotClick_(e: Event) {

@@ -1,6 +1,9 @@
+import {isMac} from '//resources/js/platform.js';
+
 import {INCOGNITO} from './sidebar_state.js';
 import type {SpaceBarElement} from './space_bar.js';
 import type {Spaces} from './spaces.js';
+import {macTintWeight, MAC_WINDOW_BASE, spaceHex, tintStrength} from './spaces.js';
 
 const OUT_MS = 120;
 const IN_MS = 260;
@@ -107,12 +110,23 @@ function registerSpaceProperties(style: CSSStyleDeclaration) {
   });
 }
 
-export function paintSpaceColors(color: string, tint: string, grain: number) {
+export function paintSpaceColors(
+    color: string, tint: string, grain: number, gradient: string[]) {
   const style = document.documentElement.style;
   registerSpaceProperties(style);
   style.setProperty('--rail-space-color', color);
   style.setProperty('--rail-space-tint', tint);
   style.setProperty(SPACE_GRAIN, String(grain));
+  if (isMac) {
+    const weight = Math.round(macTintWeight(tintStrength(tint) * 100) * 100);
+    const stops = [color, ...gradient].map(hex =>
+        `color-mix(in srgb, ${spaceHex(hex)} ${weight}%, ${MAC_WINDOW_BASE})`);
+    style.setProperty(
+        '--rail-mac-window-background',
+        stops.length > 1 ? `linear-gradient(135deg, ${stops.join(', ')})` :
+                           stops[0]!);
+    style.setProperty('--rail-mac-chrome', 'transparent');
+  }
 }
 
 export function paintSpaceInk(lightBackdrop: boolean) {
