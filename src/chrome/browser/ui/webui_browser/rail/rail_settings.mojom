@@ -96,6 +96,15 @@ interface PageHandler {
 
   SetReopenMiniWindows(bool reopen);
 
+  GetMediaSettings() => (bool sidebar_controls, bool auto_pip,
+                         bool auto_pip_private);
+
+  SetSidebarMediaControls(bool enabled);
+
+  SetAutoPip(bool enabled);
+
+  SetAutoPipPrivate(bool enabled);
+
   GetTrailDepth() => (int32 depth);
 
   SetTrailDepth(int32 depth);

@@ -1,5 +1,38 @@
 import("//build/buildflag_header.gni")
 
+source_set("media_features") {
+  sources = [ "rail_media_features.h" ]
+  public_deps = [
+    "//base",
+    "//third_party/blink/public/common",
+  ]
+}
+
+source_set("auto_pip") {
+  sources = [
+    "rail_auto_pip.cc",
+    "rail_auto_pip.h",
+    "rail_media_prefs.h",
+  ]
+  deps = [
+    "//base",
+    "//chrome/browser/profiles:profile",
+    "//components/prefs",
+    "//content/public/browser",
+    "//services/media_session/public/mojom",
+    "//ui/gfx/geometry",
+  ]
+}
+
+source_set("pip_controls") {
+  sources = [ "rail_pip_controls.h" ]
+  inputs = [ "rail_forward_30.icon" ]
+  public_deps = [
+    "//base",
+    "//ui/gfx",
+  ]
+}
+
 declare_args() {
   rail_version = ""
 }

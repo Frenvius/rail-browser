@@ -63,6 +63,36 @@ ${this.section_ === 'general' ? html`
         @change="${this.onThemedTitlebarChange_}"></cr-toggle>
     </div>
   </div>
+  <h2 class="section">Media</h2>
+  <div class="group">
+    <div class="item">
+      <div class="rowtext">
+        <span id="sidebarMediaLabel" class="cardtitle">Media controls in the sidebar</span>
+        <span class="cardhint">Control media playing in another tab</span>
+      </div>
+      <cr-toggle id="sidebarMediaControls" ?checked="${this.sidebarMediaControls_}"
+        aria-labelledby="sidebarMediaLabel"
+        @change="${this.onSidebarMediaControlsChange_}"></cr-toggle>
+    </div>
+    <div class="item">
+      <div class="rowtext">
+        <span id="autoPipLabel" class="cardtitle">Picture in picture when switching tabs</span>
+        <span class="cardhint">Keep a playing video visible in a floating window</span>
+      </div>
+      <cr-toggle id="autoPip" ?checked="${this.autoPip_}"
+        aria-labelledby="autoPipLabel"
+        @change="${this.onAutoPipChange_}"></cr-toggle>
+    </div>
+    <div class="item" ?data-disabled="${!this.autoPip_}">
+      <div class="rowtext">
+        <span id="autoPipPrivateLabel" class="cardtitle">Also in private windows</span>
+        <span class="cardhint">Allow automatic picture in picture in private windows</span>
+      </div>
+      <cr-toggle id="autoPipPrivate" ?checked="${this.autoPipPrivate_}"
+        ?disabled="${!this.autoPip_}" aria-labelledby="autoPipPrivateLabel"
+        @change="${this.onAutoPipPrivateChange_}"></cr-toggle>
+    </div>
+  </div>
   <h2 class="section">Mini Windows</h2>
   <div class="group">
     <div class="item">

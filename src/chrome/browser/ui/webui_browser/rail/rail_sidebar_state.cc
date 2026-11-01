@@ -6,6 +6,7 @@
 #include "base/token.h"
 #include "base/values.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_import.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_media_prefs.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_mini_window_restore.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_site_routes.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -39,6 +40,9 @@ void RegisterSidebarStateProfilePrefs(
   registry->RegisterBooleanPref(kSidebarIconsOnlyPref, false);
   registry->RegisterBooleanPref(kSidebarExpandOnHoverPref, true);
   registry->RegisterBooleanPref(kThemedTitlebarPref, true);
+  registry->RegisterBooleanPref(kSidebarMediaControlsPref, true);
+  registry->RegisterBooleanPref(kAutoPipEnabledPref, true);
+  registry->RegisterBooleanPref(kAutoPipPrivatePref, false);
   registry->RegisterBooleanPref(kGroupOpenedLinksPref, true);
   registry->RegisterIntegerPref(kTrailDepthPref, 1);
   registry->RegisterIntegerPref(kTabSleepMinutesPref, 30);

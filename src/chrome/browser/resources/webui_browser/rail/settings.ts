@@ -93,6 +93,9 @@ export class RailSettingsElement extends CrLitElement {
       sidebarIconsOnly_: {type: Boolean, state: true},
       sidebarExpandOnHover_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
+      sidebarMediaControls_: {type: Boolean, state: true},
+      autoPip_: {type: Boolean, state: true},
+      autoPipPrivate_: {type: Boolean, state: true},
       groupOpenedLinks_: {type: Boolean, state: true},
       reopenMiniWindows_: {type: Boolean, state: true},
       trailDepth_: {type: Number, state: true},
@@ -139,6 +142,9 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor sidebarIconsOnly_ = false;
   protected accessor sidebarExpandOnHover_ = true;
   protected accessor themedTitlebar_ = true;
+  protected accessor sidebarMediaControls_ = true;
+  protected accessor autoPip_ = true;
+  protected accessor autoPipPrivate_ = false;
   protected accessor groupOpenedLinks_ = true;
   protected accessor reopenMiniWindows_ = false;
   protected accessor trailDepth_ = 1;
@@ -248,6 +254,10 @@ export class RailSettingsElement extends CrLitElement {
     this.sidebarExpandOnHover_ =
         (await handler.getSidebarExpandOnHover()).expand;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
+    const media = await handler.getMediaSettings();
+    this.sidebarMediaControls_ = media.sidebarControls;
+    this.autoPip_ = media.autoPip;
+    this.autoPipPrivate_ = media.autoPipPrivate;
     this.groupOpenedLinks_ = (await handler.getGroupOpenedLinks()).grouped;
     this.reopenMiniWindows_ = (await handler.getReopenMiniWindows()).reopen;
     this.trailDepth_ = (await handler.getTrailDepth()).depth;
@@ -353,6 +363,21 @@ export class RailSettingsElement extends CrLitElement {
   protected onThemedTitlebarChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setThemedTitlebar(e.detail);
     this.themedTitlebar_ = e.detail;
+  }
+
+  protected onSidebarMediaControlsChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setSidebarMediaControls(e.detail);
+    this.sidebarMediaControls_ = e.detail;
+  }
+
+  protected onAutoPipChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setAutoPip(e.detail);
+    this.autoPip_ = e.detail;
+  }
+
+  protected onAutoPipPrivateChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setAutoPipPrivate(e.detail);
+    this.autoPipPrivate_ = e.detail;
   }
 
   protected onGroupOpenedLinksChange_(e: CustomEvent<boolean>) {

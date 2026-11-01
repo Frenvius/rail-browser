@@ -88,6 +88,10 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetGroupOpenedLinks(bool grouped) override;
   void GetReopenMiniWindows(GetReopenMiniWindowsCallback callback) override;
   void SetReopenMiniWindows(bool reopen) override;
+  void GetMediaSettings(GetMediaSettingsCallback callback) override;
+  void SetSidebarMediaControls(bool enabled) override;
+  void SetAutoPip(bool enabled) override;
+  void SetAutoPipPrivate(bool enabled) override;
   void GetTrailDepth(GetTrailDepthCallback callback) override;
   void SetTrailDepth(int32_t depth) override;
   void GetTabSleep(GetTabSleepCallback callback) override;

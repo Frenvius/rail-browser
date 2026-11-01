@@ -25,6 +25,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_buildflags.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_media_prefs.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_mini_window_restore.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_site_routes.h"
@@ -45,6 +46,12 @@
 namespace rail {
 
 namespace {
+
+PrefService* MediaPrefsFor(content::WebUI* web_ui) {
+  auto* browser = BrowserFor(web_ui);
+  return browser ? browser->GetProfile()->GetOriginalProfile()->GetPrefs()
+                 : nullptr;
+}
 
 std::string ProfileName(Profile* profile) {
   ProfileManager* manager = g_browser_process->profile_manager();
@@ -378,6 +385,32 @@ void RailSettingsUI::GetReopenMiniWindows(
 
 void RailSettingsUI::SetReopenMiniWindows(bool reopen) {
   rail::SetReopenMiniWindows(PrefsFor(web_ui()), reopen);
+}
+
+void RailSettingsUI::GetMediaSettings(GetMediaSettingsCallback callback) {
+  auto* prefs = MediaPrefsFor(web_ui());
+  std::move(callback).Run(
+      prefs && prefs->GetBoolean(kSidebarMediaControlsPref),
+      prefs && prefs->GetBoolean(kAutoPipEnabledPref),
+      prefs && prefs->GetBoolean(kAutoPipPrivatePref));
+}
+
+void RailSettingsUI::SetSidebarMediaControls(bool enabled) {
+  if (auto* prefs = MediaPrefsFor(web_ui())) {
+    prefs->SetBoolean(kSidebarMediaControlsPref, enabled);
+  }
+}
+
+void RailSettingsUI::SetAutoPip(bool enabled) {
+  if (auto* prefs = MediaPrefsFor(web_ui())) {
+    prefs->SetBoolean(kAutoPipEnabledPref, enabled);
+  }
+}
+
+void RailSettingsUI::SetAutoPipPrivate(bool enabled) {
+  if (auto* prefs = MediaPrefsFor(web_ui())) {
+    prefs->SetBoolean(kAutoPipPrivatePref, enabled);
+  }
 }
 
 void RailSettingsUI::GetTrailDepth(GetTrailDepthCallback callback) {

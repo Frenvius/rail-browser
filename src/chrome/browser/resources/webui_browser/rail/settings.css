@@ -134,6 +134,10 @@ select:focus-visible {
   border-top: 1px solid rgb(255 255 255 / 7%);
 }
 
+.item[data-disabled] .rowtext {
+  opacity: .5;
+}
+
 .row {
   cursor: default;
   transition: background-color 80ms ease;
