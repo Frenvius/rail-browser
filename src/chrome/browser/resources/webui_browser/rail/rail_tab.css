@@ -65,6 +65,7 @@
 #title {
     flex: 1 1 0%;
     font-size: 13px;
+    padding-bottom: 2px;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
@@ -124,6 +125,7 @@
     flex: 0 0 auto;
     gap: 2px;
     margin-left: -4px;
+    margin-right: -4px;
 }
 
 #indicators[hidden],
