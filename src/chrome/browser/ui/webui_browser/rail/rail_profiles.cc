@@ -139,8 +139,8 @@ void OnMoveProfileResolved(base::WeakPtr<BrowserWindowInterface> browser,
   content::WebContents* created =
       InsertTab(browser.get(), profile, url, index + 1);
   const int old_index = model->GetIndexOfTab(tab);
-  if (old_index != TabStripModel::kNoTab) {
-    model->CloseWebContentsAt(old_index, TabCloseTypes::CLOSE_NONE);
+  if (created && old_index != TabStripModel::kNoTab) {
+    model->DetachAndDeleteWebContentsAt(old_index);
   }
   std::move(callback).Run(created);
 }
