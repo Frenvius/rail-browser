@@ -11902,7 +11902,7 @@ index c2b7ec4..514959e 100644
  
  gfx::Rect FindBarOwnerWebUIBrowser::GetFindBarClippingBox() {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
-index f8a5a94..204b805 100644
+index f8a5a94..23f8f54 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_client_view.cc
 @@ -4,8 +4,10 @@
@@ -11916,7 +11916,7 @@ index f8a5a94..204b805 100644
  #include "chrome/browser/ui/webui_browser/webui_browser_window.h"
  #include "components/permissions/permission_request_manager.h"
  #include "components/tabs/public/tab_interface.h"
-@@ -16,7 +18,14 @@
+@@ -16,7 +18,13 @@
  #include "ui/base/interaction/element_events.h"
  #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/metadata/metadata_impl_macros.h"
@@ -11926,19 +11926,16 @@ index f8a5a94..204b805 100644
 +
 +#if BUILDFLAG(IS_WIN)
 +#include "chrome/browser/ui/webui_browser/rail/rail_window_frame.h"
-+#include "ui/aura/window.h"
 +#endif
- 
+
  WebUIBrowserClientView::WebUIBrowserClientView(
      WebUIBrowserWebContentsDelegate* web_contents_delegate,
-@@ -27,6 +36,14 @@ WebUIBrowserClientView::WebUIBrowserClientView(
+@@ -27,6 +35,12 @@ WebUIBrowserClientView::WebUIBrowserClientView(
  }
- 
+
  WebUIBrowserClientView::~WebUIBrowserClientView() {
 +#if BUILDFLAG(IS_WIN)
-+  if (event_target_) {
-+    event_target_->RemovePreTargetHandler(this);
-+  }
++  pre_target_handler_.reset();
 +  if (GetWidget()) {
 +    rail::RemoveResizeCursorSubclass(GetWidget());
 +  }
@@ -11946,20 +11943,20 @@ index f8a5a94..204b805 100644
    web_contents_delegate_->RemoveObserver(this);
    set_contents_view(nullptr);
  }
-@@ -34,6 +51,12 @@ WebUIBrowserClientView::~WebUIBrowserClientView() {
+@@ -34,6 +48,12 @@ WebUIBrowserClientView::~WebUIBrowserClientView() {
  void WebUIBrowserClientView::AddedToWidget() {
    views::ClientView::AddedToWidget();
- 
+
 +#if BUILDFLAG(IS_WIN)
-+  event_target_ = GetWidget()->GetNativeView();
-+  event_target_->AddPreTargetHandler(this);
++  pre_target_handler_ =
++      std::make_unique<rail::WidgetPreTargetHandler>(GetWidget(), this);
 +  rail::InstallResizeCursorSubclass(GetWidget());
 +#endif
 +
    // Set up element tracking callback to notify us when the
    // kLocationIconElementId bounds change, so that we can reposition the
    // Permission dialog widget as per the latest position of WebUI Anchor.
-@@ -49,7 +72,27 @@ void WebUIBrowserClientView::AddedToWidget() {
+@@ -49,7 +69,27 @@ void WebUIBrowserClientView::AddedToWidget() {
                                base::Unretained(this)));
  }
  
@@ -11988,12 +11985,12 @@ index f8a5a94..204b805 100644
      return HTCAPTION;
    }
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_client_view.h b/chrome/browser/ui/webui_browser/webui_browser_client_view.h
-index 5e6d29d..76021ae 100644
+index 5e6d29d..c551fcc 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_client_view.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_client_view.h
-@@ -6,12 +6,20 @@
+@@ -6,12 +6,22 @@
  #define CHROME_BROWSER_UI_WEBUI_BROWSER_WEBUI_BROWSER_CLIENT_VIEW_H_
- 
+
  #include "base/observer_list.h"
 +#include "build/build_config.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_web_contents_delegate.h"
@@ -12002,17 +11999,19 @@ index 5e6d29d..76021ae 100644
  #include "ui/base/metadata/metadata_header_macros.h"
 +#include "ui/events/event_handler.h"
  #include "ui/views/window/client_view.h"
- 
+
 +#if BUILDFLAG(IS_WIN)
-+namespace aura {
-+class Window;
++#include <memory>
++
++namespace rail {
++class WidgetPreTargetHandler;
 +}
 +#endif
 +
  namespace ui {
  class TrackedElement;
  }
-@@ -34,12 +42,19 @@ class WebUIBrowserClientView
+@@ -34,12 +44,19 @@ class WebUIBrowserClientView
    int NonClientHitTest(const gfx::Point& point) override;
    void AddedToWidget() override;
  
@@ -12026,7 +12025,7 @@ index 5e6d29d..76021ae 100644
    SkRegion draggable_region_;
  
 +#if BUILDFLAG(IS_WIN)
-+  raw_ptr<aura::Window> event_target_ = nullptr;
++  std::unique_ptr<rail::WidgetPreTargetHandler> pre_target_handler_;
 +#endif
 +
    // Subscription for tracking location icon element movements.

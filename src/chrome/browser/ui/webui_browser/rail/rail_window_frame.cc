@@ -221,6 +221,29 @@ LRESULT CALLBACK ResizeCursorSubclassProc(HWND hwnd,
 
 }  // namespace
 
+WidgetPreTargetHandler::WidgetPreTargetHandler(views::Widget* widget,
+                                               ui::EventHandler* handler)
+    : target_(widget->GetNativeView()), handler_(handler) {
+  target_->AddPreTargetHandler(handler_);
+  observation_.Observe(widget);
+}
+
+WidgetPreTargetHandler::~WidgetPreTargetHandler() {
+  Remove();
+}
+
+void WidgetPreTargetHandler::OnWidgetDestroying(views::Widget* widget) {
+  Remove();
+}
+
+void WidgetPreTargetHandler::Remove() {
+  observation_.Reset();
+  if (target_) {
+    target_->RemovePreTargetHandler(handler_);
+    target_ = nullptr;
+  }
+}
+
 void PrepareSystemBackdropWindow(views::Widget* widget) {
   HWND hwnd = views::HWNDForWidget(widget);
   g_backdrop_enabled = true;

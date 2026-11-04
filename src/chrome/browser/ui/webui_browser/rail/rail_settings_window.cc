@@ -4,6 +4,7 @@
 #include <windows.h>
 #endif
 
+#include <memory>
 #include <string_view>
 #include <utility>
 
@@ -110,10 +111,7 @@ class RailSettingsWindow::ClientView : public views::ClientView {
 
   ~ClientView() override {
 #if BUILDFLAG(IS_WIN)
-    if (event_target_) {
-      event_target_->RemovePreTargetHandler(this);
-      event_target_ = nullptr;
-    }
+    pre_target_handler_.reset();
 #endif
     set_contents_view(nullptr);
   }
@@ -130,8 +128,8 @@ class RailSettingsWindow::ClientView : public views::ClientView {
   void AddedToWidget() override {
     views::ClientView::AddedToWidget();
 #if BUILDFLAG(IS_WIN)
-    event_target_ = GetWidget()->GetNativeView();
-    event_target_->AddPreTargetHandler(this);
+    pre_target_handler_ =
+        std::make_unique<WidgetPreTargetHandler>(GetWidget(), this);
 #endif
   }
 
@@ -151,7 +149,7 @@ class RailSettingsWindow::ClientView : public views::ClientView {
  private:
   SkRegion draggable_region_;
 #if BUILDFLAG(IS_WIN)
-  raw_ptr<aura::Window> event_target_ = nullptr;
+  std::unique_ptr<WidgetPreTargetHandler> pre_target_handler_;
 #endif
 };
 

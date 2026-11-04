@@ -5,7 +5,14 @@
 
 #if BUILDFLAG(IS_WIN)
 
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ui/webui_browser/browser.mojom.h"
+#include "ui/views/widget/widget_observer.h"
+
+namespace aura {
+class Window;
+}
 
 namespace content {
 class WebContents;
@@ -18,14 +25,33 @@ class Size;
 }  // namespace gfx
 
 namespace ui {
+class EventHandler;
 class MouseEvent;
-}
+}  // namespace ui
 
 namespace views {
 class Widget;
 }
 
 namespace rail {
+
+class WidgetPreTargetHandler : public views::WidgetObserver {
+ public:
+  WidgetPreTargetHandler(views::Widget* widget, ui::EventHandler* handler);
+  WidgetPreTargetHandler(const WidgetPreTargetHandler&) = delete;
+  WidgetPreTargetHandler& operator=(const WidgetPreTargetHandler&) = delete;
+  ~WidgetPreTargetHandler() override;
+
+  void OnWidgetDestroying(views::Widget* widget) override;
+
+ private:
+  void Remove();
+
+  raw_ptr<aura::Window> target_;
+  raw_ptr<ui::EventHandler> handler_;
+  base::ScopedObservation<views::Widget, views::WidgetObserver> observation_{
+      this};
+};
 
 void PrepareSystemBackdropWindow(views::Widget* widget);
 
