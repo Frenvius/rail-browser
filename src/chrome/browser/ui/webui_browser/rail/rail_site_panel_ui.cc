@@ -37,6 +37,7 @@
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/common/url_constants.h"
+#include "extensions/common/constants.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
 #include "ui/base/models/image_model.h"
@@ -201,6 +202,12 @@ void RailSitePanelUI::Open(const gfx::Point& anchor,
   target_ = contents->GetWeakPtr();
   open_ = true;
   const GURL url = contents->GetLastCommittedURL();
+  if (PageInfo::IsFileOrInternalPage(url) ||
+      url.SchemeIs(extensions::kExtensionScheme)) {
+    security_ = "internal";
+    Push();
+    return;
+  }
   ui_delegate_ = std::make_unique<ChromePageInfoUiDelegate>(contents, url);
   page_info_ = std::make_unique<PageInfo>(
       std::make_unique<ChromePageInfoDelegate>(contents), contents, url);
