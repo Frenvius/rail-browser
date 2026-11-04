@@ -7474,7 +7474,7 @@ index b7a5099..907b672 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +585,2362 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +585,2369 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -9513,7 +9513,14 @@ index b7a5099..907b672 100644
 +
 +    if (updated) {
 +      if (tab.isActive) {
++        const previousSpace = this.spaces_.activeId;
++        if (tab.id !== this.activeTab_) {
++          this.spaces_.noteActive(tab.id);
++        }
 +        this.setActiveTab_(tab.id);
++        if (this.spaces_.activeId !== previousSpace) {
++          this.refreshSections_();
++        }
 +      }
 +      this.fire<TabUpdated>('tab-updated', tab);
 +    }

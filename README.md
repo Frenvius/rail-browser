@@ -66,6 +66,36 @@ Native Views window (Win32 / Cocoa)
 | **Windows native** | Mica and acrylic backdrops, system-style window controls. |
 | **macOS native** | Command-key shortcuts, the macOS app menu, Keychain-backed import and the system share sheet. |
 
+## Browser automation
+
+Search for **Browser Automation** in the command bar, then enable remote
+debugging on the Chromium page that opens. Rail uses Chromium's DevTools
+Protocol and asks you to approve incoming connections. To connect the Chrome
+DevTools MCP server to the running Rail instance, configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "rail": {
+      "command": "bunx",
+      "args": [
+        "chrome-devtools-mcp@1.12.0",
+        "--autoConnect",
+        "--user-data-dir=PATH_TO_RAIL_USER_DATA"
+      ]
+    }
+  }
+}
+```
+
+Find the user data directory in `chrome://version`: it is the parent of the
+listed Profile Path. For a local Dev build it is `build/profile`. A connection
+can inspect tabs from every Rail profile in the same browser instance. Turn
+remote debugging off on `chrome://inspect/#remote-debugging` when done.
+Selecting a page with `bringToFront` also brings its Rail Space and profile
+into view. New pages open in the active Space and profile. The MCP server lists
+pages, but does not expose Rail Space or profile names as separate controls.
+
 ## Privacy
 
 Rail inherits ungoogled-chromium, which strips Google's background services

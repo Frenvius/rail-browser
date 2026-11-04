@@ -294,6 +294,8 @@ const commands: Command[] = [
   page('History', 'visited recent', 'chrome://history'),
   page('Downloads Page', 'files saved', 'chrome://downloads'),
   page('Extensions', 'addons plugins', 'chrome://extensions'),
+  page('Browser Automation', 'mcp agents remote debugging devtools',
+       'chrome://inspect/#remote-debugging'),
 ];
 
 export const COMMANDS: Command[] =
