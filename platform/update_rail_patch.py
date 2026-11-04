@@ -16,7 +16,8 @@ def file_sections(patch):
 
 def git_apply(tree, patch, files, *options):
     includes = [f'--include={name}' for name in files]
-    command = ['git', '-C', str(tree), 'apply', *options, *includes, str(patch)]
+    command = ['git', '-C', str(tree), 'apply', *options, *includes,
+               str(patch.resolve())]
     return subprocess.run(command).returncode == 0
 
 
