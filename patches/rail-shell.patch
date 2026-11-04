@@ -4800,7 +4800,7 @@ index aa5a679..f45166d 100644
    ExtensionContextMenuModel(const ExtensionContextMenuModel&) = delete;
    ExtensionContextMenuModel& operator=(const ExtensionContextMenuModel&) =
 diff --git a/chrome/browser/extensions/extension_tab_util.cc b/chrome/browser/extensions/extension_tab_util.cc
-index 71c4c9d..606fa00 100644
+index 71c4c9d..eb72c39 100644
 --- a/chrome/browser/extensions/extension_tab_util.cc
 +++ b/chrome/browser/extensions/extension_tab_util.cc
 @@ -24,6 +24,7 @@
@@ -4811,7 +4811,17 @@ index 71c4c9d..606fa00 100644
  #include "chrome/browser/extensions/window_controller_list.h"
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/browser/tab_group_sync/tab_group_sync_service_factory.h"
-@@ -645,15 +646,18 @@ bool ExtensionTabUtil::GetTabById(int tab_id,
+@@ -321,7 +322,8 @@ WindowController* ExtensionTabUtil::GetControllerInProfileWithId(
+        *WindowControllerList::GetInstance()) {
+     const Profile* controller_profile = window_controller->profile();
+     if ((controller_profile == profile ||
+-         controller_profile == incognito_profile) &&
++         controller_profile == incognito_profile ||
++         rail::WindowHoldsTabsOf(window_controller, profile)) &&
+         window_controller->GetWindowId() == window_id) {
+       return window_controller;
+     }
+@@ -645,15 +647,18 @@ bool ExtensionTabUtil::GetTabById(int tab_id,
    for (WindowController* window : *WindowControllerList::GetInstance()) {
      bool is_alive = window->GetBrowserWindowInterface() &&
                      !window->GetBrowserWindowInterface()->IsDeleteScheduled();
@@ -4835,7 +4845,7 @@ index 71c4c9d..606fa00 100644
          if (out_window) {
            *out_window = window;
          }
-@@ -777,7 +781,8 @@ bool ExtensionTabUtil::GetGroupById(
+@@ -777,7 +782,8 @@ bool ExtensionTabUtil::GetGroupById(
            : nullptr;
    for (WindowController* target_window : *WindowControllerList::GetInstance()) {
      if (target_window->profile() != profile &&
@@ -4845,7 +4855,7 @@ index 71c4c9d..606fa00 100644
        continue;
      }
      BrowserWindowInterface* target_browser =
-@@ -793,7 +798,9 @@ bool ExtensionTabUtil::GetGroupById(
+@@ -793,7 +799,9 @@ bool ExtensionTabUtil::GetGroupById(
        continue;
      }
      for (tab_groups::TabGroupId target_group : tab_list->ListTabGroups()) {
