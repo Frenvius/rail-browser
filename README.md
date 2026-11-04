@@ -68,10 +68,10 @@ Native Views window (Win32 / Cocoa)
 
 ## Browser automation
 
-Search for **Browser Automation** in the command bar, then enable remote
-debugging on the Chromium page that opens. Rail uses Chromium's DevTools
-Protocol and asks you to approve incoming connections. To connect the Chrome
-DevTools MCP server to the running Rail instance, configure your MCP client:
+Open **Settings → General → Browser Automation** and turn on **Allow local agents
+to connect**. Rail remembers the choice and asks you to approve each incoming
+connection. To connect the Chrome DevTools MCP server to the running Rail
+instance, configure your MCP client on the same computer:
 
 ```json
 {
@@ -91,7 +91,9 @@ DevTools MCP server to the running Rail instance, configure your MCP client:
 Find the user data directory in `chrome://version`: it is the parent of the
 listed Profile Path. For a local Dev build it is `build/profile`. A connection
 can inspect tabs from every Rail profile in the same browser instance. Turn
-remote debugging off on `chrome://inspect/#remote-debugging` when done.
+browser automation off in Rail Settings when done.
+If Rail was started with remote debugging flags, those launch options control
+the port independently of this setting.
 Selecting a page with `bringToFront` also brings its Rail Space and profile
 into view. New pages open in the active Space and profile. The MCP server lists
 pages, but does not expose Rail Space or profile names as separate controls.

@@ -93,6 +93,10 @@ export class RailSettingsElement extends CrLitElement {
       sidebarIconsOnly_: {type: Boolean, state: true},
       sidebarExpandOnHover_: {type: Boolean, state: true},
       themedTitlebar_: {type: Boolean, state: true},
+      browserAutomationEnabled_: {type: Boolean, state: true},
+      browserAutomationAllowed_: {type: Boolean, state: true},
+      browserAutomationLaunch_: {type: Boolean, state: true},
+      browserAutomationAddress_: {type: String, state: true},
       sidebarMediaControls_: {type: Boolean, state: true},
       autoPip_: {type: Boolean, state: true},
       autoPipPrivate_: {type: Boolean, state: true},
@@ -142,6 +146,10 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor sidebarIconsOnly_ = false;
   protected accessor sidebarExpandOnHover_ = true;
   protected accessor themedTitlebar_ = true;
+  protected accessor browserAutomationEnabled_ = false;
+  protected accessor browserAutomationAllowed_ = true;
+  protected accessor browserAutomationLaunch_ = false;
+  protected accessor browserAutomationAddress_ = '';
   protected accessor sidebarMediaControls_ = true;
   protected accessor autoPip_ = true;
   protected accessor autoPipPrivate_ = false;
@@ -254,6 +262,7 @@ export class RailSettingsElement extends CrLitElement {
     this.sidebarExpandOnHover_ =
         (await handler.getSidebarExpandOnHover()).expand;
     this.themedTitlebar_ = (await handler.getThemedTitlebar()).themed;
+    await this.loadBrowserAutomation_();
     const media = await handler.getMediaSettings();
     this.sidebarMediaControls_ = media.sidebarControls;
     this.autoPip_ = media.autoPip;
@@ -363,6 +372,22 @@ export class RailSettingsElement extends CrLitElement {
   protected onThemedTitlebarChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setThemedTitlebar(e.detail);
     this.themedTitlebar_ = e.detail;
+  }
+
+  private async loadBrowserAutomation_() {
+    const {enabled, allowed, launchedWithDebugging, address} =
+        await browserProxyFactory.getInstance().handler.getBrowserAutomation();
+    this.browserAutomationEnabled_ = enabled;
+    this.browserAutomationAllowed_ = allowed;
+    this.browserAutomationLaunch_ = launchedWithDebugging;
+    this.browserAutomationAddress_ = address;
+  }
+
+  protected onBrowserAutomationChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setBrowserAutomation(e.detail);
+    this.browserAutomationEnabled_ = e.detail;
+    this.browserAutomationAddress_ = '';
+    window.setTimeout(() => this.loadBrowserAutomation_(), 500);
   }
 
   protected onSidebarMediaControlsChange_(e: CustomEvent<boolean>) {

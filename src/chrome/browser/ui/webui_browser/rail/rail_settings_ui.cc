@@ -2,13 +2,16 @@
 
 #include <utility>
 
-#include "base/functional/bind.h"
 #include "base/base64.h"
+#include "base/command_line.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/version_info/version_info.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/devtools/features.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
@@ -37,8 +40,10 @@
 #include "chrome/grit/webui_browser_resources.h"
 #include "chrome/grit/webui_browser_resources_map.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "content/public/common/content_switches.h"
 #include "content/public/common/url_constants.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/webui/webui_util.h"
@@ -367,6 +372,32 @@ void RailSettingsUI::GetThemedTitlebar(GetThemedTitlebarCallback callback) {
 
 void RailSettingsUI::SetThemedTitlebar(bool themed) {
   rail::SetThemedTitlebar(PrefsFor(web_ui()), themed);
+}
+
+void RailSettingsUI::GetBrowserAutomation(
+    GetBrowserAutomationCallback callback) {
+  PrefService* state = g_browser_process->local_state();
+  const bool allowed =
+      base::FeatureList::IsEnabled(features::kDevToolsAcceptDebuggingConnections) &&
+      state && state->GetBoolean(prefs::kDevToolsRemoteDebuggingAllowed);
+  const bool enabled =
+      allowed && state->GetBoolean(prefs::kDevToolsRemoteDebuggingEnabled);
+  const base::CommandLine* command_line =
+      base::CommandLine::ForCurrentProcess();
+  const bool launched_with_debugging =
+      command_line->HasSwitch(switches::kRemoteDebuggingPort) ||
+      command_line->HasSwitch(switches::kRemoteDebuggingPipe);
+  std::move(callback).Run(
+      enabled, allowed, launched_with_debugging,
+      content::DevToolsAgentHost::GetRemoteDebuggingServerAddress());
+}
+
+void RailSettingsUI::SetBrowserAutomation(bool enabled) {
+  PrefService* state = g_browser_process->local_state();
+  if (base::FeatureList::IsEnabled(features::kDevToolsAcceptDebuggingConnections) &&
+      state && state->GetBoolean(prefs::kDevToolsRemoteDebuggingAllowed)) {
+    state->SetBoolean(prefs::kDevToolsRemoteDebuggingEnabled, enabled);
+  }
 }
 
 void RailSettingsUI::GetGroupOpenedLinks(

@@ -294,8 +294,13 @@ const commands: Command[] = [
   page('History', 'visited recent', 'chrome://history'),
   page('Downloads Page', 'files saved', 'chrome://downloads'),
   page('Extensions', 'addons plugins', 'chrome://extensions'),
-  page('Browser Automation', 'mcp agents remote debugging devtools',
-       'chrome://inspect/#remote-debugging'),
+  {
+    id: 'browser-automation',
+    label: 'Browser Automation',
+    hint: '',
+    keywords: 'mcp agents remote debugging devtools',
+    run: () => browserProxyFactory.getInstance().handler.openRailSettings(),
+  },
 ];
 
 export const COMMANDS: Command[] =

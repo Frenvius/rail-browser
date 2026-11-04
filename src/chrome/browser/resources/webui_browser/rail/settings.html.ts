@@ -106,6 +106,42 @@ ${this.section_ === 'general' ? html`
         @change="${this.onReopenMiniWindowsChange_}"></cr-toggle>
     </div>
   </div>
+  <h2 class="section">Browser Automation</h2>
+  <div class="group">
+    <div class="item">
+      <div class="rowtext">
+        <span id="browserAutomationLabel" class="cardtitle">
+          Allow local agents to connect
+        </span>
+        <span class="cardhint">
+          ${this.browserAutomationLaunch_ ?
+              'A launch option controls debugging. Restart Rail without it to use connection approval.' :
+              'Agents can inspect your tabs after you approve each connection. This setting stays on when Rail restarts.'}
+        </span>
+      </div>
+      <cr-toggle id="browserAutomation"
+        ?checked="${this.browserAutomationEnabled_}"
+        ?disabled="${!this.browserAutomationAllowed_}"
+        aria-labelledby="browserAutomationLabel"
+        @change="${this.onBrowserAutomationChange_}"></cr-toggle>
+    </div>
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Local connection</span>
+        <span class="cardhint" aria-live="polite">
+          ${this.browserAutomationLaunch_ ?
+            this.browserAutomationAddress_ ?
+                `Listening at ${this.browserAutomationAddress_} (launch option)` :
+                'Started by launch option' :
+            !this.browserAutomationAllowed_ ? 'Disabled by browser policy' :
+            !this.browserAutomationEnabled_ ? 'Off' :
+            this.browserAutomationAddress_ ?
+                `Listening at ${this.browserAutomationAddress_}` :
+                'Starting or unavailable'}
+        </span>
+      </div>
+    </div>
+  </div>
 ` : nothing}
 ${this.section_ === 'tabs' ? html`
   <h2 class="section">Tab Trails</h2>
