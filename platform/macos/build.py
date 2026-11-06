@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -17,6 +18,16 @@ from build import _copy_branding, _install_ublock_origin, _link_overlay
 
 def run(*command, env):
     subprocess.run([str(part) for part in command], cwd=SOURCE, env=env, check=True)
+
+
+def compile_asset_catalog(env):
+    theme = SOURCE / 'chrome' / 'app' / 'theme' / 'chromium' / 'mac'
+    with tempfile.TemporaryDirectory(prefix='rail-assets-') as tmp:
+        run('xcrun', 'actool', theme / 'Assets.xcassets', '--compile', tmp,
+            '--platform', 'macosx', '--minimum-deployment-target', '13.0',
+            '--app-icon', 'AppIcon',
+            '--output-partial-info-plist', Path(tmp) / 'partial.plist', env=env)
+        shutil.copy2(Path(tmp) / 'Assets.car', theme / 'Assets.car')
 
 
 def main():
@@ -53,6 +64,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX)
         _link_overlay(SOURCE)
         _copy_branding(SOURCE)
+        compile_asset_catalog(env)
         output.mkdir(parents=True, exist_ok=True)
         flags = output / 'args.gn'
         if args.regenerate or not flags.exists():

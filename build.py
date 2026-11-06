@@ -12,6 +12,7 @@ import sys
 import time
 import argparse
 import hashlib
+import filecmp
 import json
 import os
 import re
@@ -104,14 +105,19 @@ def _copy_branding(source_tree):
     branding_root = _ROOT_DIR / 'branding'
     if not branding_root.is_dir():
         return
+    icon_changed = False
     for current, _, files in os.walk(branding_root):
         for name in files:
             source = Path(current) / name
             target = source_tree / source.relative_to(branding_root)
             if not target.parent.is_dir():
                 raise RuntimeError('Branding target directory is missing: {}'.format(target.parent))
+            if source.suffix == '.ico' and not (target.is_file() and filecmp.cmp(source, target, shallow=False)):
+                icon_changed = True
             shutil.copy2(source, target)
             get_logger().info('Branded %s', target.relative_to(source_tree))
+    if icon_changed:
+        (source_tree / 'chrome' / 'app' / 'chrome_exe.rc').touch()
 
 
 def _is_junction(path):
