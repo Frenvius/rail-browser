@@ -4339,6 +4339,25 @@ index a805557..9250aa9 100644
  #endif
    associated_registry.AddInterface<chrome::mojom::NetworkDiagnostics>(
        base::BindRepeating(
+diff --git a/chrome/browser/devtools/chrome_devtools_manager_delegate.cc b/chrome/browser/devtools/chrome_devtools_manager_delegate.cc
+index 37a8337..fb61f35 100644
+--- a/chrome/browser/devtools/chrome_devtools_manager_delegate.cc
++++ b/chrome/browser/devtools/chrome_devtools_manager_delegate.cc
+@@ -35,6 +35,7 @@
+ #include "chrome/browser/ui/navigator/browser_navigator.h"
+ #include "chrome/browser/ui/navigator/browser_navigator_params.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_automation_painting.h"  // nogncheck
+ #include "chrome/browser/ui/webui_browser/webui_browser.h"
+ #include "chrome/browser/web_applications/proto/web_app_install_state.pb.h"
+ #include "chrome/browser/web_applications/web_app.h"
+@@ -299,5 +300,6 @@ void ChromeDevToolsManagerDelegate::HandleCommand(
+     // a repro in some test.
+     NOTREACHED();
+   }
++  rail::KeepDrivenTabPainting(channel, message);
+   it->second->HandleCommand(message, std::move(callback));
+ }
 diff --git a/chrome/browser/devtools/devtools_ui_controller.cc b/chrome/browser/devtools/devtools_ui_controller.cc
 index f2a3fe2..b53a422 100644
 --- a/chrome/browser/devtools/devtools_ui_controller.cc
@@ -11288,10 +11307,10 @@ index d4957bd..752166d 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index ffbd17c..010e143 100644
+index ffbd17c..92c5575 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,42 @@ source_set("headers") {
+@@ -13,6 +13,43 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
@@ -11301,6 +11320,7 @@ index ffbd17c..010e143 100644
 +    "rail/rail_arc_extensions.h",
 +    "rail/rail_arc_import.h",
 +    "rail/rail_arc_writer.h",
++    "rail/rail_automation_painting.h",
 +    "rail/rail_bundled_extensions.h",
 +    "rail/rail_import.h",
 +    "rail/rail_import_bookmarks.h",
@@ -11334,7 +11354,7 @@ index ffbd17c..010e143 100644
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -26,6 +62,8 @@ source_set("webui_browser") {
+@@ -26,6 +63,8 @@ source_set("webui_browser") {
      ":headers",
      "//base",
      "//chrome/browser/ui/bookmarks",
@@ -11343,7 +11363,7 @@ index ffbd17c..010e143 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -36,7 +74,9 @@ source_set("webui_browser") {
+@@ -36,7 +75,9 @@ source_set("webui_browser") {
      "//chrome/browser/ui/views/location_bar",
      "//chrome/browser/ui/views/side_panel",
      "//chrome/browser/ui/webui/cr_components/searchbox",
@@ -11353,7 +11373,7 @@ index ffbd17c..010e143 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/bookmarks",
      "//components/browser_apis/tab_drag:mojom",
-@@ -44,6 +84,7 @@ source_set("webui_browser") {
+@@ -44,6 +85,7 @@ source_set("webui_browser") {
      "//components/browser_apis/tab_strip:mojom_ui_controller",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
      "//components/guest_contents/common:mojom",
@@ -11361,7 +11381,7 @@ index ffbd17c..010e143 100644
      "//content/public/browser",
      "//ui/base/unowned_user_data",
      "//ui/color",
-@@ -57,6 +98,63 @@ source_set("impl") {
+@@ -57,6 +99,64 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -11369,6 +11389,7 @@ index ffbd17c..010e143 100644
 +    "rail/rail_arc_extensions.cc",
 +    "rail/rail_arc_import.cc",
 +    "rail/rail_arc_writer.cc",
++    "rail/rail_automation_painting.cc",
 +    "rail/rail_bundled_extensions.cc",
 +    "rail/rail_import.cc",
 +    "rail/rail_import_bookmarks.cc",
@@ -11425,7 +11446,7 @@ index ffbd17c..010e143 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -80,6 +176,27 @@ source_set("impl") {
+@@ -80,6 +178,27 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
 +    sources += [
 +      "rail/rail_acrylic_mac.cc",
@@ -11453,7 +11474,7 @@ index ffbd17c..010e143 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -89,8 +199,13 @@ source_set("impl") {
+@@ -89,8 +201,13 @@ source_set("impl") {
      "//chrome/browser/bookmarks",
      "//chrome/browser/contextual_search",
      "//chrome/browser/devtools",
@@ -11467,7 +11488,7 @@ index ffbd17c..010e143 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/resources/webui_toolbar_shared:resources",
      "//chrome/browser/themes",
-@@ -106,6 +221,7 @@ source_set("impl") {
+@@ -106,6 +223,7 @@ source_set("impl") {
      "//chrome/browser/ui/find_bar",
      "//chrome/browser/ui/fullscreen",
      "//chrome/browser/ui/location_bar",
@@ -11475,7 +11496,7 @@ index ffbd17c..010e143 100644
      "//chrome/browser/ui/side_panel",
      "//chrome/browser/ui/side_panel:side_panel_views_dependent",
      "//chrome/browser/ui/tabs:tabs_public",
-@@ -123,8 +239,12 @@ source_set("impl") {
+@@ -123,8 +241,12 @@ source_set("impl") {
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
      "//chrome/browser/ui/webui:favicon_source",
@@ -11488,7 +11509,7 @@ index ffbd17c..010e143 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +261,46 @@ source_set("impl") {
+@@ -132,13 +263,47 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
@@ -11530,12 +11551,13 @@ index ffbd17c..010e143 100644
 +    "//third_party/blink/renderer/core/rail:mojom",
 +    "//third_party/blink/renderer/core/rail:sampler",
 +    "//third_party/boringssl",
++    "//third_party/inspector_protocol:crdtp",
 +    "rail:auto_pip",
 +    "rail:buildflags",
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +321,35 @@ source_set("impl") {
+@@ -159,17 +324,35 @@ source_set("impl") {
 +      "//chrome/browser/webshare",
        "//ui/base/accelerators/global_accelerator_listener",
      ]
@@ -14736,6 +14758,87 @@ index 57fe919..3c30e24 100644
        touch_emulator->Enable(
            input::TouchEmulator::Mode::kEmulatingTouchFromMouse,
            TouchEmulationConfigurationToType(touch_emulation_configuration_));
+diff --git a/content/browser/devtools/protocol/input_handler.cc b/content/browser/devtools/protocol/input_handler.cc
+index 411d783..51e5fff 100644
+--- a/content/browser/devtools/protocol/input_handler.cc
++++ b/content/browser/devtools/protocol/input_handler.cc
+@@ -60,6 +60,32 @@ namespace content::protocol {
+
+ namespace {
+
++bool IsWithinWebContentsOf(RenderWidgetHostImpl* candidate,
++                           RenderWidgetHostImpl* widget_host) {
++  WebContentsImpl* owner =
++      WebContentsImpl::FromRenderWidgetHostImpl(widget_host);
++  for (WebContentsImpl* contents =
++           WebContentsImpl::FromRenderWidgetHostImpl(candidate);
++       contents; contents = contents->GetOuterWebContents()) {
++    if (contents == owner) {
++      return true;
++    }
++  }
++  return false;
++}
++
++void FocusPageForTextInput(RenderWidgetHostImpl* widget_host) {
++  RenderWidgetHostImpl* focused_widget =
++      widget_host->delegate()
++          ? widget_host->delegate()->GetRenderWidgetHostWithPageFocus()
++          : nullptr;
++  if (focused_widget && IsWithinWebContentsOf(focused_widget, widget_host)) {
++    focused_widget->SetPageFocus(true);
++    return;
++  }
++  widget_host->SetPageFocus(true);
++}
++
+ gfx::PointF CssPixelsToPointF(double x, double y, float scale_factor) {
+   return gfx::PointF(x * scale_factor, y * scale_factor);
+ }
+@@ -1263,7 +1289,7 @@ void InputHandler::DispatchKeyEvent(
+   if (!host_->GetParent() && widget_host->delegate()) {
+     RenderWidgetHostImpl* target_host =
+         widget_host->delegate()->GetFocusedRenderWidgetHost(widget_host);
+-    if (target_host)
++    if (target_host && IsWithinWebContentsOf(target_host, widget_host))
+       widget_host = target_host;
+   }
+
+@@ -1290,14 +1316,14 @@ void InputHandler::InsertText(const std::string& text,
+   if (!host_->GetParent() && widget_host->delegate()) {
+     RenderWidgetHostImpl* target_host =
+         widget_host->delegate()->GetFocusedRenderWidgetHost(widget_host);
+-    if (target_host)
++    if (target_host && IsWithinWebContentsOf(target_host, widget_host))
+       widget_host = target_host;
+   }
+
+   base::OnceClosure closure =
+       base::BindOnce(&InsertTextCallback::sendSuccess, std::move(callback));
+
+-  widget_host->Focus();
++  FocusPageForTextInput(widget_host);
+   widget_host->GetWidgetInputHandler()->ImeCommitText(
+       text16, std::vector<ui::ImeTextSpan>(), gfx::Range::InvalidRange(), 0,
+       /*target_dom_node_id=*/blink::DOMNodeIdType(), std::move(closure));
+@@ -1327,7 +1353,7 @@ void InputHandler::ImeSetComposition(
+   if (widget_host->delegate()) {
+     RenderWidgetHostImpl* target_host =
+         widget_host->delegate()->GetFocusedRenderWidgetHost(widget_host);
+-    if (target_host)
++    if (target_host && IsWithinWebContentsOf(target_host, widget_host))
+       widget_host = target_host;
+   }
+
+@@ -1350,7 +1376,7 @@ void InputHandler::ImeSetComposition(
+   base::OnceClosure closure = base::BindOnce(
+       &ImeSetCompositionCallback::sendSuccess, std::move(callback));
+
+-  widget_host->Focus();
++  FocusPageForTextInput(widget_host);
+
+   widget_host->GetWidgetInputHandler()->ImeSetComposition(
+       text16, std::vector<ui::ImeTextSpan>(), replacement_range,
 diff --git a/content/browser/find_request_manager.cc b/content/browser/find_request_manager.cc
 index 9fbcd51..46501da 100644
 --- a/content/browser/find_request_manager.cc
@@ -15058,7 +15161,7 @@ index 02b399d..63e6ecf 100644
  
    host()->WasShown({} /* record_tab_switch_time_request */);
 diff --git a/content/browser/web_contents/web_contents_impl.cc b/content/browser/web_contents/web_contents_impl.cc
-index c7d0fa2..8f1f12e 100644
+index c7d0fa2..ef80a3b 100644
 --- a/content/browser/web_contents/web_contents_impl.cc
 +++ b/content/browser/web_contents/web_contents_impl.cc
 @@ -3563,6 +3563,10 @@ void WebContentsImpl::DetachUnownedInnerWebContents(
@@ -15072,6 +15175,28 @@ index c7d0fa2..8f1f12e 100644
  }
  
  SurfaceEmbedConnector* WebContentsImpl::GetSurfaceEmbedConnector() const {
+@@ -5184,7 +5188,10 @@ PageVisibilityState WebContentsImpl::CalculatePageVisibilityState(
+   // "disable rendering" optimization, since it still needs to drive the video,
+   // and possibly other elements on the page like canvas, to keep the picture in
+   // picture window up to date.
+-  if (visibility == Visibility::VISIBLE || visible_capturer_count_ > 0 ||
++  const bool painting_hidden_inner_contents =
++      node_.outer_web_contents() && hidden_capturer_count_ > 0;
++  if (visibility == Visibility::VISIBLE ||
++      (visible_capturer_count_ > 0 && !painting_hidden_inner_contents) ||
+       web_contents_visible_in_vr) {
+     return PageVisibilityState::kVisible;
+   } else if ((!did_first_set_visible_ && initially_hidden_but_painting_) ||
+@@ -11238,6 +11245,9 @@ void WebContentsImpl::FocusOwningWebContents(
+     RenderWidgetHostImpl* render_widget_host) {
+   OPTIONAL_TRACE_EVENT1("content", "WebContentsImpl::FocusOwningWebContents",
+                         "render_widget_host", render_widget_host);
++  if (GetOuterWebContents() && GetVisibility() == Visibility::HIDDEN) {
++    return;
++  }
+
+   RenderWidgetHostImpl* main_frame_widget_host =
+       GetPrimaryMainFrame()->GetRenderWidgetHost();
 diff --git a/content/browser/web_contents/web_contents_view_child_frame.cc b/content/browser/web_contents/web_contents_view_child_frame.cc
 index f2f9449..cf0fff6 100644
 --- a/content/browser/web_contents/web_contents_view_child_frame.cc

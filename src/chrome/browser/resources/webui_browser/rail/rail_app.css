@@ -747,13 +747,17 @@ webui-browser-tab-strip {
 }
 
 content-region {
+  anchor-name: --rail-content-region;
   background: var(--rail-surface);
   border-radius: 8px;
   box-shadow: var(--rail-content-shadow);
   overflow: hidden;
 }
 
-content-region[hidden],
+content-region[hidden] {
+  visibility: hidden;
+}
+
 #emptyState[hidden] {
   display: none;
 }
@@ -787,12 +791,18 @@ content-region[showing-side-panel] ~ #sidePanelResizer {
   align-items: center;
   background: var(--rail-surface);
   border-radius: 8px;
+  bottom: anchor(bottom);
   box-shadow: var(--rail-content-shadow);
   display: flex;
-  flex: 1;
   flex-direction: column;
   gap: 10px;
   justify-content: center;
+  left: anchor(left);
+  position: absolute;
+  position-anchor: --rail-content-region;
+  position-visibility: always;
+  right: anchor(right);
+  top: anchor(top);
 }
 
 #emptyNewTab {

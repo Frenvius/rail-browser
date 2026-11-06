@@ -18,3 +18,7 @@ cr-tab-webview.active.docked {
 cr-tab-webview.active.docked.hiddenByDevtools {
   visibility: hidden;
 }
+
+:host([hidden]) cr-tab-webview.active {
+  visibility: hidden;
+}
