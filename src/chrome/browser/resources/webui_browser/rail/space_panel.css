@@ -6,7 +6,7 @@
  * #css_wrapper_metadata_end */
 
 :host {
-  background: var(--rail-mac-panel-background, transparent);
+  background: var(--rail-opaque-panel-background, transparent);
   border: 1px solid var(--rail-border);
   border-radius: 8px;
   color: var(--rail-text);

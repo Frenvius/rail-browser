@@ -17,7 +17,7 @@
   isolation: isolate;
   margin: 0;
   padding: 0;
-  background: var(--rail-mac-window-background, transparent);
+  background: var(--rail-opaque-window-background, transparent);
   color: var(--rail-text);
   position: relative; /* Needed for absolute positioning of controls */
   overflow: hidden;
@@ -43,7 +43,7 @@
 }
 
 #topContainer {
-  background: var(--rail-mac-chrome, var(--rail-chrome));
+  background: var(--rail-opaque-chrome, var(--rail-chrome));
   grid-row: 1;
   min-width: 0;
 }
@@ -431,7 +431,7 @@ webui-browser-tab-strip {
   display: flex;
   flex-direction: row;
   flex: 1;
-  background: var(--rail-mac-chrome, var(--rail-chrome));
+  background: var(--rail-opaque-chrome, var(--rail-chrome));
   min-height: 0;
   padding: 0 6px 6px 0;
   position: relative;

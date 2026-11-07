@@ -6,8 +6,15 @@
 #include <windows.h>
 #include <wincrypt.h>
 #else
-#include "chrome/browser/ui/webui_browser/rail/rail_import_crypto_mac.h"
 #include "crypto/aes_cbc.h"
+#endif
+
+#if BUILDFLAG(IS_MAC)
+#include "chrome/browser/ui/webui_browser/rail/rail_import_crypto_mac.h"
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+#include "chrome/browser/ui/webui_browser/rail/rail_import_keyring_linux.h"
 #endif
 
 #include <algorithm>
@@ -53,6 +60,7 @@ namespace {
 
 constexpr char kImportDatabaseTag[] = "ArcImport";
 constexpr std::string_view kV10Prefix = "v10";
+constexpr std::string_view kV11Prefix = "v11";
 constexpr std::string_view kV20Prefix = "v20";
 #if BUILDFLAG(IS_WIN)
 constexpr std::string_view kDpapiPrefix = "DPAPI";
@@ -77,6 +85,9 @@ constexpr char kCookiesLockedCountQuery[] =
 constexpr char kCookiesEncryptedCountQuery[] =
     "SELECT COUNT(*) FROM cookies WHERE length(encrypted_value) > 0 AND "
     "substr(encrypted_value, 1, 3) != CAST('v20' AS BLOB)";
+constexpr char kCookiesKeyringCountQuery[] =
+    "SELECT COUNT(*) FROM cookies WHERE substr(encrypted_value, 1, 3) = "
+    "CAST('v11' AS BLOB)";
 constexpr char kLoginsQuery[] =
     "SELECT origin_url, action_url, username_element, username_value, "
     "password_element, password_value, submit_element, signon_realm, "
@@ -95,6 +106,7 @@ struct CookieCounts {
   int total = 0;
   int locked = 0;
   int encrypted = 0;
+  int keyring = 0;
 };
 
 struct LoginIndex {
@@ -105,7 +117,10 @@ struct LoginIndex {
 using VisitTimes = std::vector<int64_t>;
 
 base::FilePath CookiesPath(const base::FilePath& profile_dir) {
-  return profile_dir.AppendASCII("Network").AppendASCII("Cookies");
+  const base::FilePath network =
+      profile_dir.AppendASCII("Network").AppendASCII("Cookies");
+  return base::PathExists(network) ? network
+                                   : profile_dir.AppendASCII("Cookies");
 }
 
 base::FilePath LoginsPath(const base::FilePath& profile_dir) {
@@ -160,8 +175,8 @@ std::optional<std::string> ReadKey(const base::FilePath& user_data) {
   return key;
 }
 
-std::optional<std::string> DecryptV10(const std::string& key,
-                                      std::string_view encrypted) {
+std::optional<std::string> DecryptValue(const std::string& key,
+                                        std::string_view encrypted) {
   if (key.size() != kKeyLength || !base::StartsWith(encrypted, kV10Prefix)) {
     return std::nullopt;
   }
@@ -180,26 +195,81 @@ std::optional<std::string> DecryptV10(const std::string& key,
   return std::string(plain->begin(), plain->end());
 }
 #else
+constexpr size_t kCbcKeyLength = 16;
+
+#if BUILDFLAG(IS_MAC)
 std::optional<std::string> ReadKey(const base::FilePath& user_data) {
   return ReadMacImportKey(user_data);
 }
+#else
+std::optional<std::string> ReadKey(const base::FilePath& user_data) {
+  constexpr std::array<uint8_t, kCbcKeyLength> kV10Key = {
+      0xfd, 0x62, 0x1f, 0xe5, 0xa2, 0xb4, 0x02, 0x53,
+      0x9d, 0xfa, 0x14, 0x7c, 0xa9, 0x27, 0x27, 0x78};
+  return std::string(kV10Key.begin(), kV10Key.end()) +
+         ReadLinuxImportKey(user_data).value_or(std::string());
+}
+#endif
 
-std::optional<std::string> DecryptV10(const std::string& key,
-                                      std::string_view encrypted) {
-  if (key.size() != 16 || !base::StartsWith(encrypted, kV10Prefix)) {
+std::optional<std::string> DecryptCbc(std::string_view key,
+                                      std::string_view body) {
+  if (key.size() != kCbcKeyLength) {
     return std::nullopt;
   }
-  constexpr std::array<uint8_t, 16> iv = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-                                          ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+  constexpr std::array<uint8_t, kCbcKeyLength> iv = {
+      ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
+      ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
   std::optional<std::vector<uint8_t>> plain = crypto::aes_cbc::Decrypt(
-      base::as_byte_span(key), iv,
-      base::as_byte_span(encrypted.substr(kV10Prefix.size())));
+      base::as_byte_span(key), iv, base::as_byte_span(body));
   if (!plain) {
     return std::nullopt;
   }
   return std::string(plain->begin(), plain->end());
 }
+
+#if BUILDFLAG(IS_MAC)
+std::optional<std::string> DecryptValue(const std::string& key,
+                                        std::string_view encrypted) {
+  if (!base::StartsWith(encrypted, kV10Prefix)) {
+    return std::nullopt;
+  }
+  return DecryptCbc(key, encrypted.substr(kV10Prefix.size()));
+}
+#else
+std::optional<std::string> DecryptValue(const std::string& key,
+                                        std::string_view encrypted) {
+  const std::string_view stored(key);
+  if (base::StartsWith(encrypted, kV10Prefix)) {
+    return DecryptCbc(stored.substr(0, kCbcKeyLength),
+                      encrypted.substr(kV10Prefix.size()));
+  }
+  if (base::StartsWith(encrypted, kV11Prefix) &&
+      stored.size() == 2 * kCbcKeyLength) {
+    return DecryptCbc(stored.substr(kCbcKeyLength),
+                      encrypted.substr(kV11Prefix.size()));
+  }
+  return std::nullopt;
+}
 #endif
+#endif
+
+bool HasKeyringKey(const std::string& key) {
+#if BUILDFLAG(IS_LINUX)
+  return key.size() == 2 * kCbcKeyLength;
+#else
+  return false;
+#endif
+}
+
+bool IsLocked(const std::string& key, std::string_view encrypted) {
+  if (encrypted.empty()) {
+    return false;
+  }
+  if (key.empty() || base::StartsWith(encrypted, kV20Prefix)) {
+    return true;
+  }
+  return base::StartsWith(encrypted, kV11Prefix) && !HasKeyringKey(key);
+}
 
 std::optional<std::string> StripHostHash(const std::string& domain,
                                          std::string plain) {
@@ -221,7 +291,7 @@ std::optional<std::string> ValueOf(sql::Statement& row,
   if (!row.ColumnString(4).empty()) {
     return std::nullopt;
   }
-  std::optional<std::string> plain = DecryptV10(key, encrypted);
+  std::optional<std::string> plain = DecryptValue(key, encrypted);
   if (!plain) {
     return std::nullopt;
   }
@@ -322,11 +392,7 @@ void ReadCookies(sql::Database& db,
     if (IsExpired(statement, now)) {
       continue;
     }
-    if (base::StartsWith(statement.ColumnString(11), kV20Prefix)) {
-      ++data.cookies_locked;
-      continue;
-    }
-    if (key.empty() && !statement.ColumnString(11).empty()) {
+    if (IsLocked(key, statement.ColumnString(11))) {
       ++data.cookies_locked;
       continue;
     }
@@ -375,7 +441,7 @@ void ReadLogins(sql::Database& db,
     if (imported.contains(ImportedLoginKey(login))) {
       continue;
     }
-    std::optional<std::string> plain = DecryptV10(key, encrypted);
+    std::optional<std::string> plain = DecryptValue(key, encrypted);
     if (!plain) {
       ++data.passwords_locked;
       continue;
@@ -522,6 +588,7 @@ CookieCounts ReadCookieCounts(const base::FilePath& source,
     counts.total = CountRows(db, kCookiesCountQuery);
     counts.locked = CountRows(db, kCookiesLockedCountQuery);
     counts.encrypted = CountRows(db, kCookiesEncryptedCountQuery);
+    counts.keyring = CountRows(db, kCookiesKeyringCountQuery);
   }
   return counts;
 }
@@ -621,9 +688,11 @@ ProfileStoreCounts CountProfileStores(const base::FilePath& user_data,
       logins.keys.begin(), logins.keys.end(), [&marks](const std::string& key) {
         return !marks.imported_logins.contains(key);
       }));
+  const bool encrypted = cookies.encrypted > 0 || passwords > 0;
+  const std::optional<std::string> key =
+      encrypted ? ReadKey(user_data) : std::nullopt;
   const bool has_key =
-      (cookies.encrypted == 0 && passwords == 0) ||
-      ReadKey(user_data).has_value();
+      !encrypted || (key && (cookies.keyring == 0 || HasKeyringKey(*key)));
   counts.cookies = cookies.total - (has_key ? 0 : cookies.encrypted);
   counts.locked_cookies = cookies.locked + (has_key ? 0 : cookies.encrypted);
   counts.passwords = has_key ? passwords : 0;

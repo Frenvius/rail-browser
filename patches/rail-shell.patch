@@ -11446,10 +11446,10 @@ index ffbd17c..92c5575 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -80,6 +178,27 @@ source_set("impl") {
+@@ -80,6 +178,37 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
 +    sources += [
-+      "rail/rail_acrylic_mac.cc",
++      "rail/rail_acrylic_fallback.cc",
 +      "rail/rail_arc_data.cc",
 +      "rail/rail_import_crypto_mac.h",
 +      "rail/rail_import_crypto_mac.mm",
@@ -11471,10 +11471,20 @@ index ffbd17c..92c5575 100644
 +    ]
 +  }
 +
++  if (is_linux) {
++    sources += [
++      "rail/rail_acrylic_fallback.cc",
++      "rail/rail_arc_data.cc",
++      "rail/rail_import_keyring_linux.cc",
++      "rail/rail_import_keyring_linux.h",
++      "rail/rail_import_sources_linux.cc",
++    ]
++  }
++
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -89,8 +201,13 @@ source_set("impl") {
+@@ -89,8 +203,13 @@ source_set("impl") {
      "//chrome/browser/bookmarks",
      "//chrome/browser/contextual_search",
      "//chrome/browser/devtools",
@@ -11488,7 +11498,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/resources/webui_toolbar_shared:resources",
      "//chrome/browser/themes",
-@@ -106,6 +223,7 @@ source_set("impl") {
+@@ -106,6 +225,7 @@ source_set("impl") {
      "//chrome/browser/ui/find_bar",
      "//chrome/browser/ui/fullscreen",
      "//chrome/browser/ui/location_bar",
@@ -11496,7 +11506,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/ui/side_panel",
      "//chrome/browser/ui/side_panel:side_panel_views_dependent",
      "//chrome/browser/ui/tabs:tabs_public",
-@@ -123,8 +241,12 @@ source_set("impl") {
+@@ -123,8 +243,12 @@ source_set("impl") {
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
      "//chrome/browser/ui/webui:favicon_source",
@@ -11509,7 +11519,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +263,47 @@ source_set("impl") {
+@@ -132,13 +265,47 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
@@ -11557,7 +11567,7 @@ index ffbd17c..92c5575 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +324,35 @@ source_set("impl") {
+@@ -159,17 +326,39 @@ source_set("impl") {
 +      "//chrome/browser/webshare",
        "//ui/base/accelerators/global_accelerator_listener",
      ]
@@ -11570,6 +11580,10 @@ index ffbd17c..92c5575 100644
 +      "//ui/compositor",
 +    ]
 +    libs = [ "runtimeobject.lib" ]
++  }
++
++  if (is_linux) {
++    deps += [ "//dbus" ]
 +  }
  }
  

@@ -7,6 +7,7 @@
 #include "base/base64.h"
 #include "base/command_line.h"
 #include "base/containers/span.h"
+#include "base/environment.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
@@ -47,18 +48,25 @@ constexpr char kDefaultFeedUrl[] =
     "https://github.com/Frenvius/rail-browser/releases/latest/download/"
 #if BUILDFLAG(IS_MAC)
     "macos-appcast.xml";
+#elif BUILDFLAG(IS_LINUX)
+    "linux-appcast.xml";
 #else
     "appcast.xml";
 #endif
 constexpr char kFeedUrlSwitch[] = "rail-update-feed-url";
+#if BUILDFLAG(IS_WIN)
 constexpr base::FilePath::CharType kDownloadHelper[] =
     FILE_PATH_LITERAL("rail_update.exe");
+#endif
 constexpr char kPublicKey[] = "rx3nRriYut1fS5rA73ajbOg7x54sJRj1jBHm4/UQcbQ=";
 constexpr char kSparkleNamespace[] =
     "http://www.andymatuschak.org/xml-namespaces/sparkle";
-#if BUILDFLAG(IS_WIN)
+#if !BUILDFLAG(IS_MAC)
 constexpr char kRailNamespace[] =
     "https://github.com/Frenvius/rail-browser/xml-namespaces/update";
+#endif
+#if BUILDFLAG(IS_LINUX)
+constexpr char kAppImageVariable[] = "APPIMAGE";
 #endif
 constexpr base::FilePath::CharType kUpdateDirectory[] =
     FILE_PATH_LITERAL("Rail Update");
@@ -72,7 +80,7 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
         sender: "Rail Updater"
         description:
           "Reads the Rail update feed to learn whether a newer release "
-          "exists."
+          "exists, and on Linux downloads the AppImage the feed names."
         trigger:
           "A minute after the browser starts, then every five hours."
         data: "None."
@@ -99,16 +107,43 @@ base::FilePath UpdateDirectory() {
   return user_data.Append(kUpdateDirectory);
 }
 
+#if BUILDFLAG(IS_LINUX)
+base::FilePath RunningAppImage() {
+  std::optional<std::string> path =
+      base::Environment::Create()->GetVar(kAppImageVariable);
+  if (!path) {
+    return base::FilePath();
+  }
+  base::FilePath appimage(*path);
+  return appimage.IsAbsolute() ? appimage : base::FilePath();
+}
+
+base::FilePath StagedAppImage(const base::FilePath& appimage) {
+  return appimage.DirName().Append("." + appimage.BaseName().value() +
+                                   ".rail-update");
+}
+
+bool InstallAppImage(const base::FilePath& staged,
+                     const base::FilePath& appimage) {
+  bool installed = base::SetPosixFilePermissions(staged, 0755) &&
+                   base::ReplaceFile(staged, appimage, nullptr);
+  if (!installed) {
+    base::DeleteFile(staged);
+  }
+  return installed;
+}
+#endif
+
 std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
   std::string prefix;
-#if BUILDFLAG(IS_WIN)
+#if !BUILDFLAG(IS_MAC)
   std::string rail_prefix;
 #endif
   if (!data_decoder::GetXmlElementNamespacePrefix(rss, kSparkleNamespace,
                                                   &prefix)) {
     return std::nullopt;
   }
-#if BUILDFLAG(IS_WIN)
+#if !BUILDFLAG(IS_MAC)
   if (!data_decoder::GetXmlElementNamespacePrefix(rss, kRailNamespace,
                                                   &rail_prefix)) {
     return std::nullopt;
@@ -135,6 +170,10 @@ std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
   if (os != "macos") {
     return std::nullopt;
   }
+#elif BUILDFLAG(IS_LINUX)
+  if (os != "linux") {
+    return std::nullopt;
+  }
 #else
   if (os != "windows") {
     return std::nullopt;
@@ -144,7 +183,7 @@ std::optional<Updater::Release> ParseRelease(const base::Value& rss) {
   Updater::Release release;
   release.version = base::Version(version_text);
   release.url = GURL(data_decoder::GetXmlElementAttribute(*enclosure, "url"));
-#if BUILDFLAG(IS_WIN)
+#if !BUILDFLAG(IS_MAC)
   release.signature = data_decoder::GetXmlElementAttribute(
       *enclosure, data_decoder::GetXmlQualifiedName(prefix, "edSignature"));
   release.release_signature = data_decoder::GetXmlElementAttribute(
@@ -195,6 +234,12 @@ bool VerifyInstaller(const base::FilePath& installer,
   return valid;
 }
 
+#if BUILDFLAG(IS_LINUX)
+bool PrepareInstaller(const base::FilePath& installer,
+                      const Updater::Release& release) {
+  return base::PathExists(installer) && VerifyInstaller(installer, release);
+}
+#else
 bool PrepareInstaller(const base::FilePath& installer,
                       const Updater::Release& release) {
   base::FilePath directory = installer.DirName();
@@ -207,7 +252,9 @@ bool PrepareInstaller(const base::FilePath& installer,
   }
   return base::PathExists(installer) && VerifyInstaller(installer, release);
 }
+#endif
 
+#if BUILDFLAG(IS_WIN)
 bool DownloadInstaller(const GURL& url,
                        const base::FilePath& installer,
                        int64_t length) {
@@ -223,15 +270,19 @@ bool DownloadInstaller(const GURL& url,
   int exit_code = -1;
   return helper.IsValid() && helper.WaitForExit(&exit_code) && exit_code == 0;
 }
+#endif
 
 class UpdaterMainParts : public ChromeBrowserMainExtraParts {
  public:
   void PostBrowserStart() override {
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_LINUX)
+    if (RunningAppImage().empty()) {
+      return;
+    }
+#endif
     if (CurrentVersion().IsValid()) {
       updater_ = std::make_unique<Updater>();
     }
-#endif
   }
 
   void PostMainMessageLoopRun() override {
@@ -294,6 +345,12 @@ void Updater::Apply() {
   relaunch_ = true;
   g_browser_process->local_state()->SetBoolean(prefs::kWasRestarted, true);
   chrome::AttemptExit();
+#elif BUILDFLAG(IS_LINUX)
+  if (!ready_version_) {
+    return;
+  }
+  base::CommandLine::ForCurrentProcess()->SetProgram(RunningAppImage());
+  chrome::AttemptRestart();
 #endif
 }
 
@@ -387,8 +444,12 @@ void Updater::OnFeedParsed(base::expected<base::Value, std::string> result) {
     return;
   }
 
+#if BUILDFLAG(IS_LINUX)
+  base::FilePath installer = StagedAppImage(RunningAppImage());
+#else
   base::FilePath installer = UpdateDirectory().AppendASCII(
       "RailSetup-" + release->version.GetString() + ".exe");
+#endif
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       base::BindOnce(&PrepareInstaller, installer, *release),
@@ -406,6 +467,19 @@ void Updater::OnInstallerPrepared(Release release,
   }
 
   SetStatus(Status::kDownloading);
+#if BUILDFLAG(IS_LINUX)
+  auto request = std::make_unique<network::ResourceRequest>();
+  request->url = release.url;
+  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  request->load_flags = net::LOAD_DISABLE_CACHE;
+  loader_ = network::SimpleURLLoader::Create(std::move(request),
+                                             kTrafficAnnotation);
+  loader_->DownloadToFile(
+      g_browser_process->shared_url_loader_factory().get(),
+      base::BindOnce(&Updater::OnAppImageDownloaded,
+                     weak_factory_.GetWeakPtr(), release),
+      installer, release.length);
+#else
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,
       {base::MayBlock(), base::WithBaseSyncPrimitives(),
@@ -415,7 +489,23 @@ void Updater::OnInstallerPrepared(Release release,
                      release.length),
       base::BindOnce(&Updater::OnDownloaded, weak_factory_.GetWeakPtr(),
                      release, installer));
+#endif
 }
+
+#if BUILDFLAG(IS_LINUX)
+void Updater::OnAppImageDownloaded(Release release, base::FilePath path) {
+  loader_.reset();
+  OnDownloaded(std::move(release), path, !path.empty());
+}
+
+void Updater::OnAppImageInstalled(Release release, bool installed) {
+  if (installed) {
+    ready_version_ = release.version.GetString();
+    ready_callbacks_.Notify(*ready_version_);
+  }
+  Finish(installed ? Status::kReady : Status::kFailed);
+}
+#endif
 
 void Updater::OnDownloaded(Release release,
                            base::FilePath installer,
@@ -434,6 +524,16 @@ void Updater::OnDownloaded(Release release,
 void Updater::OnVerified(Release release,
                          base::FilePath installer,
                          bool valid) {
+#if BUILDFLAG(IS_LINUX)
+  if (valid) {
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
+        base::BindOnce(&InstallAppImage, installer, RunningAppImage()),
+        base::BindOnce(&Updater::OnAppImageInstalled,
+                       weak_factory_.GetWeakPtr(), std::move(release)));
+    return;
+  }
+#endif
   if (valid) {
     ready_version_ = release.version.GetString();
     ready_installer_ = std::move(installer);

@@ -150,3 +150,11 @@ jobs:
         run: |
           gh workflow run macos.yml --repo $env:GITHUB_REPOSITORY --ref master -f version=$env:RAIL_VERSION
           exit $LASTEXITCODE
+
+      - name: Start Linux build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAIL_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh workflow run linux.yml --repo $env:GITHUB_REPOSITORY --ref master -f version=$env:RAIL_VERSION
+          exit $LASTEXITCODE

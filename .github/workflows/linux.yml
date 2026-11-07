@@ -1,0 +1,130 @@
+name: Linux build
+
+on:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: Parallel compile jobs
+        default: '20'
+      version:
+        description: Rail release version (empty for a development build)
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rail-builder
+  cancel-in-progress: false
+
+env:
+  RAIL_REPO_DIR: /home/rail-runner/rail/build/rail-browser
+
+jobs:
+  build:
+    runs-on: [self-hosted, rail-linux]
+    timeout-minutes: 900
+    outputs:
+      assets: ${{ steps.package.outputs.assets }}
+    steps:
+      - name: Sync shared checkout
+        shell: bash
+        env:
+          RAIL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          git diff --quiet
+          git diff --cached --quiet
+          test -f build/src/BUILD.gn
+          remote="https://github.com/$GITHUB_REPOSITORY.git"
+          git -c fetch.unpackLimit=1 fetch -q --no-tags "$remote" "$GITHUB_SHA"
+          target="$GITHUB_SHA"
+          if [[ -n "$RAIL_VERSION" ]]; then
+            [[ "$RAIL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            git -c fetch.unpackLimit=1 fetch -q --no-tags "$remote" "refs/tags/v$RAIL_VERSION"
+            target="$(git rev-parse "FETCH_HEAD^{commit}")"
+            git merge-base --is-ancestor "$target" "$GITHUB_SHA"
+          fi
+          applied="$(git rev-parse HEAD)"
+          if ! git diff --quiet "$applied" "$target" -- ungoogled-chromium patches \
+              platform/linux/patches ':(exclude)patches/rail-shell.patch'; then
+            echo "::error::patch layers below rail-shell.patch changed since $applied; prepare a fresh tree"
+            exit 1
+          fi
+          previous="$RUNNER_TEMP/applied-rail-shell.patch"
+          git show "$applied:patches/rail-shell.patch" > "$previous"
+          git checkout -q --detach "$target"
+          if ! .venv/bin/python platform/update_rail_patch.py --tree build/src \
+              --previous "$previous" --current patches/rail-shell.patch; then
+            git checkout -q --detach "$applied"
+            exit 1
+          fi
+          git -C build/src apply --reverse --check "$RAIL_REPO_DIR/patches/rail-shell.patch"
+      - name: Python environment
+        shell: bash
+        run: |
+          cd "$RAIL_REPO_DIR"
+          .venv/bin/python -m pip install --disable-pip-version-check -q -r requirements-dev.txt
+      - name: Build Rail
+        if: inputs.version == ''
+        shell: bash
+        env:
+          BUILD_JOBS: ${{ inputs.jobs }}
+        run: |
+          cd "$RAIL_REPO_DIR"
+          nice -n 10 .venv/bin/python platform/linux/build.py --regenerate -j "$BUILD_JOBS"
+      - name: Build release
+        if: inputs.version != ''
+        shell: bash
+        env:
+          BUILD_JOBS: ${{ inputs.jobs }}
+          RAIL_VERSION: ${{ inputs.version }}
+        run: |
+          cd "$RAIL_REPO_DIR"
+          nice -n 10 .venv/bin/python platform/linux/build.py --release --regenerate \
+            --rail-version "$RAIL_VERSION" -j "$BUILD_JOBS"
+      - name: Package
+        if: inputs.version != ''
+        id: package
+        shell: bash
+        env:
+          RAIL_VERSION: ${{ inputs.version }}
+          RAIL_UPDATE_ED25519_KEY: ${{ secrets.RAIL_UPDATE_ED25519_KEY }}
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          assets="$RAIL_REPO_DIR/build/release/linux/$RAIL_VERSION"
+          .venv/bin/python platform/linux/package.py --version "$RAIL_VERSION" --assets "$assets"
+          .venv/bin/python platform/windows/appcast.py --os linux \
+            --installer "$assets/Rail-$RAIL_VERSION-x86_64.AppImage" \
+            --version "$RAIL_VERSION" --repository "$GITHUB_REPOSITORY" \
+            --output "$assets/linux-appcast.xml"
+          (cd "$assets" && sha256sum Rail-*.AppImage Rail-*.tar.xz linux-appcast.xml > SHA256SUMS-linux)
+          echo "assets=$assets" >> "$GITHUB_OUTPUT"
+
+  publish:
+    if: inputs.version != ''
+    needs: build
+    runs-on: [self-hosted, rail-linux]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Attach Linux release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAIL_VERSION: ${{ inputs.version }}
+          RAIL_ASSETS: ${{ needs.build.outputs.assets }}
+        run: |
+          set -euo pipefail
+          files=(
+            "$RAIL_ASSETS/Rail-$RAIL_VERSION-x86_64.AppImage"
+            "$RAIL_ASSETS/Rail-$RAIL_VERSION-x86_64-linux.tar.xz"
+            "$RAIL_ASSETS/linux-appcast.xml"
+            "$RAIL_ASSETS/SHA256SUMS-linux"
+          )
+          for file in "${files[@]}"; do test -f "$file"; done
+          gh release view "v$RAIL_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null
+          gh release upload "v$RAIL_VERSION" "${files[@]}" --repo "$GITHUB_REPOSITORY"

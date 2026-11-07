@@ -49,6 +49,10 @@ void Finish(std::unique_ptr<WriteJob> job) {
   std::move(job->callback).Run(std::move(job->result));
 }
 
+bool ProfileShuttingDown(const WriteJob& job) {
+  return job.profile && job.profile->ShutdownStarted();
+}
+
 GURL CookieSourceOf(const net::CanonicalCookie& cookie) {
   std::string host = cookie.Domain();
   if (host.starts_with('.')) {
@@ -131,6 +135,9 @@ void OnCookiesWritten(std::unique_ptr<WriteJob> job,
 }
 
 void WriteCookies(std::unique_ptr<WriteJob> job) {
+  if (ProfileShuttingDown(*job)) {
+    return;
+  }
   if (!job->profile) {
     Finish(std::move(job));
     return;
@@ -157,6 +164,9 @@ void WriteCookies(std::unique_ptr<WriteJob> job) {
 }
 
 void WritePasswords(std::unique_ptr<WriteJob> job) {
+  if (ProfileShuttingDown(*job)) {
+    return;
+  }
   if (!job->profile) {
     Finish(std::move(job));
     return;
@@ -207,6 +217,9 @@ void WriteFavicons(WriteJob& job) {
 }
 
 void WriteHistory(std::unique_ptr<WriteJob> job) {
+  if (ProfileShuttingDown(*job)) {
+    return;
+  }
   if (!job->profile) {
     Finish(std::move(job));
     return;

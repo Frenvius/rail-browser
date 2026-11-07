@@ -86,6 +86,10 @@ class Updater {
                     base::FilePath installer,
                     bool downloaded);
   void OnVerified(Release release, base::FilePath installer, bool valid);
+#if BUILDFLAG(IS_LINUX)
+  void OnAppImageDownloaded(Release release, base::FilePath path);
+  void OnAppImageInstalled(Release release, bool installed);
+#endif
   void SetStatus(Status status);
   void Finish(Status status);
 

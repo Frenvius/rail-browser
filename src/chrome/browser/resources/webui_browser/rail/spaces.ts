@@ -1,5 +1,5 @@
 import type {Tab} from '/tab_strip_api/tab_strip_api_data_model.mojom-webui.js';
-import {isMac} from '//resources/js/platform.js';
+import {isWindows} from '//resources/js/platform.js';
 
 import type {SpaceStyle, SystemBackdropSettings} from '../browser.mojom-webui.js';
 import {SystemBackdropMaterial} from '../browser.mojom-webui.js';
@@ -128,7 +128,9 @@ export const INCOGNITO_COLOR = withStrength('#3c3c43', 0.8);
 export const MIN_STRENGTH = 5;
 export const MAX_GRADIENT_COLORS = 2;
 export const DEFAULT_MATERIAL = SystemBackdropMaterial.kMicaAlt;
-export const MAC_WINDOW_BASE = '#252932';
+export const opaqueWindow = !isWindows;
+
+export const OPAQUE_WINDOW_BASE = '#252932';
 
 const ACRYLIC_TINT_RANGE: readonly[number, number] = [0.06, 0.6];
 const ACRYLIC_LUMINOSITY_RANGE: readonly[number, number] = [0.95, 0.6];
@@ -139,7 +141,7 @@ function mix(range: readonly[number, number], t: number): number {
   return range[0] + (range[1] - range[0]) * t;
 }
 
-export function macTintWeight(strength: number): number {
+export function opaqueTintWeight(strength: number): number {
   const t = (Math.max(MIN_STRENGTH, strength) - MIN_STRENGTH) /
       (100 - MIN_STRENGTH);
   return mix([0.08, 0.55], t);
@@ -166,8 +168,9 @@ export function backdropSettings(
     material,
     tintColor: color,
     gradientColors: gradient.map(hexToArgb),
-    tintOpacity: isMac ? macTintWeight(strength) :
-                         mix(mica ? MICA_TINT_RANGE : ACRYLIC_TINT_RANGE, t),
+    tintOpacity: opaqueWindow ?
+        opaqueTintWeight(strength) :
+        mix(mica ? MICA_TINT_RANGE : ACRYLIC_TINT_RANGE, t),
     luminosityOpacity:
         mix(mica ? MICA_LUMINOSITY_RANGE : ACRYLIC_LUMINOSITY_RANGE, t),
   };
@@ -187,8 +190,8 @@ export function isLightBackdrop(settings: SystemBackdropSettings): boolean {
   const colors = [settings.tintColor, ...settings.gradientColors];
   const tint =
       colors.reduce((sum, color) => sum + luma(color), 0) / colors.length;
-  if (isMac) {
-    const base = luma(hexToArgb(MAC_WINDOW_BASE));
+  if (opaqueWindow) {
+    const base = luma(hexToArgb(OPAQUE_WINDOW_BASE));
     return base + (tint - base) * settings.tintOpacity > LIGHT_BACKDROP_LUMA;
   }
   const weight = isMicaMaterial(settings.material) ?

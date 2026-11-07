@@ -30,7 +30,7 @@ def release_message(version, payload):
     return 'rail-update\n{}\n{}'.format(version, hashlib.sha256(payload).hexdigest()).encode('ascii')
 
 
-def build_appcast(installer, version, repository, key):
+def build_appcast(installer, version, repository, key, os_name='windows'):
     if version != '.'.join(str(int(part)) for part in version.split('.')):
         raise SystemExit('version {} is not in canonical form'.format(version))
     tag = 'v' + version
@@ -41,7 +41,7 @@ def build_appcast(installer, version, repository, key):
 
     rss = ET.Element('rss', {'version': '2.0'})
     channel = ET.SubElement(rss, 'channel')
-    ET.SubElement(channel, 'title').text = 'Rail'
+    ET.SubElement(channel, 'title').text = 'Rail' if os_name == 'windows' else 'Rail for Linux'
     item = ET.SubElement(channel, 'item')
     ET.SubElement(item, 'title').text = 'Rail ' + version
     ET.SubElement(item, 'pubDate').text = email.utils.formatdate(usegmt=True)
@@ -54,7 +54,7 @@ def build_appcast(installer, version, repository, key):
             repository, tag, installer.name),
         'length': str(len(payload)),
         'type': 'application/octet-stream',
-        sparkle + 'os': 'windows',
+        sparkle + 'os': os_name,
         sparkle + 'edSignature': base64.b64encode(key.sign(payload)).decode('ascii'),
         rail + 'releaseSignature': base64.b64encode(
             key.sign(release_message(version, payload))).decode('ascii'),
@@ -70,10 +70,12 @@ def main():
     parser.add_argument('--repository', required=True)
     parser.add_argument('--key-variable', default='RAIL_UPDATE_ED25519_KEY')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--os', choices=('windows', 'linux'), default='windows')
     args = parser.parse_args()
 
     key = load_signing_key(args.key_variable)
-    args.output.write_bytes(build_appcast(args.installer, args.version, args.repository, key))
+    args.output.write_bytes(
+        build_appcast(args.installer, args.version, args.repository, key, args.os))
 
 
 if __name__ == '__main__':

@@ -718,7 +718,7 @@ export class RailSettingsElement extends CrLitElement {
         return 'Couldn\'t check for updates. Check your connection and ' +
             'try again.';
       case UpdateStatus.kUnavailable:
-        return 'Development builds don\'t update automatically.';
+        return 'This copy of Rail doesn\'t update automatically.';
       default:
         return 'Rail checks for updates automatically.';
     }
