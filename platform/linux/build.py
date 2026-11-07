@@ -30,6 +30,7 @@ def build_env():
     env.setdefault('SCCACHE_DIR', str(Path.home() / 'rail' / 'sccache'))
     env.setdefault('SCCACHE_CACHE_SIZE', '40G')
     env.setdefault('SCCACHE_IDLE_TIMEOUT', '0')
+    env.setdefault('SCCACHE_SERVER_PORT', '4227')
     env.setdefault('DEPOT_TOOLS_UPDATE', '0')
     return env
 

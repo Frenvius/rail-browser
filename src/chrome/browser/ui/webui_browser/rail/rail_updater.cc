@@ -54,7 +54,7 @@ constexpr char kDefaultFeedUrl[] =
     "appcast.xml";
 #endif
 constexpr char kFeedUrlSwitch[] = "rail-update-feed-url";
-#if BUILDFLAG(IS_WIN)
+#if !BUILDFLAG(IS_LINUX)
 constexpr base::FilePath::CharType kDownloadHelper[] =
     FILE_PATH_LITERAL("rail_update.exe");
 #endif
@@ -254,7 +254,7 @@ bool PrepareInstaller(const base::FilePath& installer,
 }
 #endif
 
-#if BUILDFLAG(IS_WIN)
+#if !BUILDFLAG(IS_LINUX)
 bool DownloadInstaller(const GURL& url,
                        const base::FilePath& installer,
                        int64_t length) {
