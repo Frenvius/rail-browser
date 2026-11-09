@@ -10,6 +10,9 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/tabs/public/tab_interface.h"
+#include "content/public/browser/web_contents.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/size.h"
 
 namespace rail {
 
@@ -27,6 +30,17 @@ resource_coordinator::TabLifecycleUnitExternal* LifecycleOf(
 bool IsDiscarded(resource_coordinator::TabLifecycleUnitExternal* lifecycle) {
   return lifecycle &&
          lifecycle->GetTabState() == mojom::LifecycleUnitState::DISCARDED;
+}
+
+void SizeLikeActiveTab(TabStripModel* model, content::WebContents* contents) {
+  content::WebContents* active = model->GetActiveWebContents();
+  if (!active || active == contents || !contents->GetSize().IsEmpty()) {
+    return;
+  }
+  const gfx::Size size = active->GetContainerBounds().size();
+  if (!size.IsEmpty()) {
+    contents->Resize(gfx::Rect(size));
+  }
 }
 
 }
@@ -95,6 +109,7 @@ void TabDiscardWatcher::OnLifecycleUnitStateChanged(
                   TabStripModel::kNoTab) {
     return;
   }
+  SizeLikeActiveTab(browser_->GetTabStripModel(), tab->GetContents());
   on_discarded_.Run(tabs_api::NodeId::FromTabHandle(tab->GetHandle()));
 }
 
