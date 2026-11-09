@@ -70,8 +70,11 @@ Native Views window (Win32 / Cocoa)
 
 Open **Settings → General → Browser Automation** and turn on **Allow local agents
 to connect**. Rail remembers the choice and asks you to approve each incoming
-connection. To connect the Chrome DevTools MCP server to the running Rail
-instance, configure your MCP client on the same computer:
+connection. Turn on **Approve connections automatically** to skip that prompt,
+for agents driven while you are away from the computer; any local program can
+then control the browser without asking. To connect the Chrome DevTools MCP
+server to the running Rail instance, configure your MCP client on the same
+computer:
 
 ```json
 {

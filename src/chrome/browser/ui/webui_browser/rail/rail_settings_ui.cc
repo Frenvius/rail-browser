@@ -27,6 +27,7 @@
 #include "url/gurl.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/webui/webui_embedding_context.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_browser_automation.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_buildflags.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_media_prefs.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_mini_window_restore.h"
@@ -389,7 +390,12 @@ void RailSettingsUI::GetBrowserAutomation(
       command_line->HasSwitch(switches::kRemoteDebuggingPipe);
   std::move(callback).Run(
       enabled, allowed, launched_with_debugging,
-      content::DevToolsAgentHost::GetRemoteDebuggingServerAddress());
+      content::DevToolsAgentHost::GetRemoteDebuggingServerAddress(),
+      rail::GetApproveConnectionsAutomatically());
+}
+
+void RailSettingsUI::SetApproveAutomationConnections(bool approve) {
+  rail::SetApproveConnectionsAutomatically(approve);
 }
 
 void RailSettingsUI::SetBrowserAutomation(bool enabled) {

@@ -86,6 +86,7 @@ class RailSettingsUI : public TopChromeWebUIController,
   void SetThemedTitlebar(bool themed) override;
   void GetBrowserAutomation(GetBrowserAutomationCallback callback) override;
   void SetBrowserAutomation(bool enabled) override;
+  void SetApproveAutomationConnections(bool approve) override;
   void GetGroupOpenedLinks(GetGroupOpenedLinksCallback callback) override;
   void SetGroupOpenedLinks(bool grouped) override;
   void GetReopenMiniWindows(GetReopenMiniWindowsCallback callback) override;

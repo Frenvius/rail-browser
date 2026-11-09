@@ -127,6 +127,22 @@ ${this.section_ === 'general' ? html`
     </div>
     <div class="item">
       <div class="rowtext">
+        <span id="browserAutomationAutoApproveLabel" class="cardtitle">
+          Approve connections automatically
+        </span>
+        <span class="cardhint">
+          Skips the approval prompt, so agents work while you are away. Any program on this computer can then control your tabs.
+        </span>
+      </div>
+      <cr-toggle id="browserAutomationAutoApprove"
+        ?checked="${this.browserAutomationAutoApprove_}"
+        ?disabled="${!this.browserAutomationAllowed_ ||
+            this.browserAutomationLaunch_}"
+        aria-labelledby="browserAutomationAutoApproveLabel"
+        @change="${this.onBrowserAutomationAutoApproveChange_}"></cr-toggle>
+    </div>
+    <div class="item">
+      <div class="rowtext">
         <span class="cardtitle">Local connection</span>
         <span class="cardhint" aria-live="polite">
           ${this.browserAutomationLaunch_ ?

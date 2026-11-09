@@ -97,6 +97,7 @@ export class RailSettingsElement extends CrLitElement {
       browserAutomationAllowed_: {type: Boolean, state: true},
       browserAutomationLaunch_: {type: Boolean, state: true},
       browserAutomationAddress_: {type: String, state: true},
+      browserAutomationAutoApprove_: {type: Boolean, state: true},
       sidebarMediaControls_: {type: Boolean, state: true},
       autoPip_: {type: Boolean, state: true},
       autoPipPrivate_: {type: Boolean, state: true},
@@ -150,6 +151,7 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor browserAutomationAllowed_ = true;
   protected accessor browserAutomationLaunch_ = false;
   protected accessor browserAutomationAddress_ = '';
+  protected accessor browserAutomationAutoApprove_ = false;
   protected accessor sidebarMediaControls_ = true;
   protected accessor autoPip_ = true;
   protected accessor autoPipPrivate_ = false;
@@ -375,12 +377,14 @@ export class RailSettingsElement extends CrLitElement {
   }
 
   private async loadBrowserAutomation_() {
-    const {enabled, allowed, launchedWithDebugging, address} =
+    const {enabled, allowed, launchedWithDebugging, address,
+           approveAutomatically} =
         await browserProxyFactory.getInstance().handler.getBrowserAutomation();
     this.browserAutomationEnabled_ = enabled;
     this.browserAutomationAllowed_ = allowed;
     this.browserAutomationLaunch_ = launchedWithDebugging;
     this.browserAutomationAddress_ = address;
+    this.browserAutomationAutoApprove_ = approveAutomatically;
   }
 
   protected onBrowserAutomationChange_(e: CustomEvent<boolean>) {
@@ -388,6 +392,12 @@ export class RailSettingsElement extends CrLitElement {
     this.browserAutomationEnabled_ = e.detail;
     this.browserAutomationAddress_ = '';
     window.setTimeout(() => this.loadBrowserAutomation_(), 500);
+  }
+
+  protected onBrowserAutomationAutoApproveChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setApproveAutomationConnections(
+        e.detail);
+    this.browserAutomationAutoApprove_ = e.detail;
   }
 
   protected onSidebarMediaControlsChange_(e: CustomEvent<boolean>) {

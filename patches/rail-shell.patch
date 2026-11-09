@@ -4340,24 +4340,37 @@ index a805557..9250aa9 100644
    associated_registry.AddInterface<chrome::mojom::NetworkDiagnostics>(
        base::BindRepeating(
 diff --git a/chrome/browser/devtools/chrome_devtools_manager_delegate.cc b/chrome/browser/devtools/chrome_devtools_manager_delegate.cc
-index 37a8337..fb61f35 100644
+index 37a8337..c862e5f 100644
 --- a/chrome/browser/devtools/chrome_devtools_manager_delegate.cc
 +++ b/chrome/browser/devtools/chrome_devtools_manager_delegate.cc
-@@ -35,6 +35,7 @@
+@@ -35,6 +35,8 @@
  #include "chrome/browser/ui/navigator/browser_navigator.h"
  #include "chrome/browser/ui/navigator/browser_navigator_params.h"
  #include "chrome/browser/ui/tabs/tab_strip_model.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_automation_painting.h"  // nogncheck
++#include "chrome/browser/ui/webui_browser/rail/rail_browser_automation.h"  // nogncheck
  #include "chrome/browser/ui/webui_browser/webui_browser.h"
  #include "chrome/browser/web_applications/proto/web_app_install_state.pb.h"
  #include "chrome/browser/web_applications/web_app.h"
-@@ -299,5 +300,6 @@ void ChromeDevToolsManagerDelegate::HandleCommand(
+@@ -299,5 +301,6 @@ void ChromeDevToolsManagerDelegate::HandleCommand(
      // a repro in some test.
      NOTREACHED();
    }
 +  rail::KeepDrivenTabPainting(channel, message);
    it->second->HandleCommand(message, std::move(callback));
  }
+@@ -540,6 +543,11 @@ void ChromeDevToolsManagerDelegate::AcceptDebugging(AcceptCallback callback) {
+         std::move(inner_callback).Run(result);
+       },
+       std::move(callback));
++  if (rail::GetApproveConnectionsAutomatically()) {
++    std::move(wrapped_callback)
++        .Run(content::DevToolsManagerDelegate::AcceptConnectionResult::kAllow);
++    return;
++  }
+   Profile* profile = Profile::FromBrowserContext(GetDefaultBrowserContext());
+   ProfileBrowserCollection* collection =
+       profile ? ProfileBrowserCollection::GetForProfile(profile) : nullptr;
 diff --git a/chrome/browser/devtools/devtools_ui_controller.cc b/chrome/browser/devtools/devtools_ui_controller.cc
 index f2a3fe2..b53a422 100644
 --- a/chrome/browser/devtools/devtools_ui_controller.cc
@@ -4960,28 +4973,30 @@ index dfb3bab..7d63026 100644
                                      ? WindowOpenDisposition::NEW_FOREGROUND_TAB
                                      : WindowOpenDisposition::NEW_BACKGROUND_TAB;
 diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
-index 65facca..3aa8fda 100644
+index 65facca..53339c4 100644
 --- a/chrome/browser/prefs/browser_prefs.cc
 +++ b/chrome/browser/prefs/browser_prefs.cc
-@@ -94,6 +94,9 @@
+@@ -94,6 +94,10 @@
  #include "chrome/browser/ui/safety_hub/safety_hub_prefs.h"
  #include "chrome/browser/ui/tabs/organizer/organizer_prefs.h"
  #include "chrome/browser/ui/tabs/tab_strip_prefs.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_browser_automation.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
  #include "chrome/browser/ui/toolbar/chrome_labs/chrome_labs_prefs.h"
  #include "chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.h"
  #include "chrome/browser/ui/toolbar/toolbar_pref_names.h"
-@@ -1466,6 +1469,7 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
+@@ -1466,6 +1470,8 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
    ProfileAttributesStorage::RegisterPrefs(registry);
    ProfileNetworkContextService::RegisterLocalStatePrefs(registry);
    profiles::RegisterPrefs(registry);
++  rail::RegisterBrowserAutomationLocalStatePrefs(registry);
 +  rail::RegisterUpdaterLocalStatePrefs(registry);
    feature_engagement::RegisterLocalStatePrefs(registry);
  #if BUILDFLAG(IS_ANDROID)
    PushMessagingServiceImpl::RegisterPrefs(registry);
-@@ -1758,6 +1760,8 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
+@@ -1758,6 +1762,8 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
    ChromeLocationBarModelDelegate::RegisterProfilePrefs(registry);
    content_settings::CookieSettings::RegisterProfilePrefs(registry);
    ChromeVersionService::RegisterProfilePrefs(registry);
@@ -11307,10 +11322,10 @@ index d4957bd..752166d 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index ffbd17c..92c5575 100644
+index ffbd17c..296cff8 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
-@@ -13,6 +13,43 @@ source_set("headers") {
+@@ -13,6 +13,44 @@ source_set("headers") {
  source_set("webui_browser") {
    sources = [
      "browser_elements_webui_browser.h",
@@ -11321,6 +11336,7 @@ index ffbd17c..92c5575 100644
 +    "rail/rail_arc_import.h",
 +    "rail/rail_arc_writer.h",
 +    "rail/rail_automation_painting.h",
++    "rail/rail_browser_automation.h",
 +    "rail/rail_bundled_extensions.h",
 +    "rail/rail_import.h",
 +    "rail/rail_import_bookmarks.h",
@@ -11354,7 +11370,7 @@ index ffbd17c..92c5575 100644
      "find_bar_owner_webui_browser.h",
      "webui_browser_exclusive_access_context.h",
      "webui_browser_side_panel_ui.h",
-@@ -26,6 +63,8 @@ source_set("webui_browser") {
+@@ -26,6 +64,8 @@ source_set("webui_browser") {
      ":headers",
      "//base",
      "//chrome/browser/ui/bookmarks",
@@ -11363,7 +11379,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/ui/exclusive_access",
      "//chrome/browser/ui/location_bar",
      "//chrome/browser/ui/side_panel",
-@@ -36,7 +75,9 @@ source_set("webui_browser") {
+@@ -36,7 +76,9 @@ source_set("webui_browser") {
      "//chrome/browser/ui/views/location_bar",
      "//chrome/browser/ui/views/side_panel",
      "//chrome/browser/ui/webui/cr_components/searchbox",
@@ -11373,7 +11389,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/ui/webui/webui_toolbar",
      "//components/browser_apis/bookmarks",
      "//components/browser_apis/tab_drag:mojom",
-@@ -44,6 +85,7 @@ source_set("webui_browser") {
+@@ -44,6 +86,7 @@ source_set("webui_browser") {
      "//components/browser_apis/tab_strip:mojom_ui_controller",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
      "//components/guest_contents/common:mojom",
@@ -11381,7 +11397,7 @@ index ffbd17c..92c5575 100644
      "//content/public/browser",
      "//ui/base/unowned_user_data",
      "//ui/color",
-@@ -57,6 +99,64 @@ source_set("impl") {
+@@ -57,6 +100,65 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -11390,6 +11406,7 @@ index ffbd17c..92c5575 100644
 +    "rail/rail_arc_import.cc",
 +    "rail/rail_arc_writer.cc",
 +    "rail/rail_automation_painting.cc",
++    "rail/rail_browser_automation.cc",
 +    "rail/rail_bundled_extensions.cc",
 +    "rail/rail_import.cc",
 +    "rail/rail_import_bookmarks.cc",
@@ -11446,7 +11463,7 @@ index ffbd17c..92c5575 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -80,6 +178,37 @@ source_set("impl") {
+@@ -80,6 +180,37 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
 +    sources += [
 +      "rail/rail_acrylic_fallback.cc",
@@ -11484,7 +11501,7 @@ index ffbd17c..92c5575 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -89,8 +203,13 @@ source_set("impl") {
+@@ -89,8 +205,13 @@ source_set("impl") {
      "//chrome/browser/bookmarks",
      "//chrome/browser/contextual_search",
      "//chrome/browser/devtools",
@@ -11498,7 +11515,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/resources/webui_toolbar_shared:resources",
      "//chrome/browser/themes",
-@@ -106,6 +225,7 @@ source_set("impl") {
+@@ -106,6 +227,7 @@ source_set("impl") {
      "//chrome/browser/ui/find_bar",
      "//chrome/browser/ui/fullscreen",
      "//chrome/browser/ui/location_bar",
@@ -11506,7 +11523,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/ui/side_panel",
      "//chrome/browser/ui/side_panel:side_panel_views_dependent",
      "//chrome/browser/ui/tabs:tabs_public",
-@@ -123,8 +243,12 @@ source_set("impl") {
+@@ -123,8 +245,12 @@ source_set("impl") {
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
      "//chrome/browser/ui/webui:favicon_source",
@@ -11519,7 +11536,7 @@ index ffbd17c..92c5575 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +265,47 @@ source_set("impl") {
+@@ -132,13 +267,47 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
@@ -11567,7 +11584,7 @@ index ffbd17c..92c5575 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +326,39 @@ source_set("impl") {
+@@ -159,17 +328,39 @@ source_set("impl") {
 +      "//chrome/browser/webshare",
        "//ui/base/accelerators/global_accelerator_listener",
      ]

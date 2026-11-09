@@ -89,9 +89,12 @@ interface PageHandler {
   SetThemedTitlebar(bool themed);
 
   GetBrowserAutomation() => (bool enabled, bool allowed,
-                             bool launched_with_debugging, string address);
+                             bool launched_with_debugging, string address,
+                             bool approve_automatically);
 
   SetBrowserAutomation(bool enabled);
+
+  SetApproveAutomationConnections(bool approve);
 
   GetGroupOpenedLinks() => (bool grouped);
 
