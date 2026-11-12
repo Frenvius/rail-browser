@@ -1,5 +1,6 @@
 /build
 /.venv
 __pycache__/
+node_modules/
 /.gcs_entries
 *.log

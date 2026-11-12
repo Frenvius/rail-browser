@@ -143,7 +143,7 @@ void RailCommandUI::CreatePageHandler(
 Profile* RailCommandUI::CurrentProfile() {
   WebUIBrowserWindow* window = WindowFor(web_ui());
   Profile* profile =
-      window ? ProfileForNewTab(window->browser(), nullptr) : nullptr;
+      window ? ProfileForNewTab(window->browser()) : nullptr;
   return profile ? profile : Profile::FromWebUI(web_ui());
 }
 

@@ -98,8 +98,33 @@ browser automation off in Rail Settings when done.
 If Rail was started with remote debugging flags, those launch options control
 the port independently of this setting.
 Selecting a page with `bringToFront` also brings its Rail Space and profile
-into view. New pages open in the active Space and profile. The MCP server lists
-pages, but does not expose Rail Space or profile names as separate controls.
+into view. New pages open in the active Space and profile.
+
+The stock server lists pages but knows nothing about Spaces. `tools/rail-mcp`
+in this repository is the same server with Spaces added: `list_spaces`,
+`select_space` to switch the window to a Space, a `space` label and filter on
+`list_pages`, and a `space` argument on `new_page` that opens the tab with
+that Space's cookies and logins. Every other tool and flag is unchanged. Run `bun install` in `tools/rail-mcp` once, then point the
+MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "rail": {
+      "command": "bun",
+      "args": [
+        "run",
+        "PATH_TO_RAIL_CHECKOUT/tools/rail-mcp/src/main.ts",
+        "--autoConnect",
+        "--user-data-dir=PATH_TO_RAIL_USER_DATA"
+      ]
+    }
+  }
+}
+```
+
+Sleeping tabs are not loaded, so they are not listed as pages until you open
+them in the browser.
 
 ## Privacy
 

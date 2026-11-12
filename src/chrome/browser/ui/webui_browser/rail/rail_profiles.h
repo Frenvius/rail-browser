@@ -11,6 +11,7 @@
 class BrowserWindowInterface;
 class GURL;
 class Profile;
+struct NavigateParams;
 
 namespace content {
 class WebContents;
@@ -47,6 +48,11 @@ void CreateTabInProfile(BrowserWindowInterface* browser,
                         const GURL& url,
                         TabCreatedCallback callback);
 
+void CreateBackgroundTabInProfile(BrowserWindowInterface* browser,
+                                  const std::string& profile_id,
+                                  const GURL& url,
+                                  TabCreatedCallback callback);
+
 void MoveTabToProfile(BrowserWindowInterface* browser,
                       const tabs_api::NodeId& tab_id,
                       const std::string& profile_id,
@@ -59,8 +65,10 @@ void SetActiveProfile(BrowserWindowInterface* browser, Profile* profile);
 
 void ForgetActiveProfile(BrowserWindowInterface* browser);
 
-Profile* ProfileForNewTab(BrowserWindowInterface* browser,
-                          content::WebContents* source);
+Profile* ProfileForNewTab(BrowserWindowInterface* browser);
+
+Profile* ProfileForNavigation(BrowserWindowInterface* browser,
+                              const NavigateParams& params);
 
 BrowserWindowInterface* WindowHostingProfile(Profile* profile);
 

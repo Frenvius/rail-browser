@@ -5052,7 +5052,7 @@ index 6f872ee..aa86f39 100644
      FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
                                          discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index 8b36341..0ca792d 100644
+index 8b36341..e687188 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,18 @@ assert(!is_android)
@@ -5075,11 +5075,12 @@ index 8b36341..0ca792d 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,65 @@ build_webui("build") {
+@@ -27,6 +38,66 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
 +    "rail/active_profile.ts",
++    "rail/automation.ts",
 +    "rail/command.html.ts",
 +    "rail/command.ts",
 +    "rail/command_registry.ts",
@@ -5141,7 +5142,7 @@ index 8b36341..0ca792d 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -54,6 +124,22 @@ build_webui("build") {
+@@ -54,6 +125,22 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -5164,7 +5165,7 @@ index 8b36341..0ca792d 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -67,7 +153,15 @@ build_webui("build") {
+@@ -67,7 +154,15 @@ build_webui("build") {
      # reference import issue.
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
@@ -5180,7 +5181,7 @@ index 8b36341..0ca792d 100644
      "$root_gen_dir/components/browser_apis/bookmarks/bookmarks_api.mojom-webui.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/node_id_converter.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/tab_strip_api_types.mojom-converters.ts",
-@@ -79,4 +173,5 @@ build_webui("build") {
+@@ -79,4 +174,5 @@ build_webui("build") {
    mojo_files_deps = [
 +    "//chrome/browser/ui/webui/downloads:mojo_bindings_ts__generator",
      "//chrome/browser/ui/webui_browser:browser_mojo_bindings_ts__generator",
@@ -6945,7 +6946,7 @@ index a15445b..df17256 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..907b672 100644
+index b7a5099..bdd5a4f 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,10 @@
@@ -6959,7 +6960,7 @@ index b7a5099..907b672 100644
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -11,24 +14,57 @@ import '//resources/cr_elements/icons.html.js';
+@@ -11,24 +14,58 @@ import '//resources/cr_elements/icons.html.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
@@ -6980,6 +6981,7 @@ index b7a5099..907b672 100644
 -import type {DropTargetInterface, DropTargetRegistrationRemote as DropTargetRegistrationRemoteType, TabDragServiceRemote} from '../tab_drag_api.mojom-webui.js';
 +import type {SpaceStyle, SystemBackdropMaterial} from '../browser.mojom-webui.js';
 +import {browserProxyFactory} from '../browser.mojom-webui.js';
++import {exposeAutomation} from '../rail/automation.js';
 +import type {ImportSite} from '../rail/import_merge.js';
 +import {importSiteOf} from '../rail/import_merge.js';
 +import {Folders} from '../rail/folders.js';
@@ -7025,7 +7027,7 @@ index b7a5099..907b672 100644
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-@@ -40,6 +73,8 @@ export interface TabStripElement {
+@@ -40,6 +74,8 @@ export interface TabStripElement {
    };
  }
  
@@ -7034,7 +7036,7 @@ index b7a5099..907b672 100644
  class TabStripItemFactory {
    static create(child: Container): TabStripItem|null {
      const data = child.data;
-@@ -67,8 +102,8 @@ class TabStripItemFactory {
+@@ -67,8 +103,8 @@ class TabStripItemFactory {
    }
  }
  
@@ -7045,7 +7047,7 @@ index b7a5099..907b672 100644
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -86,6 +121,42 @@ export class TabStripElement extends CrLitElement implements
+@@ -86,6 +122,42 @@ export class TabStripElement extends CrLitElement implements
        items_: {
          type: Array,
        },
@@ -7088,7 +7090,7 @@ index b7a5099..907b672 100644
        activeTab_: {
          type: String,
          state: true,
-@@ -95,32 +166,130 @@ export class TabStripElement extends CrLitElement implements
+@@ -95,32 +167,130 @@ export class TabStripElement extends CrLitElement implements
          reflect: true,
          attribute: 'drag-in-progress',
        },
@@ -7229,7 +7231,7 @@ index b7a5099..907b672 100644
    }
  
    override connectedCallback() {
-@@ -128,11 +297,33 @@ export class TabStripElement extends CrLitElement implements
+@@ -128,11 +298,39 @@ export class TabStripElement extends CrLitElement implements
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -7243,6 +7245,12 @@ index b7a5099..907b672 100644
 +    this.tabSleep_.start();
 +    if (!INCOGNITO && !MINI) {
 +      this.tabArchive_.start();
++    }
++    if (!MINI) {
++      exposeAutomation(this.spaces_, {
++        refresh: () => this.refreshSections_(),
++        select: id => this.selectSpace_(id),
++      });
 +    }
    }
 +
@@ -7263,7 +7271,7 @@ index b7a5099..907b672 100644
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -154,6 +345,125 @@ export class TabStripElement extends CrLitElement implements
+@@ -154,6 +352,125 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -7389,7 +7397,7 @@ index b7a5099..907b672 100644
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -175,18 +464,8 @@ export class TabStripElement extends CrLitElement implements
+@@ -175,18 +471,8 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -7410,7 +7418,7 @@ index b7a5099..907b672 100644
    }
  
  
-@@ -194,14 +473,39 @@ export class TabStripElement extends CrLitElement implements
+@@ -194,14 +480,39 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -7451,7 +7459,7 @@ index b7a5099..907b672 100644
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -209,6 +513,12 @@ export class TabStripElement extends CrLitElement implements
+@@ -209,6 +520,12 @@ export class TabStripElement extends CrLitElement implements
      this.dragDelegate_.onUpdate();
    }
 
@@ -7464,7 +7472,7 @@ index b7a5099..907b672 100644
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
 
-@@ -217,48 +527,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -217,48 +534,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7518,7 +7526,7 @@ index b7a5099..907b672 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +585,2369 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +592,2369 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -10282,7 +10290,7 @@ index 276016b..060b5f4 100644
    // result in closing this Browser. This can happen in the case of closing
    // the last Browser with ongoing downloads.
 diff --git a/chrome/browser/ui/browser_command_controller.cc b/chrome/browser/ui/browser_command_controller.cc
-index 2bf5b0a..56dc716 100644
+index 2bf5b0a..52a92c0 100644
 --- a/chrome/browser/ui/browser_command_controller.cc
 +++ b/chrome/browser/ui/browser_command_controller.cc
 @@ -100,6 +100,7 @@
@@ -10298,7 +10306,7 @@ index 2bf5b0a..56dc716 100644
        break;
      case IDC_NEW_INCOGNITO_WINDOW:
 -      NewIncognitoWindow(profile());
-+      NewIncognitoWindow(rail::ProfileForNewTab(browser_, nullptr));
++      NewIncognitoWindow(rail::ProfileForNewTab(browser_));
        break;
      case IDC_NEW_ISOLATED_WINDOW:
        NewIncognitoWindow(profile());
@@ -10697,7 +10705,7 @@ index 812ea8e..30c42ad 100644
      "//components/captive_portal/content",
      "//components/captive_portal/core:buildflags",
 diff --git a/chrome/browser/ui/navigator/browser_navigator.cc b/chrome/browser/ui/navigator/browser_navigator.cc
-index 5029e26..9b79219 100644
+index 5029e26..48a61f4 100644
 --- a/chrome/browser/ui/navigator/browser_navigator.cc
 +++ b/chrome/browser/ui/navigator/browser_navigator.cc
 @@ -50,6 +50,8 @@
@@ -10734,7 +10742,7 @@ index 5029e26..9b79219 100644
    // will stay in the same BrowsingInstance (creating frame proxies as needed)
    // preserving the requested opener relationship along the way.
 +  Profile* const target_profile =
-+      rail::ProfileForNewTab(params.browser, params.source_contents);
++      rail::ProfileForNavigation(params.browser, params);
 +
    scoped_refptr<content::SiteInstance> initial_site_instance_for_new_contents =
        params.opener ? params.opener->GetSiteInstance()
@@ -10749,7 +10757,7 @@ index 5029e26..9b79219 100644
    if (params.opener) {
      create_params.opener_id = params.opener->GetGlobalId();
 diff --git a/chrome/browser/ui/navigator/browser_navigator_params_utils.cc b/chrome/browser/ui/navigator/browser_navigator_params_utils.cc
-index 448853f..c4185f9 100644
+index 448853f..78ad2e3 100644
 --- a/chrome/browser/ui/navigator/browser_navigator_params_utils.cc
 +++ b/chrome/browser/ui/navigator/browser_navigator_params_utils.cc
 @@ -13,6 +13,7 @@
@@ -10765,7 +10773,7 @@ index 448853f..c4185f9 100644
    }
  
 +  Profile* const target_profile =
-+      rail::ProfileForNewTab(browser, params.source_contents);
++      rail::ProfileForNavigation(browser, params);
 +
    // If there are several matches: prefer the active tab by starting there.
    int start_index = std::max(0, tab_list->GetActiveIndex());
@@ -11625,7 +11633,7 @@ index ffbd17c..296cff8 100644
    ]
    webui_module_path = "/"
 diff --git a/chrome/browser/ui/webui_browser/browser.mojom b/chrome/browser/ui/webui_browser/browser.mojom
-index 7e0800a..9c13de2 100644
+index 7e0800a..383550e 100644
 --- a/chrome/browser/ui/webui_browser/browser.mojom
 +++ b/chrome/browser/ui/webui_browser/browser.mojom
 @@ -4,9 +4,13 @@
@@ -11784,7 +11792,7 @@ index 7e0800a..9c13de2 100644
  
    // Load TabSearch in a guest contents and returns the guest id.
    LoadTabSearch() => (mojo_base.mojom.UnguessableToken guest_id);
-@@ -93,6 +204,116 @@ interface PageHandler {
+@@ -93,6 +204,121 @@ interface PageHandler {
  
    // How far to offset tab strip to avoid overlapping with the caption buttons.
    GetTabStripInset() => (int32 width);
@@ -11812,6 +11820,11 @@ index 7e0800a..9c13de2 100644
 +
 +  CreateTabInProfile(string profile_id, url.mojom.Url? url)
 +      => (tabs_api.mojom.NodeId? id);
++
++  CreateBackgroundTabInProfile(string profile_id, url.mojom.Url url)
++      => (tabs_api.mojom.NodeId? id);
++
++  GetTabTargetId(tabs_api.mojom.NodeId id) => (string target_id);
 +
 +  MoveTabToProfile(tabs_api.mojom.NodeId id, string profile_id)
 +      => (tabs_api.mojom.NodeId? id);
@@ -12095,7 +12108,7 @@ index 5e6d29d..c551fcc 100644
    base::CallbackListSubscription location_icon_moved_subscription_;
  };
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
-index cb0e145..295c6a2 100644
+index cb0e145..4ee3614 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.cc
 @@ -12,6 +12,8 @@
@@ -12107,11 +12120,12 @@ index cb0e145..295c6a2 100644
  #include "chrome/browser/ui/browser_element_identifiers.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
-@@ -27,12 +29,31 @@
+@@ -27,12 +29,32 @@
  #include "chrome/browser/ui/views/profiles/profile_menu_coordinator.h"
  #include "chrome/browser/ui/views/tab_search_bubble_host.h"
  #include "chrome/browser/ui/views/toolbar/app_menu.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_accelerators.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_browser_automation.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_default_browser.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_drag_ghost.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_import_ui.h"
@@ -12139,7 +12153,7 @@ index cb0e145..295c6a2 100644
  #include "components/vector_icons/vector_icons.h"
  #include "content/public/browser/devtools_agent_host.h"
  #include "content/public/browser/navigation_controller.h"
-@@ -41,6 +62,7 @@
+@@ -41,6 +63,7 @@
  #include "ui/base/interaction/element_tracker.h"
  #include "ui/base/ui_base_features.h"
  #include "ui/gfx/vector_icon_types.h"
@@ -12147,7 +12161,7 @@ index cb0e145..295c6a2 100644
  #include "ui/views/controls/menu/menu_model_adapter.h"
  #include "ui/views/controls/menu/menu_runner.h"
  #include "ui/views/interaction/element_tracker_views.h"
-@@ -198,19 +220,20 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
+@@ -198,19 +221,20 @@ void WebUIBrowserPageHandler::GetGuestIdForTabId(
      tab = maybe_tab_handle->Get();
    }
 
@@ -12172,7 +12186,7 @@ index cb0e145..295c6a2 100644
 
    guest_contents::GuestContentsHandle::CreateForWebContents(tab_contents);
    auto* guest_handle =
-@@ -240,21 +263,24 @@ void WebUIBrowserPageHandler::ShowTabSearchBubble(
+@@ -240,21 +264,24 @@ void WebUIBrowserPageHandler::ShowTabSearchBubble(
 
  void WebUIBrowserPageHandler::OpenAppMenu() {
    menu_.reset();
@@ -12200,7 +12214,7 @@ index cb0e145..295c6a2 100644
  }
 
  void WebUIBrowserPageHandler::OpenProfileMenu() {
-@@ -271,30 +297,171 @@ void WebUIBrowserPageHandler::LaunchDevToolsForBrowser() {
+@@ -271,30 +298,171 @@ void WebUIBrowserPageHandler::LaunchDevToolsForBrowser() {
  }
 
  void WebUIBrowserPageHandler::OnSidePanelClosed() {
@@ -12377,7 +12391,7 @@ index cb0e145..295c6a2 100644
    content::WebContents* web_contents =
        GetBrowser()->GetTabStripModel()->GetActiveWebContents();
    if (!web_contents) {
-@@ -314,12 +481,19 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
+@@ -314,12 +482,19 @@ void WebUIBrowserPageHandler::ShowBackForwardMenu(bool is_back) {
                              : BackForwardMenuModel::ModelType::kForward);
    back_forward_menu_model_adapter_ =
        std::make_unique<views::MenuModelAdapter>(back_forward_menu_model_.get());
@@ -12400,7 +12414,7 @@ index cb0e145..295c6a2 100644
  }
  
  // static
-@@ -337,6 +511,420 @@ void WebUIBrowserPageHandler::GetTabStripInset(
+@@ -337,6 +512,434 @@ void WebUIBrowserPageHandler::GetTabStripInset(
    std::move(callback).Run(GetTabStripInsetWidth());
  }
  
@@ -12643,6 +12657,20 @@ index cb0e145..295c6a2 100644
 +                           base::BindOnce(&ReplyWithTab, std::move(callback)));
 +}
 +
++void WebUIBrowserPageHandler::CreateBackgroundTabInProfile(
++    const std::string& profile_id,
++    const GURL& url,
++    CreateBackgroundTabInProfileCallback callback) {
++  rail::CreateBackgroundTabInProfile(
++      GetBrowser(), profile_id, url,
++      base::BindOnce(&ReplyWithTab, std::move(callback)));
++}
++
++void WebUIBrowserPageHandler::GetTabTargetId(const tabs_api::NodeId& id,
++                                             GetTabTargetIdCallback callback) {
++  std::move(callback).Run(rail::TargetIdOfTab(id));
++}
++
 +void WebUIBrowserPageHandler::MoveTabToProfile(
 +    const tabs_api::NodeId& id,
 +    const std::string& profile_id,
@@ -12821,7 +12849,7 @@ index cb0e145..295c6a2 100644
  WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      content::RenderFrameHost& render_frame_host,
      mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -344,7 +921,64 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
+@@ -344,7 +936,64 @@ WebUIBrowserPageHandler::WebUIBrowserPageHandler(
      : content::DocumentService<webui_browser::mojom::PageHandler>(
            render_frame_host,
            std::move(receiver)),
@@ -12888,7 +12916,7 @@ index cb0e145..295c6a2 100644
  BrowserWindowInterface* WebUIBrowserPageHandler::GetBrowser() {
    if (!controller_) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
-index 41a8923..815205d 100644
+index 41a8923..53b3b62 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 +++ b/chrome/browser/ui/webui_browser/webui_browser_page_handler.h
 @@ -7,10 +7,17 @@
@@ -12921,7 +12949,7 @@ index 41a8923..815205d 100644
  class WebUIBrowserUI;
  
  class WebUIBrowserPageHandler
-@@ -56,10 +68,112 @@ class WebUIBrowserPageHandler
+@@ -56,10 +68,118 @@ class WebUIBrowserPageHandler
    void Close() override;
    void ShowBackForwardMenu(bool is_back) override;
    void GetTabStripInset(GetTabStripInsetCallback callback) override;
@@ -12946,6 +12974,12 @@ index 41a8923..815205d 100644
 +  void CreateTabInProfile(const std::string& profile_id,
 +                          const std::optional<GURL>& url,
 +                          CreateTabInProfileCallback callback) override;
++  void CreateBackgroundTabInProfile(
++      const std::string& profile_id,
++      const GURL& url,
++      CreateBackgroundTabInProfileCallback callback) override;
++  void GetTabTargetId(const tabs_api::NodeId& id,
++                      GetTabTargetIdCallback callback) override;
 +  void MoveTabToProfile(const tabs_api::NodeId& id,
 +                        const std::string& profile_id,
 +                        MoveTabToProfileCallback callback) override;
@@ -13034,7 +13068,7 @@ index 41a8923..815205d 100644
    WebUIBrowserPageHandler(
        content::RenderFrameHost& render_frame_host,
        mojo::PendingReceiver<webui_browser::mojom::PageHandler> receiver,
-@@ -71,19 +185,31 @@ class WebUIBrowserPageHandler
+@@ -71,19 +191,31 @@ class WebUIBrowserPageHandler
    std::unique_ptr<AppMenuModel> menu_model_;
    std::unique_ptr<AppMenu> menu_;
  
