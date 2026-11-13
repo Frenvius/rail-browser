@@ -5705,7 +5705,7 @@ index 922ef29..5799035 100644
      this.trackedElementManager_.startTracking(
          this.$.contentRegion, 'kContentsContainerViewElementId');
      this.setUpLongPress_(this.$.backButton, /*isBack=*/ true);
-@@ -131,6 +158,35 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -131,6 +158,36 @@ export class WebuiBrowserAppElement extends CrLitElement {
      const {width} =
          await browserProxyFactory.getInstance().handler.getTabStripInset();
      this.tabStripInset_ = width;
@@ -5730,6 +5730,7 @@ index 922ef29..5799035 100644
 +          const picked = spaces.find(space => space.id === command);
 +          if (picked) {
 +            this.miniSpace_ = miniSetTargetSpace(picked);
++            this.$.tabstrip.showMiniSpace(picked.id);
 +            this.$.tabstrip.openTabs.forEach(tab => miniMatchProfile(tab.id));
 +          }
 +        });
@@ -5741,7 +5742,7 @@ index 922ef29..5799035 100644
    }
  
    // TabStripControllerDelegate:
-@@ -155,21 +211,29 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -155,21 +212,29 @@ export class WebuiBrowserAppElement extends CrLitElement {
      [SecurityIcon.OfflinePin, 'OfflinePinIcon-custom'],
    ]);
  
@@ -5782,7 +5783,7 @@ index 922ef29..5799035 100644
    }
  
    protected onMinimizeClick_(_: Event) {
-@@ -177,7 +241,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -177,7 +242,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
 
    protected onMaximizeClick_(_: Event) {
@@ -5791,7 +5792,7 @@ index 922ef29..5799035 100644
    }
 
    protected onRestoreClick_(_: Event) {
-@@ -189,9 +253,18 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -189,9 +254,18 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected onBackClick_(_: Event) {
@@ -5812,7 +5813,7 @@ index 922ef29..5799035 100644
    }
  
    protected onBackContextmenu_(e: Event) {
-@@ -253,16 +326,65 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -253,16 +327,65 @@ export class WebuiBrowserAppElement extends CrLitElement {
  
    protected onTabAdded_(event: CustomEvent<TabAdded>) {
      this.$.contentRegion.createWebView(event.detail.id, event.detail.isActive);
@@ -5879,7 +5880,7 @@ index 922ef29..5799035 100644
      this.$.contentRegion.activateTab(event.detail.id);
      this.updateUrlForActiveTab_(event.detail);
      this.refreshLayout();
-@@ -274,6 +396,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -274,6 +397,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
        return;
      }
  
@@ -5887,7 +5888,7 @@ index 922ef29..5799035 100644
      this.$.contentRegion.activateTab(tabData.id);
      this.updateUrlForActiveTab_(tabData);
      this.refreshLayout();
-@@ -292,7 +415,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -292,7 +416,7 @@ export class WebuiBrowserAppElement extends CrLitElement {
      // is typing and the tab navigates.
      const isNTP = activeTabUrl.startsWith('chrome://newtab');
      if (!isNTP) {
@@ -5896,7 +5897,7 @@ index 922ef29..5799035 100644
  
        const tabWebView = this.$.contentRegion.activeWebview;
        if (tabWebView) {
-@@ -309,7 +432,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -309,7 +433,11 @@ export class WebuiBrowserAppElement extends CrLitElement {
        }
      }
      this.showLocationIconButton_ = !isNTP;
@@ -5909,7 +5910,7 @@ index 922ef29..5799035 100644
      this.$.contentRegion.classList.toggle('modalScrim', active.isBlocked);
    }
  
-@@ -318,7 +445,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -318,7 +446,8 @@ export class WebuiBrowserAppElement extends CrLitElement {
      if (webview) {
        const [canGoBack, canGoForward] =
            await Promise.all([webview.canGoBack(), webview.canGoForward()]);
@@ -5919,7 +5920,7 @@ index 922ef29..5799035 100644
        this.forwardButtonDisabled_ = !canGoForward;
      } else {
        this.backButtonDisabled_ = true;
-@@ -327,32 +455,105 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -327,32 +456,105 @@ export class WebuiBrowserAppElement extends CrLitElement {
    }
  
    protected override firstUpdated() {
@@ -6043,7 +6044,7 @@ index 922ef29..5799035 100644
    }
  
    protected setReloadStopState(isLoading: boolean) {
-@@ -371,6 +572,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -371,6 +573,16 @@ export class WebuiBrowserAppElement extends CrLitElement {
      this.showingSidePanel_ = false;
    }
  
@@ -6060,7 +6061,7 @@ index 922ef29..5799035 100644
    // This function is called when the side panel closes itself. For example,
    // when user clicks the close "x" button.
    protected onSidePanelClosed_() {
-@@ -400,9 +611,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
+@@ -400,9 +612,17 @@ export class WebuiBrowserAppElement extends CrLitElement {
      }
    }
  
@@ -7526,7 +7527,7 @@ index b7a5099..bdd5a4f 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +592,2369 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +592,2377 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8847,6 +8848,14 @@ index b7a5099..bdd5a4f 100644
 +
 +  restyleSpace(id: string, style: SpaceStyle) {
 +    this.spaces_.restyle(id, style);
++    this.refreshSections_();
++  }
++
++  showMiniSpace(id: string) {
++    for (const tab of this.openTabs) {
++      this.spaces_.claim(tab.id, id);
++    }
++    this.spaces_.select(id);
 +    this.refreshSections_();
 +  }
 +
