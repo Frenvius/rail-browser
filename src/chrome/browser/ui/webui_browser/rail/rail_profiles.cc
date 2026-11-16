@@ -84,29 +84,11 @@ struct TabRequest {
   bool foreground = true;
 };
 
-content::WebContents* InsertTab(BrowserWindowInterface* browser,
-                                Profile* profile,
-                                const TabRequest& request) {
-  if (!browser || !profile) {
-    return nullptr;
-  }
-
-  const bool mini = IsMiniWindow(browser);
-  if (!mini && profile == browser->GetProfile() &&
-      profile == ProfileForNewTab(browser)) {
-    return chrome::AddAndReturnTabAt(browser, request.url, request.index,
-                                     request.foreground, std::nullopt, false);
-  }
-
-  content::WebContents::CreateParams create(profile);
-  create.initially_hidden = !request.foreground;
-  std::unique_ptr<content::WebContents> contents =
-      content::WebContents::Create(create);
-  content::NavigationController::LoadURLParams load(request.url);
-  load.transition_type = ui::PAGE_TRANSITION_TYPED;
-  contents->GetController().LoadURLWithParams(load);
-
-  if (mini) {
+content::WebContents* InsertBlankTab(
+    BrowserWindowInterface* browser,
+    std::unique_ptr<content::WebContents> contents,
+    const TabRequest& request) {
+  if (IsMiniWindow(browser)) {
     content::WebContents* inserted = contents.get();
     TabStripModel* model = browser->GetTabStripModel();
     model->InsertWebContentsAt(
@@ -124,6 +106,32 @@ content::WebContents* InsertTab(BrowserWindowInterface* browser,
   params.tabstrip_index = request.index;
   Navigate(&params);
   return params.navigated_or_inserted_contents;
+}
+
+content::WebContents* InsertTab(BrowserWindowInterface* browser,
+                                Profile* profile,
+                                const TabRequest& request) {
+  if (!browser || !profile) {
+    return nullptr;
+  }
+
+  if (!IsMiniWindow(browser) && profile == browser->GetProfile() &&
+      profile == ProfileForNewTab(browser)) {
+    return chrome::AddAndReturnTabAt(browser, request.url, request.index,
+                                     request.foreground, std::nullopt, false);
+  }
+
+  content::WebContents::CreateParams create(profile);
+  create.initially_hidden = !request.foreground;
+  content::WebContents* inserted = InsertBlankTab(
+      browser, content::WebContents::Create(create), request);
+  if (!inserted) {
+    return nullptr;
+  }
+  content::NavigationController::LoadURLParams load(request.url);
+  load.transition_type = ui::PAGE_TRANSITION_TYPED;
+  inserted->GetController().LoadURLWithParams(load);
+  return inserted;
 }
 
 void OnProfileResolved(base::WeakPtr<BrowserWindowInterface> browser,
