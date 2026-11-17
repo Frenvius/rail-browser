@@ -4525,6 +4525,22 @@ index 9331bad..115fc31 100644
    if (inspected_window) {
      return inspected_window->PreHandleKeyboardEvent(event);
    }
+diff --git a/chrome/browser/enterprise/platform_auth/platform_auth_policy_observer.cc b/chrome/browser/enterprise/platform_auth/platform_auth_policy_observer.cc
+index 874d369..60ffe85 100644
+--- a/chrome/browser/enterprise/platform_auth/platform_auth_policy_observer.cc
++++ b/chrome/browser/enterprise/platform_auth/platform_auth_policy_observer.cc
+@@ -51,8 +51,10 @@ PlatformAuthPolicyObserver::~PlatformAuthPolicyObserver() = default;
+ // static
+ void PlatformAuthPolicyObserver::RegisterPrefs(
+     PrefRegistrySimple* pref_registry) {
+-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
++#if BUILDFLAG(IS_ANDROID)
+   pref_registry->RegisterIntegerPref(GetPrefName(), 0);
++#elif BUILDFLAG(IS_WIN)
++  pref_registry->RegisterIntegerPref(GetPrefName(), 1);
+ #elif BUILDFLAG(IS_MAC)
+   pref_registry->RegisterIntegerPref(GetPrefName(), 1);
+   pref_registry->RegisterListPref(
 diff --git a/chrome/browser/extensions/BUILD.gn b/chrome/browser/extensions/BUILD.gn
 index ae90b48..3ac5b49 100644
 --- a/chrome/browser/extensions/BUILD.gn
