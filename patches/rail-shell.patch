@@ -11355,7 +11355,7 @@ index d4957bd..752166d 100644
        observe_actions_{this};
  
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index ffbd17c..296cff8 100644
+index ffbd17c..d66c1a4 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,44 @@ source_set("headers") {
@@ -11430,7 +11430,7 @@ index ffbd17c..296cff8 100644
      "//content/public/browser",
      "//ui/base/unowned_user_data",
      "//ui/color",
-@@ -57,6 +100,65 @@ source_set("impl") {
+@@ -57,6 +100,67 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -11452,6 +11452,8 @@ index ffbd17c..296cff8 100644
 +    "rail/rail_command_ui.cc",
 +    "rail/rail_default_browser.cc",
 +    "rail/rail_default_browser.h",
++    "rail/rail_docked_devtools.cc",
++    "rail/rail_docked_devtools.h",
 +    "rail/rail_downloads.cc",
 +    "rail/rail_searchbox_handler.cc",
 +    "rail/rail_settings_ui.cc",
@@ -11496,7 +11498,7 @@ index ffbd17c..296cff8 100644
      "browser_elements_webui_browser.cc",
      "find_bar_owner_webui_browser.cc",
      "webui_browser.cc",
-@@ -80,6 +180,37 @@ source_set("impl") {
+@@ -80,6 +182,37 @@ source_set("impl") {
      sources += [ "webui_browser_window_mac.mm" ]
 +    sources += [
 +      "rail/rail_acrylic_fallback.cc",
@@ -11534,7 +11536,7 @@ index ffbd17c..296cff8 100644
    deps = [
      ":browser_mojo_bindings",
      ":webui_browser",
-@@ -89,8 +205,13 @@ source_set("impl") {
+@@ -89,8 +207,13 @@ source_set("impl") {
      "//chrome/browser/bookmarks",
      "//chrome/browser/contextual_search",
      "//chrome/browser/devtools",
@@ -11548,7 +11550,7 @@ index ffbd17c..296cff8 100644
      "//chrome/browser/resources/webui_browser:resources",
      "//chrome/browser/resources/webui_toolbar_shared:resources",
      "//chrome/browser/themes",
-@@ -106,6 +227,7 @@ source_set("impl") {
+@@ -106,6 +229,7 @@ source_set("impl") {
      "//chrome/browser/ui/find_bar",
      "//chrome/browser/ui/fullscreen",
      "//chrome/browser/ui/location_bar",
@@ -11556,7 +11558,7 @@ index ffbd17c..296cff8 100644
      "//chrome/browser/ui/side_panel",
      "//chrome/browser/ui/side_panel:side_panel_views_dependent",
      "//chrome/browser/ui/tabs:tabs_public",
-@@ -123,8 +245,12 @@ source_set("impl") {
+@@ -123,8 +247,12 @@ source_set("impl") {
      "//chrome/browser/ui/views/zoom",
      "//chrome/browser/ui/web_applications",
      "//chrome/browser/ui/webui:favicon_source",
@@ -11569,7 +11571,7 @@ index ffbd17c..296cff8 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +267,47 @@ source_set("impl") {
+@@ -132,13 +269,47 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
@@ -11617,7 +11619,7 @@ index ffbd17c..296cff8 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +328,39 @@ source_set("impl") {
+@@ -159,17 +330,39 @@ source_set("impl") {
 +      "//chrome/browser/webshare",
        "//ui/base/accelerators/global_accelerator_listener",
      ]
@@ -13164,7 +13166,7 @@ index 2843563..ecf5cb3 100644
  content::WebContents* WebUIBrowserSidePanelUI::GetWebContentsForTest(
      SidePanelEntryId id) {
 diff --git a/chrome/browser/ui/webui_browser/webui_browser_ui.cc b/chrome/browser/ui/webui_browser/webui_browser_ui.cc
-index 2dc243e..22907f3 100644
+index 2dc243e..a7974a7 100644
 --- a/chrome/browser/ui/webui_browser/webui_browser_ui.cc
 +++ b/chrome/browser/ui/webui_browser/webui_browser_ui.cc
 @@ -10,6 +10,7 @@
@@ -13175,17 +13177,18 @@ index 2dc243e..22907f3 100644
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/browser/ui/bookmarks/bookmark_bar_controller.h"
  #include "chrome/browser/ui/bookmarks/bookmarks_service_feature.h"
-@@ -27,6 +28,9 @@
+@@ -27,6 +28,10 @@
  #include "chrome/browser/ui/webui/searchbox/realbox_handler.h"
  #include "chrome/browser/ui/webui/webui_toolbar/webui_toolbar_extensions_container.h"
  #include "chrome/browser/ui/webui_browser/bookmark_bar_page_handler.h"
++#include "chrome/browser/ui/webui_browser/rail/rail_docked_devtools.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_profiles.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_side_panel.h"
 +#include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
  #include "chrome/browser/ui/webui_browser/webui_browser.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_page_handler.h"
  #include "chrome/browser/ui/webui_browser/webui_browser_side_panel_ui.h"
-@@ -34,6 +38,7 @@
+@@ -34,6 +39,7 @@
  #include "chrome/common/webui_url_constants.h"
  #include "chrome/grit/branded_strings.h"
  #include "chrome/grit/generated_resources.h"
@@ -13193,7 +13196,7 @@ index 2dc243e..22907f3 100644
  #include "chrome/grit/tab_strip_api_resources_map.h"
  #include "chrome/grit/webui_browser_resources.h"
  #include "chrome/grit/webui_browser_resources_map.h"
-@@ -42,6 +47,7 @@
+@@ -42,6 +48,7 @@
  #include "components/contextual_search/contextual_search_service.h"
  #include "components/contextual_search/contextual_search_session_handle.h"
  #include "components/favicon_base/favicon_url_parser.h"
@@ -13201,7 +13204,7 @@ index 2dc243e..22907f3 100644
  #include "components/guest_contents/browser/guest_contents_host_impl.h"
  #include "components/surface_embed/common/features.h"
  #include "content/public/browser/browser_context.h"
-@@ -133,6 +139,10 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
+@@ -133,6 +140,10 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
    source->AddInteger("tabStripInset",
                       WebUIBrowserPageHandler::GetTabStripInsetWidth());
 
@@ -13212,7 +13215,7 @@ index 2dc243e..22907f3 100644
    source->AddBoolean(
        "enableSurfaceEmbed",
        base::FeatureList::IsEnabled(surface_embed::features::kSurfaceEmbed));
-@@ -151,9 +161,10 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
+@@ -151,9 +162,10 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
    //     "resultChangedToPaintMetricName",
    //     "Omnibox.Popup.WebUI.ResultChangedToRepaintLatency.ToPaint");
  
@@ -13226,7 +13229,7 @@ index 2dc243e..22907f3 100644
  
    if (browser_) {
      // This use of unretained is safe because the
-@@ -170,7 +181,9 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
+@@ -170,7 +182,9 @@ WebUIBrowserUI::WebUIBrowserUI(content::WebUI* web_ui)
    }
  }
  
@@ -13237,7 +13240,7 @@ index 2dc243e..22907f3 100644
  
  void WebUIBrowserUI::BindInterface(
      mojo::PendingReceiver<webui_browser::mojom::PageHandlerFactory> receiver) {
-@@ -205,11 +218,26 @@ void WebUIBrowserUI::CreatePageHandler(
+@@ -205,11 +219,26 @@ void WebUIBrowserUI::CreatePageHandler(
    // WebUIOmniboxHandler.
    realbox_handler_ = std::make_unique<RealboxHandler>(
        std::move(pending_page_handler), std::move(page),
@@ -13265,7 +13268,7 @@ index 2dc243e..22907f3 100644
  void WebUIBrowserUI::BindInterface(
      mojo::PendingReceiver<bookmarks_api::mojom::BookmarksService> receiver) {
    WebUIBrowserWindow* window =
-@@ -322,18 +350,46 @@ void WebUIBrowserUI::ShowSidePanel(SidePanelEntryKey side_panel_entry_key) {
+@@ -322,18 +351,47 @@ void WebUIBrowserUI::ShowSidePanel(SidePanelEntryKey side_panel_entry_key) {
        side_panel_ui->GetWebContentsForId(side_panel_entry_key.id());
    web_contents->SetColorProviderSource(browser_window());
    CHECK(web_contents);
@@ -13305,6 +13308,7 @@ index 2dc243e..22907f3 100644
 +}
 +
 +void WebUIBrowserUI::CloseDockedDevTools() {
++  rail::DetachDockedDevTools(web_ui()->GetWebContents());
 +  if (!page()) {
 +    return;
 +  }
