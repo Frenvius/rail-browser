@@ -1,4 +1,5 @@
 import argparse
+import gzip
 import hashlib
 import http.client
 import importlib.util
@@ -6,7 +7,6 @@ import json
 import os
 import sys
 import time
-import zlib
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
@@ -16,12 +16,16 @@ RELEASE_LIST = ROOT / 'build' / 'src' / 'chrome' / 'installer' / 'mini_installer
 PLATFORMS = ('windows-x64', 'windows-arm64', 'macos-arm64', 'macos-x64', 'linux-x64', 'linux-arm64')
 WINDOWS_REQUIRED = ('chrome.exe', 'chrome.dll')
 WINDOWS_WITHOUT_PDB = ('d3dcompiler_47.dll',)
-CHUNK = 1 << 20
+PART_SIZE = 64 << 20
 ATTEMPTS = 3
 TIMEOUT = 600
 
 
 class UploadError(Exception):
+    pass
+
+
+class RetryableError(Exception):
     pass
 
 
@@ -90,22 +94,6 @@ def collect(platform, out_dir, release_list):
     return linux_files(out_dir)
 
 
-def compressed_chunks(path, digest):
-    packer = zlib.compressobj(6, zlib.DEFLATED, 31)
-    with path.open('rb') as source:
-        while True:
-            block = source.read(CHUNK)
-            if not block:
-                break
-            digest.update(block)
-            packed = packer.compress(block)
-            if packed:
-                yield packed
-    tail = packer.flush()
-    if tail:
-        yield tail
-
-
 def connect(server):
     parts = urlsplit(server)
     factory = http.client.HTTPSConnection if parts.scheme == 'https' else http.client.HTTPConnection
@@ -117,40 +105,64 @@ def send(server, token, method, path, body=None, headers=None):
     try:
         request_headers = {'Authorization': 'Bearer ' + token}
         request_headers.update(headers or {})
-        connection.request(method, prefix + path, body=body, headers=request_headers,
-                           encode_chunked=body is not None)
+        connection.request(method, prefix + path, body=body, headers=request_headers)
         response = connection.getresponse()
         return response.status, response.read()
     finally:
         connection.close()
 
 
-def upload_once(server, token, base, path):
-    digest = hashlib.sha256()
-    status, payload = send(
-        server, token, 'PUT', base + '/files/' + quote(path.name, safe=''),
-        body=compressed_chunks(path, digest),
-        headers={'Content-Encoding': 'gzip', 'Content-Type': 'application/octet-stream'})
-    if status != 201:
-        raise UploadError('HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace')), status)
-    reply = json.loads(payload)
-    expected = digest.hexdigest()
-    if reply.get('sha256') != expected:
-        raise UploadError('sha256 mismatch: local {} remote {}'.format(expected, reply.get('sha256')), 0)
-    return reply
+def read_parts(path):
+    with path.open('rb') as source:
+        while True:
+            block = source.read(PART_SIZE)
+            if not block:
+                break
+            yield block
+
+
+def put_part(server, token, file_base, index, block):
+    expected = hashlib.sha256(block).hexdigest()
+    body = gzip.compress(block, 6, mtime=0)
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            status, payload = send(
+                server, token, 'PUT', '{}/parts/{}'.format(file_base, index), body=body,
+                headers={'Content-Encoding': 'gzip', 'Content-Type': 'application/octet-stream'})
+            if status != 201:
+                message = 'HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace'))
+                if status < 500:
+                    raise UploadError(message)
+                raise RetryableError(message)
+            remote = json.loads(payload).get('sha256')
+            if remote != expected:
+                raise RetryableError('sha256 mismatch: local {} remote {}'.format(expected, remote))
+            return
+        except (OSError, http.client.HTTPException, RetryableError) as error:
+            if attempt == ATTEMPTS:
+                raise UploadError('part {}: {}'.format(index, error))
+            print('retry {}/{} part {}: {}'.format(attempt, ATTEMPTS - 1, index, error), file=sys.stderr)
+            time.sleep(2 ** attempt)
 
 
 def upload(server, token, base, path):
-    for attempt in range(1, ATTEMPTS + 1):
-        try:
-            return upload_once(server, token, base, path)
-        except (OSError, http.client.HTTPException, UploadError) as error:
-            status = error.args[1] if isinstance(error, UploadError) and len(error.args) > 1 else None
-            retryable = not isinstance(error, UploadError) or status == 0 or (status or 0) >= 500
-            if not retryable or attempt == ATTEMPTS:
-                raise
-            print('retry {}/{} {}: {}'.format(attempt, ATTEMPTS - 1, path.name, error), file=sys.stderr)
-            time.sleep(2 ** attempt)
+    file_base = base + '/files/' + quote(path.name, safe='')
+    digest = hashlib.sha256()
+    total = 0
+    count = 0
+    for block in read_parts(path):
+        put_part(server, token, file_base, count, block)
+        digest.update(block)
+        total += len(block)
+        count += 1
+    if count == 0:
+        raise UploadError('{} is empty'.format(path.name))
+    body = json.dumps({'parts': count, 'size': total, 'sha256': digest.hexdigest()}).encode('utf-8')
+    status, payload = send(server, token, 'POST', file_base + '/complete', body=body,
+                           headers={'Content-Type': 'application/json'})
+    if status != 201:
+        raise UploadError('complete HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace')))
+    return count
 
 
 def main():
@@ -181,11 +193,11 @@ def main():
     for path in files:
         started = time.monotonic()
         try:
-            upload(args.server, token, base, path)
+            parts = upload(args.server, token, base, path)
         except (OSError, http.client.HTTPException, UploadError) as error:
             print('FAILED {}: {}'.format(path.name, error), file=sys.stderr)
             return 1
-        print('{} {} bytes {:.1f}s'.format(path.name, path.stat().st_size, time.monotonic() - started))
+        print('{} {} bytes {} parts {:.1f}s'.format(path.name, path.stat().st_size, parts, time.monotonic() - started))
     status, payload = send(args.server, token, 'POST', base + '/process')
     if status != 202:
         print('process failed: HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace')), file=sys.stderr)
