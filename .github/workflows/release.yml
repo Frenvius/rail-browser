@@ -90,7 +90,7 @@ jobs:
           $self = Get-Process -Id $PID
           $self.PriorityClass = 'BelowNormal'
           $self.ProcessorAffinity = [IntPtr]0xFFFFFF
-          .\.venv\Scripts\python.exe .\build.py --reuse --regenerate --rail-version $env:RAIL_VERSION -j 20
+          .\.venv\Scripts\python.exe .\build.py --reuse --regenerate --symbols --rail-version $env:RAIL_VERSION -j 20
           exit $LASTEXITCODE
 
       - name: Package
@@ -120,6 +120,20 @@ jobs:
           $sums = Get-ChildItem $assets -File | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
           [IO.File]::WriteAllText((Join-Path $assets 'SHA256SUMS'), (($sums -join "`n") + "`n"))
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "assets=$assets`n")
+
+      - name: Upload debug files
+        if: vars.CRASH_SERVER_URL != ''
+        working-directory: ${{ env.RAIL_REPO_DIR }}
+        env:
+          RAIL_VERSION: ${{ steps.version.outputs.version }}
+          CRASH_SERVER_URL: ${{ vars.CRASH_SERVER_URL }}
+          CRASH_SYMBOL_TOKEN: ${{ secrets.CRASH_SYMBOL_TOKEN }}
+        run: |
+          $self = Get-Process -Id $PID
+          $self.PriorityClass = 'BelowNormal'
+          .\.venv\Scripts\python.exe scripts\upload_debug_files.py --server $env:CRASH_SERVER_URL `
+            --build $env:RAIL_VERSION --platform windows-x64 --out-dir build\src\out\Release
+          exit $LASTEXITCODE
 
   publish:
     needs: build

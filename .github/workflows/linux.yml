@@ -82,7 +82,7 @@ jobs:
           RAIL_VERSION: ${{ inputs.version }}
         run: |
           cd "$RAIL_REPO_DIR"
-          nice -n 10 .venv/bin/python platform/linux/build.py --release --regenerate \
+          nice -n 10 .venv/bin/python platform/linux/build.py --release --regenerate --symbols \
             --rail-version "$RAIL_VERSION" -j "$BUILD_JOBS"
       - name: Package
         if: inputs.version != ''
@@ -102,6 +102,18 @@ jobs:
             --output "$assets/linux-appcast.xml"
           (cd "$assets" && sha256sum Rail-*.AppImage Rail-*.tar.xz linux-appcast.xml > SHA256SUMS-linux)
           echo "assets=$assets" >> "$GITHUB_OUTPUT"
+      - name: Upload debug files
+        if: inputs.version != '' && vars.CRASH_SERVER_URL != ''
+        shell: bash
+        env:
+          RAIL_VERSION: ${{ inputs.version }}
+          CRASH_SERVER_URL: ${{ vars.CRASH_SERVER_URL }}
+          CRASH_SYMBOL_TOKEN: ${{ secrets.CRASH_SYMBOL_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          nice -n 10 .venv/bin/python scripts/upload_debug_files.py --server "$CRASH_SERVER_URL" \
+            --build "$RAIL_VERSION" --platform linux-x64 --out-dir build/src/out/Release
 
   publish:
     if: inputs.version != ''

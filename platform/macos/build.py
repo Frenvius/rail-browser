@@ -30,6 +30,16 @@ def compile_asset_catalog(env):
         shutil.copy2(Path(tmp) / 'Assets.car', theme / 'Assets.car')
 
 
+def enable_symbols(text):
+    text, count = re.subn(r'^symbol_level=\d+[ \t]*$', 'symbol_level=1', text, flags=re.M)
+    if count != 1:
+        raise RuntimeError('expected exactly one symbol_level assignment in args.gn')
+    text, count = re.subn(r'^enable_dsyms=\w+[ \t]*$', 'enable_dsyms=true', text, flags=re.M)
+    if count == 0:
+        text += '\nenable_dsyms=true\n'
+    return text
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-j', '--jobs', type=int, default=6)
@@ -37,6 +47,7 @@ def main():
     parser.add_argument('--target', action='append', default=None)
     parser.add_argument('--release', action='store_true')
     parser.add_argument('--rail-version')
+    parser.add_argument('--symbols', action='store_true')
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error('jobs must be positive')
@@ -46,6 +57,8 @@ def main():
         parser.error('--release requires --rail-version and vice versa')
     if args.rail_version and not args.regenerate:
         parser.error('--rail-version requires --regenerate')
+    if args.symbols and not (args.release and args.regenerate):
+        parser.error('--symbols requires --release and --regenerate')
     if not (SOURCE / 'BUILD.gn').is_file():
         parser.error('the prepared Chromium tree is missing')
     if not RUST_SDK.is_dir():
@@ -69,12 +82,14 @@ def main():
         flags = output / 'args.gn'
         if args.regenerate or not flags.exists():
             platform_flags = 'flags.release.gn' if args.release else 'flags.gn'
-            flags.write_text(
+            gn_flags = (
                 (ROOT / 'ungoogled-chromium' / 'flags.gn').read_text()
                 + (ROOT / 'platform' / 'macos' / platform_flags).read_text()
                 + (f'\nrail_version="{args.rail_version}"\n'
-                   if args.rail_version else ''),
-                encoding='utf-8')
+                   if args.rail_version else ''))
+            if args.symbols:
+                gn_flags = enable_symbols(gn_flags)
+            flags.write_text(gn_flags, encoding='utf-8')
         gn = SOURCE / 'out' / 'Rail' / 'gn' if args.release else output / 'gn'
         if not gn.is_file():
             gn = output / 'gn'

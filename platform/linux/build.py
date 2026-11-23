@@ -35,12 +35,21 @@ def build_env():
     return env
 
 
-def write_args(output, release, rail_version):
+def enable_symbols(text):
+    text, count = re.subn(r'^symbol_level=\d+[ \t]*$', 'symbol_level=1', text, flags=re.M)
+    if count != 1:
+        raise RuntimeError('expected exactly one symbol_level assignment in args.gn')
+    return text
+
+
+def write_args(output, release, rail_version, symbols):
     flags_file = 'flags.release.gn' if release else 'flags.dev.gn'
     text = (ROOT / 'ungoogled-chromium' / 'flags.gn').read_text(encoding='utf-8')
     text += '\n' + (PLATFORM / flags_file).read_text(encoding='utf-8')
     if rail_version:
         text += '\nrail_version="{}"\n'.format(rail_version)
+    if symbols:
+        text = enable_symbols(text)
     (output / 'args.gn').write_text(text, encoding='utf-8')
 
 
@@ -51,6 +60,7 @@ def main():
     parser.add_argument('--target', action='append', default=None)
     parser.add_argument('--release', action='store_true')
     parser.add_argument('--rail-version')
+    parser.add_argument('--symbols', action='store_true')
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error('jobs must be positive')
@@ -58,6 +68,8 @@ def main():
         parser.error('--rail-version must be MAJOR.MINOR.PATCH')
     if args.rail_version and not args.regenerate:
         parser.error('--rail-version requires --regenerate')
+    if args.symbols and not (args.release and args.regenerate):
+        parser.error('--symbols requires --release and --regenerate')
     if not (SOURCE / 'BUILD.gn').is_file():
         parser.error('the prepared Chromium tree is missing; run platform/linux/prepare.py')
     if not (SOURCE / 'third_party' / 'llvm-build' / 'Release+Asserts' / 'bin' / 'clang').is_file():
@@ -81,7 +93,7 @@ def main():
         _copy_branding(SOURCE)
         output.mkdir(parents=True, exist_ok=True)
         if args.regenerate or not (output / 'args.gn').exists():
-            write_args(output, args.release, args.rail_version)
+            write_args(output, args.release, args.rail_version, args.symbols)
         expected_debug_flag = 'is_debug=false'
         if expected_debug_flag not in (output / 'args.gn').read_text(encoding='utf-8').split():
             parser.error('{} lacks {}; rerun with --regenerate'.format(

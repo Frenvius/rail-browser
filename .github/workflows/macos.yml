@@ -87,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RAIL_REPO_DIR"
-          .venv/bin/python platform/macos/build.py --release --regenerate \
+          .venv/bin/python platform/macos/build.py --release --regenerate --symbols \
             --rail-version "$RAIL_VERSION" --target chrome \
             --target chrome/installer/mac:mac -j "$BUILD_JOBS"
       - name: Package ad hoc release
@@ -103,6 +103,20 @@ jobs:
           .venv/bin/python platform/macos/package.py --version "$RAIL_VERSION" \
             --repository "$GITHUB_REPOSITORY"
           echo "assets=$RAIL_REPO_DIR/build/release/mac/$RAIL_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Upload debug files
+        if: inputs.version != '' && vars.CRASH_SERVER_URL != ''
+        shell: bash
+        env:
+          RAIL_REPO_DIR: /Users/Shared/rail/build/rail-browser
+          RAIL_VERSION: ${{ inputs.version }}
+          CRASH_SERVER_URL: ${{ vars.CRASH_SERVER_URL }}
+          CRASH_SYMBOL_TOKEN: ${{ secrets.CRASH_SYMBOL_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd "$RAIL_REPO_DIR"
+          .venv/bin/python scripts/upload_debug_files.py --server "$CRASH_SERVER_URL" \
+            --build "$RAIL_VERSION" --platform macos-arm64 \
+            --out-dir build/src/out/RailRelease
 
   publish:
     if: inputs.version != ''

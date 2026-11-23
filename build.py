@@ -387,6 +387,13 @@ def _install_ublock_origin(source_tree, downloads_cache, output_dir):
         encoding=ENCODING)
 
 
+def _enable_symbols(gn_flags):
+    gn_flags, count = re.subn(r'^symbol_level=\d+[ \t]*$', 'symbol_level=1', gn_flags, flags=re.M)
+    if count != 1:
+        raise RuntimeError('expected exactly one symbol_level assignment in args.gn')
+    return gn_flags
+
+
 def main():
     """CLI Entrypoint"""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -444,6 +451,10 @@ def main():
         help=('Rail release version, MAJOR.MINOR.PATCH, compiled into the build. '
               'It turns on the updater and requires --regenerate on an existing output'))
     parser.add_argument(
+        '--symbols',
+        action='store_true',
+        help='Build a release with symbol_level=1 for crash symbolication; requires --regenerate')
+    parser.add_argument(
         '--prepare-only',
         action='store_true',
         help='Download, patch, and prepare Chromium sources, then stop before GN/Ninja')
@@ -456,6 +467,8 @@ def main():
     args = parser.parse_args()
     if args.rail_version is not None and not re.fullmatch(r'\d+\.\d+\.\d+', args.rail_version):
         parser.error('--rail-version must be MAJOR.MINOR.PATCH')
+    if args.symbols and (args.dev or not args.regenerate):
+        parser.error('--symbols requires a release build and --regenerate')
 
     # Set common variables
     source_tree = _ROOT_DIR / 'build' / 'src'
@@ -630,6 +643,8 @@ def main():
         if args.rail_version:
             windows_flags += '\nrail_version="{}"\n'.format(args.rail_version)
         gn_flags += windows_flags
+        if args.symbols:
+            gn_flags = _enable_symbols(gn_flags)
         (source_tree / output_dir / 'args.gn').write_text(gn_flags, encoding=ENCODING)
     elif args.rail_version:
         raise RuntimeError('--rail-version only takes effect with --regenerate')
