@@ -11354,8 +11354,28 @@ index d4957bd..752166d 100644
    base::ScopedObservation<ToolbarActionsModel, ToolbarActionsModel::Observer>
        observe_actions_{this};
  
+diff --git a/chrome/browser/metrics/chrome_metrics_services_manager_client.cc b/chrome/browser/metrics/chrome_metrics_services_manager_client.cc
+index c28e0ba..43ef272 100644
+--- a/chrome/browser/metrics/chrome_metrics_services_manager_client.cc
++++ b/chrome/browser/metrics/chrome_metrics_services_manager_client.cc
+@@ -382,15 +382,5 @@
+   // are allowed.
+   install_static::SetCollectStatsInSample(IsClientInSampleForCrashes());
+
+-  // The intent here is to set the value of the consent. However, since right
+-  // now we have may_record which is based off both consent and the Feature
+-  // state, this is redundant with the above value. This is pretty confusing
+-  // right now, and we may want to rethink this. One extra complexity here is we
+-  // currently check the disable_crashes parameter, which does not go
+-  // into may_record. This is because this is specifically intending to test for
+-  // consent, and as mentioned, on the crashpad side we check both. See
+-  // SetUploadConsent() in components/crash/core/app/crashpad.cc for how this
+-  // gets used.
+-  SetUploadConsent_ExportThunk(may_record && may_upload);
+ }
+ #endif  // BUILDFLAG(IS_WIN)
 diff --git a/chrome/browser/ui/webui_browser/BUILD.gn b/chrome/browser/ui/webui_browser/BUILD.gn
-index ffbd17c..d66c1a4 100644
+index ffbd17c..e6491d2 100644
 --- a/chrome/browser/ui/webui_browser/BUILD.gn
 +++ b/chrome/browser/ui/webui_browser/BUILD.gn
 @@ -13,6 +13,44 @@ source_set("headers") {
@@ -11430,7 +11450,7 @@ index ffbd17c..d66c1a4 100644
      "//content/public/browser",
      "//ui/base/unowned_user_data",
      "//ui/color",
-@@ -57,6 +100,67 @@ source_set("impl") {
+@@ -57,6 +100,69 @@ source_set("impl") {
    sources = [
      "bookmark_bar_page_handler.cc",
      "bookmark_bar_page_handler.h",
@@ -11450,6 +11470,8 @@ index ffbd17c..d66c1a4 100644
 +    "rail/rail_webui_browser.cc",
 +    "rail/rail_command_bubble.cc",
 +    "rail/rail_command_ui.cc",
++    "rail/rail_crash_reporting.cc",
++    "rail/rail_crash_reporting.h",
 +    "rail/rail_default_browser.cc",
 +    "rail/rail_default_browser.h",
 +    "rail/rail_docked_devtools.cc",
@@ -11571,11 +11593,12 @@ index ffbd17c..d66c1a4 100644
      "//chrome/browser/ui/webui/webui_toolbar:impl",
      "//chrome/browser/ui/window_feature_controller",
      "//chrome/browser/ui/window_metadata",
-@@ -132,13 +269,47 @@ source_set("impl") {
+@@ -132,13 +269,48 @@ source_set("impl") {
      "//chrome/common:chrome_features",
      "//components/browser_apis/tab_strip/resources",
      "//components/browser_apis/ui_controllers/toolbar:mojom",
 +    "//components/content_settings/core/browser",
++    "//components/crash/core/app",
 +    "//components/crx_file",
 +    "//components/favicon/core",
 +    "//components/favicon_base",
@@ -11619,7 +11642,7 @@ index ffbd17c..d66c1a4 100644
      "//ui/base",
      "//ui/content_accelerators",
      "//ui/views",
-@@ -159,17 +330,39 @@ source_set("impl") {
+@@ -159,17 +330,41 @@ source_set("impl") {
 +      "//chrome/browser/webshare",
        "//ui/base/accelerators/global_accelerator_listener",
      ]
@@ -11628,6 +11651,8 @@ index ffbd17c..d66c1a4 100644
 +  if (is_win) {
 +    deps += [
 +      "//chrome/browser/webshare",
++      "//components/crash/core/app:crash_export_thunk_include",
++      "//third_party/crashpad/crashpad/client",
 +      "//ui/aura",
 +      "//ui/compositor",
 +    ]
@@ -14257,7 +14282,7 @@ index 2a61e87..6fdc1a7 100644
  
  // Window represents a browser window.
 diff --git a/components/components_chromium_strings.grd b/components/components_chromium_strings.grd
-index 154a930..9d733b5 100644
+index 154a930..ada9d5d 100644
 --- a/components/components_chromium_strings.grd
 +++ b/components/components_chromium_strings.grd
 @@ -196,7 +196,7 @@
@@ -14329,7 +14354,7 @@ index 154a930..9d733b5 100644
        <!-- chrome://crashes strings -->
        <message name="IDS_CRASH_DISABLED_MESSAGE" desc="The explanatory message for chrome://crashes when crash reporting is disabled">
 -        Crash reporting is not available in Chromium.
-+        Crash reporting is not available in Rail.
++        Crash reporting is off. Turn on Send crash reports in Rail settings.
        </message>
  
        <!-- Version UI -->
@@ -14401,6 +14426,55 @@ index 154a930..9d733b5 100644
          </message>
        </if>
      </messages>
+diff --git a/components/crash/core/app/crash_reporter_client.cc b/components/crash/core/app/crash_reporter_client.cc
+index a5c49d9..835aa67 100644
+--- a/components/crash/core/app/crash_reporter_client.cc
++++ b/components/crash/core/app/crash_reporter_client.cc
+@@ -141,9 +141,5 @@
+ #endif
+
+ std::string CrashReporterClient::GetUploadUrl() {
+-#if 0
+-  return kDefaultUploadURL;
+-#else
+-  return std::string();
+-#endif
++  return "https://crash.railbrowser.app/crash";
+ }
+
+ bool CrashReporterClient::ShouldRateLimitUploads() {
+diff --git a/components/crash/core/app/crashpad.cc b/components/crash/core/app/crashpad.cc
+index f2765a7..829cdc9 100644
+--- a/components/crash/core/app/crashpad.cc
++++ b/components/crash/core/app/crashpad.cc
+@@ -73,13 +73,6 @@
+                             const std::vector<std::string>& initial_arguments,
+                             bool embedded_handler,
+                             const std::vector<base::FilePath>& attachments) {
+-// Crashpad is needed on Linux because it's used as a WASM signal handler.
+-// This is not the case on other platforms, and so it can remain entirely
+-// disabled there.
+-#if !BUILDFLAG(IS_LINUX)
+-  return false;
+-#endif
+-
+   static bool initialized = false;
+   DCHECK(!initialized);
+   initialized = true;
+@@ -186,13 +179,6 @@
+     g_database =
+         crashpad::CrashReportDatabase::Initialize(database_path).release();
+
+-#if !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
+-    // On Android crashpad doesn't handle uploads. Android uses
+-    // //components/minidump_uploader which queries metrics sample/consent opt
+-    // in from preferences.
+-    CrashReporterClient* crash_reporter_client = GetCrashReporterClient();
+-    SetUploadConsent(crash_reporter_client->GetCollectStatsConsent());
+-#endif
+   }
+   return true;
+ }
 diff --git a/components/content_settings/core/browser/content_settings_registry.cc b/components/content_settings/core/browser/content_settings_registry.cc
 index c5d6d6b..b90cbba 100644
 --- a/components/content_settings/core/browser/content_settings_registry.cc
@@ -15385,6 +15459,28 @@ index fcccc1a..35fa065 100644
        console.error(
            `Received message for unknown endpoint ${msg.header.interfaceId}`);
  
+diff --git a/third_party/crashpad/crashpad/handler/handler_main.cc b/third_party/crashpad/crashpad/handler/handler_main.cc
+index 431edd0..ec0900f 100644
+--- a/third_party/crashpad/crashpad/handler/handler_main.cc
++++ b/third_party/crashpad/crashpad/handler/handler_main.cc
+@@ -875,7 +875,7 @@
+ #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||
+         // BUILDFLAG(IS_ANDROID)
+       case kOptionURL: {
+-        options.url = "";
++        options.url = optarg;
+         break;
+       }
+ #if BUILDFLAG(IS_CHROMEOS)
+@@ -1016,7 +1016,7 @@
+   }
+
+   ScopedStoppable upload_thread;
+-  if ((false)) {
++  if (!options.url.empty()) {
+     // TODO(scottmg): options.rate_limit should be removed when we have a
+     // configurable database setting to control upload limiting.
+     // See https://crashpad.ch40m1um.qjz9zk/bug/23.
 diff --git a/third_party/blink/renderer/core/BUILD.gn b/third_party/blink/renderer/core/BUILD.gn
 index 1048d8f..93fb21b 100644
 --- a/third_party/blink/renderer/core/BUILD.gn

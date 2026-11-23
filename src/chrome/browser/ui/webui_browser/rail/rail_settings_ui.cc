@@ -34,6 +34,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_sidebar_state.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_site_routes.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_crash_reporting.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_webui_browser.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
@@ -634,6 +635,15 @@ void RailSettingsUI::OnUpdateStatusChanged() {
   Updater* updater = Updater::Get();
   page_->OnUpdateStatusChanged(UpdateStatusOf(updater),
                                ReadyVersionOf(updater));
+}
+
+void RailSettingsUI::GetSendCrashReports(
+    GetSendCrashReportsCallback callback) {
+  std::move(callback).Run(rail::GetSendCrashReports());
+}
+
+void RailSettingsUI::SetSendCrashReports(bool enabled) {
+  rail::SetSendCrashReports(enabled);
 }
 
 void RailSettingsUI::OpenUrl(const std::string& url) {

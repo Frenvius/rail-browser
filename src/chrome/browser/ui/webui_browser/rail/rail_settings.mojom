@@ -150,6 +150,10 @@ interface PageHandler {
 
   ApplyUpdate();
 
+  GetSendCrashReports() => (bool enabled);
+
+  SetSendCrashReports(bool enabled);
+
   OpenUrl(string url);
 
   Close();

@@ -552,6 +552,21 @@ ${this.section_ === 'about' ? html`
       ` : nothing}
     </div>
   </div>
+  <h2 class="section">Privacy</h2>
+  <div class="group">
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Send crash reports</span>
+        <span class="cardhint">
+          When Rail crashes, send a report to crash.railbrowser.app so the
+          problem can be fixed. A report can include parts of what was in
+          memory at the time.
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.sendCrashReports_}"
+        @change="${this.onSendCrashReportsChange_}"></cr-toggle>
+    </div>
+  </div>
   <h2 class="section">Third-party software</h2>
   <div class="group">
     <div class="item credit">
