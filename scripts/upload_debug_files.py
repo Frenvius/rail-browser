@@ -124,11 +124,15 @@ def read_parts(path):
 def put_part(server, token, file_base, index, block):
     expected = hashlib.sha256(block).hexdigest()
     body = gzip.compress(block, 6, mtime=0)
+    headers = {'Content-Encoding': 'gzip', 'Content-Type': 'application/octet-stream'}
+    if len(body) >= len(block):
+        body = block
+        headers = {'Content-Type': 'application/octet-stream'}
     for attempt in range(1, ATTEMPTS + 1):
         try:
             status, payload = send(
                 server, token, 'PUT', '{}/parts/{}'.format(file_base, index), body=body,
-                headers={'Content-Encoding': 'gzip', 'Content-Type': 'application/octet-stream'})
+                headers=headers)
             if status != 201:
                 message = 'HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace'))
                 if status < 500:
