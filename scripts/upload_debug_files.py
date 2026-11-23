@@ -112,6 +112,22 @@ def send(server, token, method, path, body=None, headers=None):
         connection.close()
 
 
+def send_retrying(server, token, method, path, body=None, headers=None, verify=None):
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            status, payload = send(server, token, method, path, body=body, headers=headers)
+            if status >= 500:
+                raise RetryableError('HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace')))
+            if verify:
+                verify(status, payload)
+            return status, payload
+        except (OSError, http.client.HTTPException, RetryableError) as error:
+            if attempt == ATTEMPTS:
+                raise UploadError('{} {}: {}'.format(method, path, error))
+            print('retry {}/{} {} {}: {}'.format(attempt, ATTEMPTS - 1, method, path, error), file=sys.stderr)
+            time.sleep(2 ** attempt)
+
+
 def read_parts(path):
     with path.open('rb') as source:
         while True:
@@ -128,25 +144,15 @@ def put_part(server, token, file_base, index, block):
     if len(body) >= len(block):
         body = block
         headers = {'Content-Type': 'application/octet-stream'}
-    for attempt in range(1, ATTEMPTS + 1):
-        try:
-            status, payload = send(
-                server, token, 'PUT', '{}/parts/{}'.format(file_base, index), body=body,
-                headers=headers)
-            if status != 201:
-                message = 'HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace'))
-                if status < 500:
-                    raise UploadError(message)
-                raise RetryableError(message)
-            remote = json.loads(payload).get('sha256')
-            if remote != expected:
-                raise RetryableError('sha256 mismatch: local {} remote {}'.format(expected, remote))
-            return
-        except (OSError, http.client.HTTPException, RetryableError) as error:
-            if attempt == ATTEMPTS:
-                raise UploadError('part {}: {}'.format(index, error))
-            print('retry {}/{} part {}: {}'.format(attempt, ATTEMPTS - 1, index, error), file=sys.stderr)
-            time.sleep(2 ** attempt)
+    def verify(status, payload):
+        if status != 201:
+            raise UploadError('part {} HTTP {}: {}'.format(index, status, payload[:200].decode('utf-8', 'replace')))
+        remote = json.loads(payload).get('sha256')
+        if remote != expected:
+            raise RetryableError('sha256 mismatch: local {} remote {}'.format(expected, remote))
+
+    send_retrying(server, token, 'PUT', '{}/parts/{}'.format(file_base, index), body=body,
+                  headers=headers, verify=verify)
 
 
 def upload(server, token, base, path):
@@ -162,8 +168,8 @@ def upload(server, token, base, path):
     if count == 0:
         raise UploadError('{} is empty'.format(path.name))
     body = json.dumps({'parts': count, 'size': total, 'sha256': digest.hexdigest()}).encode('utf-8')
-    status, payload = send(server, token, 'POST', file_base + '/complete', body=body,
-                           headers={'Content-Type': 'application/json'})
+    status, payload = send_retrying(server, token, 'POST', file_base + '/complete', body=body,
+                                    headers={'Content-Type': 'application/json'})
     if status != 201:
         raise UploadError('complete HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace')))
     return count
@@ -202,7 +208,11 @@ def main():
             print('FAILED {}: {}'.format(path.name, error), file=sys.stderr)
             return 1
         print('{} {} bytes {} parts {:.1f}s'.format(path.name, path.stat().st_size, parts, time.monotonic() - started))
-    status, payload = send(args.server, token, 'POST', base + '/process')
+    try:
+        status, payload = send_retrying(args.server, token, 'POST', base + '/process')
+    except UploadError as error:
+        print('process failed: {}'.format(error), file=sys.stderr)
+        return 1
     if status != 202:
         print('process failed: HTTP {}: {}'.format(status, payload[:200].decode('utf-8', 'replace')), file=sys.stderr)
         return 1
