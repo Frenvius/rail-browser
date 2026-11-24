@@ -22,6 +22,7 @@
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface_iterator.h"
+#include "chrome/browser/ui/browser_window/public/desktop_browser_window_capabilities.h"
 #include "chrome/browser/ui/navigator/browser_navigator.h"
 #include "chrome/browser/ui/navigator/browser_navigator_params.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
@@ -84,6 +85,11 @@ struct TabRequest {
   bool foreground = true;
 };
 
+bool AcceptsNewTabs(BrowserWindowInterface* browser) {
+  return browser && !browser->IsDeleteScheduled() &&
+         !browser->capabilities()->IsAttemptingToCloseBrowser();
+}
+
 content::WebContents* InsertBlankTab(
     BrowserWindowInterface* browser,
     std::unique_ptr<content::WebContents> contents,
@@ -111,7 +117,7 @@ content::WebContents* InsertBlankTab(
 content::WebContents* InsertTab(BrowserWindowInterface* browser,
                                 Profile* profile,
                                 const TabRequest& request) {
-  if (!browser || !profile) {
+  if (!AcceptsNewTabs(browser) || !profile) {
     return nullptr;
   }
 
@@ -161,7 +167,7 @@ void OnMoveProfileResolved(base::WeakPtr<BrowserWindowInterface> browser,
                            TabCreatedCallback callback,
                            Profile* profile) {
   tabs::TabInterface* tab = handle.Get();
-  if (!browser || !tab) {
+  if (!AcceptsNewTabs(browser.get()) || !tab) {
     std::move(callback).Run(nullptr);
     return;
   }
