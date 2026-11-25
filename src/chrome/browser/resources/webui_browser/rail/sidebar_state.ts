@@ -75,6 +75,7 @@ export interface SidebarState {
   material?: number;
   spaces: StoredSpace[];
   favoritesByProfile?: Record<string, StoredPin[]>;
+  favoritesHintDismissedByProfile?: Record<string, boolean>;
   favorites?: StoredPin[];
   essentials?: StoredPin[];
   rev?: string;

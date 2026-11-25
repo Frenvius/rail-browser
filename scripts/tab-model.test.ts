@@ -20,6 +20,7 @@ const load = (file: string, name: string, mini = false,
     deps: Record<string, unknown> = {}) => {
   const scope: Record<string, unknown> = {
     SystemBackdropMaterial: {kAcrylic: 0, kMica: 1, kMicaAlt: 2},
+    isWindows: true,
     INCOGNITO: false,
     MINI: mini,
     WINDOW_ID: 'test-window',
@@ -43,11 +44,48 @@ const Spaces = load('spaces', 'Spaces');
 const PinnedTabs = load('pinned_tabs', 'PinnedTabs');
 const ReopenHistory = load('pinned_tabs', 'ReopenHistory');
 const nativeTabMoves = load('tab_drag', 'nativeTabMoves');
-const TabDrag = load('tab_drag', 'TabDrag');
+const favoriteSlot = load('favorites', 'favoriteSlot');
+const TabDrag = load('tab_drag', 'TabDrag', false, {
+  FavoriteDropPreview: load('favorites', 'FavoriteDropPreview'),
+});
 const tab = (id: string) => ({id, url: 'https://example.test/', title: id,
   favicon: {dataUrl: ''}});
 const state = {activeSpace: 's', spaces: [{id: 's', name: 'S', color: '#192e50',
   activeUrl: '', pinned: [], tabs: []}]};
+
+test('favorite insertion uses both axes, including wrapped rows and the preview gap', () => {
+  const slots = [0, 1, 2, 3, 4].map(i => {
+    const left = (i % 3) * 45;
+    const top = Math.floor(i / 3) * 45;
+    return {rect: {left, top, width: 40, bottom: top + 40, right: left + 40}, gap: i === 1};
+  });
+  expect(favoriteSlot(slots, 52, 10, false)).toBe(1);
+  expect(favoriteSlot(slots, 1, 55, false)).toBe(2);
+  expect(favoriteSlot(slots, 200, 55, false)).toBe(4);
+  expect(favoriteSlot(slots, -10, -10, false)).toBe(0);
+});
+
+test('favorites keep profile order and dismissal through serialization and merge', () => {
+  const pins = new PinnedTabs(() => {});
+  const spaces = new Spaces(() => {});
+  spaces.restore(state, [], new Set());
+  const folders = {storedIn: () => []};
+  const serialize = load('spaces', 'serializeSidebar');
+  const save = () => serialize(spaces, pins, folders, folders);
+  const a = pins.pin(tab('a'), 'fav:p', '');
+  const b = pins.pin(tab('b'), 'fav:p', '');
+  pins.pin(tab('c'), 'fav:q', '');
+  const base = save();
+  pins.moveTo(b.key, 'fav:p', 0);
+  pins.dismissFavoritesHint('q');
+  const theirs = structuredClone(base);
+  theirs.favoritesHintDismissedByProfile = {p: true};
+  const restored = new PinnedTabs(() => {});
+  restored.restore(mergeState(base, save(), theirs), [], new Set());
+  expect(restored.favorites('p').map((row: {key: string}) => row.key)).toEqual([b.key, a.key]);
+  expect(restored.favorites('q')).toHaveLength(1);
+  expect(restored.favoritesHintDismissedByProfile).toEqual({p: true, q: true});
+});
 
 test('native moves use current indices and preserve collection boundaries', () => {
   const leaf = (id: string) => ({data: {tab: {id}}, children: []});

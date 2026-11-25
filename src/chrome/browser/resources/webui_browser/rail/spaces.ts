@@ -1450,5 +1450,6 @@ export function serializeSidebar(
     material: spaces.material,
     spaces: stored,
     favoritesByProfile,
+    favoritesHintDismissedByProfile: pinned.favoritesHintDismissedByProfile,
   };
 }

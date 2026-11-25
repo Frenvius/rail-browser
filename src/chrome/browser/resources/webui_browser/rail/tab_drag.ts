@@ -5,6 +5,8 @@ import type {TabStripItem} from '../tab_strip/items.js';
 import type {TabElement} from '../tab_strip/tab.js';
 import type {TabDragHost} from '../tab_strip/tab_drag_host.js';
 
+import {containsPoint, FavoriteDropPreview} from './favorites.js';
+
 export function nativeTabMoves(root: Container, order: string[]):
     Array<{id: string, position: Position}> {
   const ranks = new Map(order.map((id, index) => [id, index]));
@@ -107,6 +109,8 @@ export interface RailDragHost extends Omit<
   applyDragSlots(slots: DragSlot[], pinned: boolean): void;
   dragElementFor(slot: DragSlot): HTMLElement|null;
   moveTabToSpace(tabId: string, spaceId: string): void;
+  placeFavorite(id: string, index: number): void;
+  moveFavoriteToActiveSpace(id: string): void;
   setTabPinned(tabId: string, pinned: boolean): PinnedDragRows;
   captureDragState(): () => void;
   setTabFolder(tabId: string, folderId: string): void;
@@ -133,6 +137,8 @@ export class TabDrag {
   private layoutFrame_ = 0;
   private pinned_ = false;
   private dormant_ = false;
+  private favoriteOrigin_ = false;
+  private readonly favorites_ = new FavoriteDropPreview();
   private isGroup_ = false;
   private suppressClick_ = false;
   private dragging_ = false;
@@ -181,6 +187,7 @@ export class TabDrag {
     this.revertCrossing_ = null;
     this.pinned_ = tab ? tab.pinned : !!folderId;
     this.dormant_ = tab ? tab.dormant : false;
+    this.favoriteOrigin_ = !!tab?.tile;
     this.startX_ = e.clientX;
     this.startY_ = e.clientY;
     this.lastY_ = e.clientY;
@@ -215,6 +222,22 @@ export class TabDrag {
     this.lastY_ = y;
     this.lastX_ = x;
     this.hoverDot_(x, y);
+    const root = this.host_.shadowRoot!;
+    const strip = root.querySelector('#tabstrip');
+    if (this.hoveredDot_ || !strip || !containsPoint(strip.getBoundingClientRect(), x, y)) {
+      this.favorites_.clear();
+      this.hoverFolder_(x, y);
+      return;
+    }
+    if (!this.isGroup_ && this.favorites_.hover(root, {x, y}, this.element_())) {
+      this.hoveredFolder_?.classList.remove('droptarget');
+      this.hoveredFolder_ = null;
+      return;
+    }
+    if (this.favoriteOrigin_) {
+      this.hoverFolder_(x, y);
+      return;
+    }
     const crossed = this.hoverDivider_(y);
     this.hoverFolder_(x, y);
     if (!crossed && !this.hoveredFolder_) {
@@ -222,10 +245,17 @@ export class TabDrag {
     }
   }
 
-  onDragEnded(inside: boolean) {
+  onDragEnded(inside: boolean, point?: {x: number, y: number}) {
     if (!this.dragging_) {
       return;
     }
+    if (point && inside) {
+      this.onDragMoved(point.x, point.y);
+      const strip = this.host_.shadowRoot?.querySelector('#tabstrip');
+      inside = !!strip && containsPoint(strip.getBoundingClientRect(), point.x, point.y);
+    }
+    const index = this.favorites_.index;
+    const favoriteOrigin = this.favoriteOrigin_;
     const spaceId = this.hoveredDot_?.dataset['id'];
     const folderId = this.hoveredFolder_?.dataset['folder'];
     const tabId = this.tabId_;
@@ -235,15 +265,36 @@ export class TabDrag {
 
     if (!inside) {
       revert?.();
-    } else {
-      if (spaceId) {
-        this.host_.moveTabToSpace(tabId, spaceId);
-      } else if (folderId) {
-        this.host_.setTabFolder(tabId, folderId);
-      }
+    } else if (spaceId) {
+      this.host_.moveTabToSpace(tabId, spaceId);
+    } else if (index >= 0) {
+      this.host_.placeFavorite(tabId, index);
+    } else if (favoriteOrigin && point) {
+      this.dropFavorite_(tabId, point, folderId);
+    } else if (folderId) {
+      this.host_.setTabFolder(tabId, folderId);
     }
     this.host_.syncTabOrder();
     this.host_.requestUpdate();
+  }
+
+  private dropFavorite_(id: string, point: {x: number, y: number}, folder?: string) {
+    const root = this.host_.shadowRoot;
+    const area = root?.querySelector('#scrollArea')?.getBoundingClientRect();
+    const title = root?.querySelector('#spaceTitle')?.getBoundingClientRect();
+    const divider = root?.querySelector('#pinnedDivider')?.getBoundingClientRect();
+    if (!area || !divider || point.y < (title?.top ?? area.top) || point.y >= area.bottom) {
+      return;
+    }
+    const pinned = point.y < divider.top + divider.height / 2;
+    const slots = this.host_.dragSlots(pinned, false)
+                      .filter(slot => this.host_.dragElementFor(slot));
+    const at = slots.findIndex(slot => point.y < this.midpoint_(this.host_.dragElementFor(slot)!));
+    const position = at < 0 ? slots.length : at;
+    this.host_.moveFavoriteToActiveSpace(id);
+    const row = pinned ? id : this.host_.setTabPinned(id, false).tabId;
+    slots.splice(position, 0, {id: row, kind: 'tab', group: folder || slots[position - 1]?.group || ''});
+    this.host_.applyDragSlots(slots, pinned);
   }
 
   private move_(e: MouseEvent) {
@@ -275,8 +326,9 @@ export class TabDrag {
       row: element.getBoundingClientRect(),
       grabX: this.offsetX_,
       grabY: this.offsetY_,
-      detachable: !this.dormant_ && !this.isGroup_,
+      detachable: !this.dormant_ && !this.isGroup_ && !this.favoriteOrigin_,
     });
+    this.host_.shadowRoot?.querySelector('#tabstrip')?.classList.toggle('favorite-drag', !this.isGroup_);
     element.classList.add('dragsource');
   }
 
@@ -290,6 +342,8 @@ export class TabDrag {
   }
 
   private clearDragUi_() {
+    this.favorites_.clear();
+    this.host_.shadowRoot?.querySelector('#tabstrip')?.classList.remove('favorite-drag');
     cancelAnimationFrame(this.layoutFrame_);
     this.layoutFrame_ = 0;
     clearInterval(this.scrollTimer_);
@@ -378,10 +432,13 @@ export class TabDrag {
   private edgeScroll_() {
     const list =
         this.host_.shadowRoot?.querySelector<HTMLElement>('#scrollArea');
-    if (!list) {
+    if (!list || this.favorites_.index >= 0 || this.hoveredDot_) {
       return;
     }
     const rect = list.getBoundingClientRect();
+    if (!containsPoint(rect, this.lastX_, this.lastY_)) {
+      return;
+    }
     const up = this.lastY_ < rect.top + SCROLL_EDGE;
     const down = this.lastY_ > rect.bottom - SCROLL_EDGE;
     if (!up && !down) {

@@ -5119,7 +5119,7 @@ index 6f872ee..aa86f39 100644
      FinishDiscardAndPreserveWebContents(reason, tab_memory_footprint_estimate,
                                          discard_start_time);
 diff --git a/chrome/browser/resources/webui_browser/BUILD.gn b/chrome/browser/resources/webui_browser/BUILD.gn
-index 8b36341..e687188 100644
+index 8b36341..64a5840 100644
 --- a/chrome/browser/resources/webui_browser/BUILD.gn
 +++ b/chrome/browser/resources/webui_browser/BUILD.gn
 @@ -9,7 +9,18 @@ assert(!is_android)
@@ -5142,7 +5142,7 @@ index 8b36341..e687188 100644
  
    ts_files = [
      "app.html.ts",
-@@ -27,6 +38,66 @@ build_webui("build") {
+@@ -27,6 +38,67 @@ build_webui("build") {
      "extension.ts",
      "extensions_bar.ts",
      "icons.html.ts",
@@ -5152,6 +5152,7 @@ index 8b36341..e687188 100644
 +    "rail/command.ts",
 +    "rail/command_registry.ts",
 +    "rail/docked_devtools.ts",
++    "rail/favorites.ts",
 +    "rail/folder_icon.ts",
 +    "rail/downloads.ts",
 +    "rail/folders.ts",
@@ -5209,7 +5210,7 @@ index 8b36341..e687188 100644
      "side_panel.html.ts",
      "side_panel.ts",
      "tab_strip/events.ts",
-@@ -54,6 +125,22 @@ build_webui("build") {
+@@ -54,6 +126,22 @@ build_webui("build") {
      "content_region.css",
      "extension.css",
      "extensions_bar.css",
@@ -5232,7 +5233,7 @@ index 8b36341..e687188 100644
      "side_panel.css",
      "tab_strip/tab.css",
      "tab_strip/tab_group.css",
-@@ -67,7 +154,15 @@ build_webui("build") {
+@@ -67,7 +155,15 @@ build_webui("build") {
      # reference import issue.
      "$root_gen_dir/components/tabs/public/mojom/tabs.mojom-webui.ts",
      "$root_gen_dir/chrome/browser/ui/webui_browser/bookmark_bar.mojom-webui.ts",
@@ -5248,7 +5249,7 @@ index 8b36341..e687188 100644
      "$root_gen_dir/components/browser_apis/bookmarks/bookmarks_api.mojom-webui.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/node_id_converter.ts",
      "$root_gen_dir/components/browser_apis/tab_strip/tab_strip_api_types.mojom-converters.ts",
-@@ -79,4 +174,5 @@ build_webui("build") {
+@@ -79,4 +175,5 @@ build_webui("build") {
    mojo_files_deps = [
 +    "//chrome/browser/ui/webui/downloads:mojo_bindings_ts__generator",
      "//chrome/browser/ui/webui_browser:browser_mojo_bindings_ts__generator",
@@ -5640,7 +5641,7 @@ index 5e48dff..1d88d6a 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/app.ts b/chrome/browser/resources/webui_browser/app.ts
-index 922ef29..5799035 100644
+index 922ef29..a34872b 100644
 --- a/chrome/browser/resources/webui_browser/app.ts
 +++ b/chrome/browser/resources/webui_browser/app.ts
 @@ -2,7 +2,6 @@
@@ -6031,8 +6032,8 @@ index 922ef29..5799035 100644
 +    browserProxyFactory.getInstance().callbackRouter.onTabDragMoved.addListener(
 +        (point: Point) => this.$.tabstrip.onTabDragMoved(point.x, point.y));
 +    browserProxyFactory.getInstance().callbackRouter.onTabDragEnded.addListener(
-+        (_point: Point, inside: boolean) =>
-+            this.$.tabstrip.onTabDragEnded(inside));
++        (point: Point, inside: boolean) =>
++            this.$.tabstrip.onTabDragEnded(inside, point));
 +    browserProxyFactory.getInstance().callbackRouter.onTabDropTarget.addListener(
 +        (visible: boolean) => this.$.tabstrip.onTabDropTarget(visible));
 +  }
@@ -6792,16 +6793,17 @@ index 0fbaf6c..e58d103 100644
 -  --cr-icon-button-margin-end: 8px;
 -}
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-index a15445b..df17256 100644
+index a15445b..ce9eec4 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts
-@@ -2,30 +2,204 @@
+@@ -2,30 +2,206 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
  
 -import {html, repeat} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 +import {html} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 +
++import {favoritesHint} from '../rail/favorites.js';
 +import {folderIcon} from '../rail/folder_icon.js';
  
  import type {TabStripElement} from './tab_strip.js';
@@ -6818,6 +6820,7 @@ index a15445b..df17256 100644
 -               @tab-close-click="${this.onTabCloseClick}">
 +<div id="tabstrip" ?inert="${this.libraryOpen_}"
 +    @contextmenu="${this.onStripContextmenu_}">
++  ${this.favoriteRows_.length ? '' : favoritesHint(this.favoritesHint_())}
 +  <div id="favoritesList" ?hidden="${!this.favoriteRows_.length}">
 +    ${this.favoriteRows_.map(row => html`
 +          <webui-browser-tab id="${this.tabIdToDomId(row.item.id)}"
@@ -7014,7 +7017,7 @@ index a15445b..df17256 100644
  <!--_html_template_end_-->`;
    // clang-format on
 diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
-index b7a5099..bdd5a4f 100644
+index b7a5099..b4c97ff 100644
 --- a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 +++ b/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts
 @@ -4,6 +4,10 @@
@@ -7594,7 +7597,7 @@ index b7a5099..bdd5a4f 100644
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -306,213 +592,2377 @@ export class TabStripElement extends CrLitElement implements
+@@ -306,213 +592,2409 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -8804,17 +8807,43 @@ index b7a5099..bdd5a4f 100644
 +        section.rows.filter(row => row.item.id === this.activeTab_);
 +  }
 +
++  protected favoritesHint_() {
++    const profile = this.spaces_.profileOf(this.spaces_.activeId);
++    return {
++      dismissed: !!this.pinnedTabs_.favoritesHintDismissedByProfile[profile],
++      dismiss: () => {
++        this.pinnedTabs_.dismissFavoritesHint(profile);
++        this.requestUpdate();
++      },
++    };
++  }
++
 +  private toggleFavorite_(target: TabMenuTarget) {
-+    const entry = this.entryFor_(target.id) ?? this.pinTab_(target.id);
-+    if (!entry) {
-+      return;
++    if (target.favorite) {
++      this.moveFavoriteToActiveSpace(target.id);
++    } else {
++      this.placeFavorite(target.id);
 +    }
-+    this.pinnedTabs_.moveTo(
-+        entry.key,
-+        isFavorites(entry.space) ?
-+            this.spaces_.activeId :
-+            favoritesKey(this.spaces_.profileOf(this.spaces_.activeId)));
-+    this.refreshSections_();
++  }
++
++  placeFavorite(id: string, index?: number) {
++    const entry = this.entryFor_(id) ?? this.pinTab_(id, false);
++    if (entry) {
++      this.pinnedTabs_.moveTo(entry.key,
++          favoritesKey(this.spaces_.profileOf(this.spaces_.activeId)), index);
++      this.refreshSections_();
++    }
++  }
++
++  moveFavoriteToActiveSpace(id: string) {
++    const entry = this.entryFor_(id);
++    if (entry && isFavorites(entry.space)) {
++      this.pinnedTabs_.moveTo(entry.key, this.spaces_.activeId);
++      if (entry.tabId) {
++        this.spaces_.assignPinned(entry.tabId, entry.space, entry.url);
++      }
++      this.refreshSections_();
++    }
 +  }
 +
 +  // A pinned row and the tab behind it move together, so a row never ends up
@@ -9130,6 +9159,7 @@ index b7a5099..bdd5a4f 100644
 +    if (!entry) {
 +      return;
 +    }
++    this.moveFavoriteToActiveSpace(id);
 +    this.pinnedTabs_.unpin(entry.key);
 +    let rowId = entry.tabId;
 +    if (entry.tabId) {
@@ -9506,7 +9536,8 @@ index b7a5099..bdd5a4f 100644
 +    this.wakingPins_.add(entry.key);
 +    this.spaces_.expectPinnedTab();
 +    try {
-+      const tabId = await this.createTab_(entry.url, entry.space);
++      const tabId = await this.createTab_(entry.url,
++          isFavorites(entry.space) ? this.spaces_.activeId : entry.space);
 +      if (tabId) {
 +        this.pinnedTabs_.attach(entry.key, tabId);
 +      }
@@ -9603,6 +9634,9 @@ index b7a5099..bdd5a4f 100644
 +
 +    // Activating a tab of a hidden space follows it, so a command bar match
 +    // never activates something the sidebar is not showing.
++    if (isFavorites(this.pinnedTabs_.byTab(tabId)?.space ?? '')) {
++      this.spaces_.assignPinned(tabId, this.spaces_.activeId, item.tabData.url);
++    }
 +    this.spaces_.noteActive(tabId);
 +    this.setActiveTab_(tabId);
 +    this.refreshSections_();
@@ -9708,7 +9742,8 @@ index b7a5099..bdd5a4f 100644
 +
 +  selectTabAt(index: number) {
 +    const order = this.rowOrder_();
-+    this.selectRow_(index < 0 ? order[order.length - 1] : order[index]);
++    const favorite = this.favoriteRows_[index < 0 ? 8 : index];
++    this.selectRow_(favorite?.item.id ?? order[index < 0 ? order.length - 1 : index]);
 +  }
 +
 +  stepTab(delta: number) {
@@ -10003,8 +10038,8 @@ index b7a5099..bdd5a4f 100644
 +    this.dragDelegate_.onDragMoved(x, y);
 +  }
 +
-+  onTabDragEnded(inside: boolean) {
-+    this.dragDelegate_.onDragEnded(inside);
++  onTabDragEnded(inside: boolean, point: {x: number, y: number}) {
++    this.dragDelegate_.onDragEnded(inside, point);
 +  }
 +
 +  onTabDropTarget(visible: boolean) {

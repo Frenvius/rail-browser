@@ -90,6 +90,70 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+#favoritesList[hidden] {
+  display: none;
+}
+
+#favoritesHint {
+  align-items: center;
+  border: 1px dashed var(--rail-border);
+  border-radius: 10px;
+  color: var(--rail-text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 6px 8px;
+  padding: 12px 24px;
+  position: relative;
+  text-align: center;
+}
+
+#favoritesHint > cr-icon {
+  --iron-icon-height: 16px;
+  --iron-icon-width: 16px;
+}
+
+#favoritesHint strong {
+  color: var(--rail-text);
+  font-size: 13px;
+}
+
+#favoritesHint span {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#favoritesHint cr-icon-button {
+  -webkit-app-region: no-drag;
+  --cr-icon-button-size: 24px;
+  --cr-icon-button-icon-size: 14px;
+  inset-block-start: 2px;
+  inset-inline-end: 2px;
+  position: absolute;
+}
+
+#tabstrip:not(.favorite-drag) #favoritesHint[data-dismissed] {
+  display: none;
+}
+
+.favorite-drag :is(#favoritesHint, #favoritesList) {
+  background: var(--rail-surface);
+  border-radius: 10px;
+  outline: 1px dashed var(--rail-accent);
+  outline-offset: -1px;
+}
+
+.favorite-drag :is(#favoritesHint, #favoritesList).droptarget {
+  background: var(--rail-accent-soft);
+  outline-style: solid;
+}
+
+#favoritesList > .favorite-gap {
+  border-radius: 8px;
+  outline: 1px dashed var(--rail-accent);
+  outline-offset: -1px;
+}
+
 #favoritesList::-webkit-scrollbar {
   width: 0;
 }
@@ -523,6 +587,7 @@ webui-browser-tab {
 }
 
 @container style(--rail-sidebar-icons: 1) {
+  #favoritesHint,
   #spaceBar,
   #dividerActions,
   #newTabButton span,

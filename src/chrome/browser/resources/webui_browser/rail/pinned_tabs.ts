@@ -40,6 +40,14 @@ export interface PinnedEntry {
 // not have a tab driving it, which is what lets the row outlive a close.
 export class PinnedTabs {
   private entries_: PinnedEntry[] = [];
+  favoritesHintDismissedByProfile: Record<string, boolean> = {};
+
+  dismissFavoritesHint(profile: string) {
+    this.favoritesHintDismissedByProfile = {
+      ...this.favoritesHintDismissedByProfile, [profile]: true,
+    };
+    this.onChange_();
+  }
 
   constructor(private onChange_: () => void) {}
 
@@ -64,6 +72,7 @@ export class PinnedTabs {
   restore(
       state: SidebarState|null, tabs: Tab[], claimed: Set<string>,
       adopted = '') {
+    this.favoritesHintDismissedByProfile = state?.favoritesHintDismissedByProfile ?? {};
     const previous = new Map(this.entries_.map(entry => [entry.key, entry]));
     this.entries_ = [];
     const groups: Array<[string, StoredPin[]]> =
@@ -289,13 +298,19 @@ export class PinnedTabs {
     this.onChange_();
   }
 
-  moveTo(key: string, spaceId: string) {
+  moveTo(key: string, spaceId: string, index?: number) {
     const entry = this.byKey(key);
     if (!entry) {
       return;
     }
     entry.space = spaceId;
     entry.folder = '';
+    if (index !== undefined) {
+      this.entries_.splice(this.entries_.indexOf(entry), 1);
+      const rows = this.entriesIn(spaceId);
+      const before = rows[Math.max(0, index)];
+      this.entries_.splice(before ? this.entries_.indexOf(before) : this.entries_.length, 0, entry);
+    }
     this.onChange_();
   }
 
