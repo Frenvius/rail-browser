@@ -123,6 +123,8 @@ export class RailSettingsElement extends CrLitElement {
       updateStatus_: {type: Number, state: true},
       readyVersion_: {type: String, state: true},
       sendCrashReports_: {type: Boolean, state: true},
+      pushEnabled_: {type: Boolean, state: true},
+      pushBackgroundEnabled_: {type: Boolean, state: true},
     };
   }
 
@@ -178,6 +180,8 @@ export class RailSettingsElement extends CrLitElement {
   protected accessor updateStatus_ = UpdateStatus.kUnavailable;
   protected accessor readyVersion_ = '';
   protected accessor sendCrashReports_ = false;
+  protected accessor pushEnabled_ = true;
+  protected accessor pushBackgroundEnabled_ = true;
   protected readonly models_ = [
     {id: 'z-ai/glm-5.3-flash', name: 'GLM 5.3 Flash', price: '$0.01 / $0.20'},
     {
@@ -284,6 +288,9 @@ export class RailSettingsElement extends CrLitElement {
     const update = await handler.getUpdateStatus();
     this.setUpdateStatus_(update.status, update.version);
     this.sendCrashReports_ = (await handler.getSendCrashReports()).enabled;
+    this.pushEnabled_ = (await handler.getPushEnabled()).enabled;
+    this.pushBackgroundEnabled_ =
+        (await handler.getPushBackgroundEnabled()).enabled;
     const spaces = storedSpaces(value);
     this.spaces_ = spaces.map(
         ({id, name, profile}) => ({id, name, profile: profile ?? ''}));
@@ -782,6 +789,16 @@ export class RailSettingsElement extends CrLitElement {
   protected onSendCrashReportsChange_(e: CustomEvent<boolean>) {
     browserProxyFactory.getInstance().handler.setSendCrashReports(e.detail);
     this.sendCrashReports_ = e.detail;
+  }
+
+  protected onPushEnabledChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setPushEnabled(e.detail);
+    this.pushEnabled_ = e.detail;
+  }
+
+  protected onPushBackgroundEnabledChange_(e: CustomEvent<boolean>) {
+    browserProxyFactory.getInstance().handler.setPushBackgroundEnabled(e.detail);
+    this.pushBackgroundEnabled_ = e.detail;
   }
 
   protected onLinkClick_(e: Event) {

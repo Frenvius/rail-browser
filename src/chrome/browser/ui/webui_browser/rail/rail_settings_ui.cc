@@ -35,6 +35,7 @@
 #include "chrome/browser/ui/webui_browser/rail/rail_site_routes.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_tab_organizer.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_crash_reporting.h"
+#include "chrome/browser/ui/webui_browser/rail/rail_push_driver.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_updater.h"
 #include "chrome/browser/ui/webui_browser/rail/rail_webui_browser.h"
 #include "chrome/browser/ui/webui_browser/webui_browser_ui.h"
@@ -644,6 +645,30 @@ void RailSettingsUI::GetSendCrashReports(
 
 void RailSettingsUI::SetSendCrashReports(bool enabled) {
   rail::SetSendCrashReports(enabled);
+}
+
+void RailSettingsUI::GetPushEnabled(GetPushEnabledCallback callback) {
+  PrefService* prefs = PrefsFor(web_ui());
+  std::move(callback).Run(prefs ? prefs->GetBoolean(kPushEnabledPref) : true);
+}
+
+void RailSettingsUI::SetPushEnabled(bool enabled) {
+  if (PrefService* prefs = PrefsFor(web_ui())) {
+    prefs->SetBoolean(kPushEnabledPref, enabled);
+  }
+}
+
+void RailSettingsUI::GetPushBackgroundEnabled(
+    GetPushBackgroundEnabledCallback callback) {
+  PrefService* prefs = PrefsFor(web_ui());
+  std::move(callback).Run(
+      prefs ? prefs->GetBoolean(kPushBackgroundPref) : true);
+}
+
+void RailSettingsUI::SetPushBackgroundEnabled(bool enabled) {
+  if (PrefService* prefs = PrefsFor(web_ui())) {
+    prefs->SetBoolean(kPushBackgroundPref, enabled);
+  }
 }
 
 void RailSettingsUI::OpenUrl(const std::string& url) {

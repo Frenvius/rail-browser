@@ -154,6 +154,14 @@ interface PageHandler {
 
   SetSendCrashReports(bool enabled);
 
+  GetPushEnabled() => (bool enabled);
+
+  SetPushEnabled(bool enabled);
+
+  GetPushBackgroundEnabled() => (bool enabled);
+
+  SetPushBackgroundEnabled(bool enabled);
+
   OpenUrl(string url);
 
   Close();

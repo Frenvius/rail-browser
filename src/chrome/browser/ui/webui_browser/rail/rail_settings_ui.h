@@ -126,6 +126,10 @@ class RailSettingsUI : public TopChromeWebUIController,
   void ApplyUpdate() override;
   void GetSendCrashReports(GetSendCrashReportsCallback callback) override;
   void SetSendCrashReports(bool enabled) override;
+  void GetPushEnabled(GetPushEnabledCallback callback) override;
+  void SetPushEnabled(bool enabled) override;
+  void GetPushBackgroundEnabled(GetPushBackgroundEnabledCallback callback) override;
+  void SetPushBackgroundEnabled(bool enabled) override;
   void OpenUrl(const std::string& url) override;
   void Close() override;
 

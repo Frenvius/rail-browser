@@ -566,6 +566,29 @@ ${this.section_ === 'about' ? html`
       <cr-toggle ?checked="${this.sendCrashReports_}"
         @change="${this.onSendCrashReportsChange_}"></cr-toggle>
     </div>
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Push notifications from sites</span>
+        <span class="cardhint">
+          Sites you allow can send notifications through Rail's push service.
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.pushEnabled_}"
+        @change="${this.onPushEnabledChange_}"></cr-toggle>
+    </div>
+    <div class="item">
+      <div class="rowtext">
+        <span class="cardtitle">Keep running in the background</span>
+        <span class="cardhint">
+          When a site is subscribed to notifications, closing the last window
+          keeps Rail running so notifications keep arriving, and Rail starts
+          in the background when you sign in.
+        </span>
+      </div>
+      <cr-toggle ?checked="${this.pushBackgroundEnabled_}"
+        ?disabled="${!this.pushEnabled_}"
+        @change="${this.onPushBackgroundEnabledChange_}"></cr-toggle>
+    </div>
   </div>
   <h2 class="section">Third-party software</h2>
   <div class="group">

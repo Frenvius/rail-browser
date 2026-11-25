@@ -33,6 +33,35 @@ source_set("pip_controls") {
   ]
 }
 
+source_set("push") {
+  sources = [
+    "rail_gcm_profile_service.cc",
+    "rail_gcm_profile_service.h",
+    "rail_push_background.h",
+    "rail_push_driver.cc",
+    "rail_push_driver.h",
+    "rail_push_socket.cc",
+    "rail_push_socket.h",
+    "rail_push_store.cc",
+    "rail_push_store.h",
+  ]
+  deps = [
+    "//base",
+    "//chrome/browser/profiles:profile",
+    "//components/gcm_driver",
+    "//components/pref_registry",
+    "//components/prefs",
+    "//content/public/browser",
+    "//mojo/public/cpp/bindings",
+    "//mojo/public/cpp/system",
+    "//net",
+    "//net/traffic_annotation",
+    "//services/network/public/cpp",
+    "//services/network/public/mojom",
+    "//url",
+  ]
+}
+
 declare_args() {
   rail_version = ""
 }
