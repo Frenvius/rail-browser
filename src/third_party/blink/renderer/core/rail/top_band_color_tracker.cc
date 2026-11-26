@@ -209,7 +209,7 @@ class TopBandColorTracker final
                 scoped_refptr<Image> image,
                 std::optional<SkColor> color)
         : object(&object),
-          style(&object.StyleRef()),
+          style(&object.Style()),
           image(std::move(image)),
           box(object.AbsoluteBoundingBoxRect().size()),
           time(base::TimeTicks::Now()),
@@ -386,7 +386,7 @@ class TopBandColorTracker final
         object->IsText()) {
       return nullptr;
     }
-    const ComputedStyle& style = object->StyleRef();
+    const ComputedStyle& style = object->Style();
     if (style.Visibility() != EVisibility::kVisible || style.Opacity() <= 0) {
       return nullptr;
     }
@@ -461,7 +461,7 @@ class TopBandColorTracker final
           continue;
         }
       }
-      const ComputedStyle& style = object->StyleRef();
+      const ComputedStyle& style = object->Style();
       auto* model = DynamicTo<LayoutBoxModelObject>(object);
       if (model && model->BackgroundTransfersToView()) {
         continue;
@@ -521,7 +521,7 @@ class TopBandColorTracker final
         image = resource->GetImage();
       }
     } else if (object.GetNode()) {
-      for (const FillLayer* layer = &object.StyleRef().BackgroundLayers();
+      for (const FillLayer* layer = &object.Style().BackgroundLayers();
            layer; layer = layer->Next()) {
         StyleImage* style_image = layer->GetImage();
         if (!style_image) {
@@ -536,7 +536,7 @@ class TopBandColorTracker final
                                   std::min(box.height(), kMaxRasterDimension))
                       : box;
         image = style_image->GetImage(object, *object.GetNode(),
-                                      object.StyleRef(), gfx::SizeF(target));
+                                      object.Style(), gfx::SizeF(target));
         if (image) {
           break;
         }
@@ -546,7 +546,7 @@ class TopBandColorTracker final
       return nullptr;
     }
     for (const auto& sample : image_samples_) {
-      if (sample->object == &object && sample->style == &object.StyleRef() &&
+      if (sample->object == &object && sample->style == &object.Style() &&
           sample->image == image && sample->box == box) {
         return sample.Get();
       }

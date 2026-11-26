@@ -21,9 +21,7 @@ ungoogled/windows-fix-complex-builtins.patch
 ungoogled/windows-fix-remove-unused-preferences-fields.patch
 ungoogled/windows-fix-missing-includes.patch
 ungoogled/windows-fix-unsupported-llvm-flags.patch
-ungoogled/windows-fix-building-without-crubit.patch
 ungoogled/windows-fix-python.patch
 ungoogled/windows-fix-typescript-lib-dom.patch
-ungoogled/windows-disable-private-verification-tokens.patch
 toolchain/windows-pch-module-name.patch
 toolchain/midl-empty-source-placeholder.patch

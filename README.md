@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/Windows-11-0078D4" alt="Windows 11">
   <img src="https://img.shields.io/badge/macOS-Apple%20silicon-000000" alt="macOS on Apple silicon">
   <img src="https://img.shields.io/badge/Linux-later-lightgrey" alt="Linux later">
-  <img src="https://img.shields.io/badge/Chromium-155-4285F4" alt="Chromium 155">
+  <img src="https://img.shields.io/badge/Chromium-158-4285F4" alt="Chromium 158">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-BSD--3--Clause-green" alt="BSD-3-Clause"></a>
 </p>
 
