@@ -129,6 +129,7 @@
   --cr-icon-button-icon-size: 14px;
   inset-block-start: 2px;
   inset-inline-end: 2px;
+  margin: 0;
   position: absolute;
 }
 

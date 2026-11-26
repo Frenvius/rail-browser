@@ -1,6 +1,11 @@
 import {html, nothing} from '//resources/lit/v3_0/lit.rollup.js';
 
+import {INCOGNITO} from './sidebar_state.js';
+
 export function favoritesHint(hint: {dismissed: boolean, dismiss: () => void}) {
+  if (INCOGNITO) {
+    return nothing;
+  }
   return html`
     <div id="favoritesHint" ?data-dismissed="${hint.dismissed}">
       <cr-icon icon="cr:star-filled" aria-hidden="true"></cr-icon>
