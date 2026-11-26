@@ -30,6 +30,26 @@ def compile_asset_catalog(env):
         shutil.copy2(Path(tmp) / 'Assets.car', theme / 'Assets.car')
 
 
+def build_crubit(env):
+    rust = SOURCE / 'third_party' / 'rust-toolchain'
+    crubit = rust / 'crubit'
+    binary = crubit / 'bin' / 'cc_bindings_from_rs'
+    if binary.is_file():
+        return
+    target = SOURCE / 'out' / 'crubit'
+    cargo_env = env.copy()
+    cargo_env['CARGO_HOME'] = str(target / 'cargo_home')
+    cargo_env['RUSTC'] = str(rust / 'bin' / 'rustc')
+    cargo_env['RUSTFLAGS'] = '-Clink-args=-Wl,-rpath,@loader_path/../../rustc/lib'
+    run(rust / 'bin' / 'cargo', 'build', '--release', '--locked',
+        '-p', 'cc_bindings_from_rs', '--bin', 'cc_bindings_from_rs',
+        '--manifest-path', crubit / 'lib' / 'third_party' / 'crubit' / 'Cargo.toml',
+        '--target-dir', target, env=cargo_env)
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(target / 'release' / 'cc_bindings_from_rs', binary)
+    run(binary, '--help', env=env)
+
+
 def enable_symbols(text):
     text, count = re.subn(r'^symbol_level=\d+[ \t]*$', 'symbol_level=1', text, flags=re.M)
     if count != 1:
@@ -99,6 +119,7 @@ def main():
             rust_env = env.copy()
             rust_env['SDKROOT'] = str(RUST_SDK)
             run(python, 'tools/rust/build_bindgen.py', '--skip-test', env=rust_env)
+        build_crubit(env)
         if args.regenerate or not (output / 'build.ninja').is_file():
             run(gn, 'gen', output, '--fail-on-unused-args',
                 '--script-executable=' + str(python.resolve()), env=env)
