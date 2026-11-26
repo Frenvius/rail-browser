@@ -41,8 +41,11 @@ jobs:
           if [[ -n "$RAIL_VERSION" ]]; then
             [[ "$RAIL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
             git -c fetch.unpackLimit=1 fetch -q --no-tags "$remote" "refs/tags/v$RAIL_VERSION"
-            target="$(git rev-parse "FETCH_HEAD^{commit}")"
-            git merge-base --is-ancestor "$target" "$GITHUB_SHA"
+            tag="$(git rev-parse "FETCH_HEAD^{commit}")"
+            git merge-base --is-ancestor "$tag" "$GITHUB_SHA"
+            if ! git diff --quiet "$tag" "$GITHUB_SHA" -- . ':(exclude)platform' ':(exclude).github'; then
+              target="$tag"
+            fi
           fi
           applied="$(git rev-parse HEAD)"
           if ! git diff --quiet "$applied" "$target" -- ungoogled-chromium patches \
