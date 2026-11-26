@@ -464,7 +464,7 @@ void RailSitePanelUI::ActivateExtension(const std::string& id) {
   WebUIToolbarExtensionsContainer* container = Extensions();
   Close();
   if (container && container->GetActionForId(id)) {
-    container->ExecuteUserAction(id, /*is_pointer_interaction=*/false);
+    container->ExecuteUserAction(id);
   }
 }
 

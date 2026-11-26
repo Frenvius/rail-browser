@@ -5624,7 +5624,7 @@ diff --git a/chrome/browser/resources/webui_browser/app.html.ts b/chrome/browser
 -        </webui-browser-tab-strip>
 +    <div class="titlebarDiv">
 +      <div id="railLogoHit">
-+        ${isMac ? '' : html`<div id="railLogo" @click="${this.onRailLogoClick_}"></div>`}
++        ${!isMac ? html`<div id="railLogo" @click="${this.onRailLogoClick_}"></div>` : ''}
 +        <button id="sidebarToggle" title="Toggle sidebar (${shortcut('Ctrl+S')})"
 +          aria-label="Toggle sidebar"
 +          @click="${this.onSidebarToggleClick_}"></button>
@@ -7000,7 +7000,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts 
 +  </rail-space-bar>
 +  <div id="scrollArea">
 +  <div id="pinnedList">
-+    ${this.visiblePinnedEntries_().map(entry => entry.kind === 'folder' ? html`
++    ${this.visiblePinnedEntries_().map(entry => html`${entry.kind === 'folder' ? html`
 +          <div class="folder" data-id="${entry.section.folder.id}"
 +              style="--rail-folder-level: ${entry.depth}"
 +              ?data-expanded="${entry.section.folder.expanded}">
@@ -7039,14 +7039,14 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts 
 +              @tab-context-menu="${this.onTabContextMenu_}"
 +              @tab-select="${this.onTabSelect_}">
 +          </webui-browser-tab>
-+        `)}
++        `}`)}
 +  </div>
 +  <div id="pinnedDivider" ?data-busy="${this.tidyBusy_}"
 +      ?data-error="${this.tidyError_}">
 +  </div>
 +  <div id="tabList" class="${this.dropTarget_ ? 'droptarget' : ''}">
-+    ${this.looseEntries_.map(entry => entry.kind === 'item' ?
-+        (entry.item.type === 'tab' ? html`
++    ${this.looseEntries_.map(entry => html`${entry.kind === 'item' ?
++        html`${entry.item.type === 'tab' ? html`
 +          <webui-browser-tab id="${this.tabIdToDomId(entry.item.id)}"
 +              .tabData="${entry.item.tabData}"
 +              .dragInProgress="${this.dragInProgress_}"
@@ -7063,7 +7063,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts 
 +          <webui-browser-tab-group .collectionId="${entry.item.id}"
 +              .groupData="${entry.item.groupData}">
 +          </webui-browser-tab-group>
-+        `) : html`
++        `}` : html`
 +          <div class="tidygroup" data-id="${entry.section.group.id}"
 +              ?data-expanded="${entry.section.group.expanded}">
 +            <div class="tidygroup-row" data-group="${entry.section.group.id}"
@@ -7104,7 +7104,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts 
 +              </div>
 +            </div>
 +            <div class="tidygroup-children">
-+                ${entry.section.items.map(item => item.type === 'tab' ? html`
++                ${entry.section.items.map(item => html`${item.type === 'tab' ? html`
 +                  <webui-browser-tab id="${this.tabIdToDomId(item.id)}"
 +                      style="--rail-trail-level: ${this.trailLevel_(item.id)}"
 +                      .tabData="${item.tabData}"
@@ -7118,10 +7118,10 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.html.ts 
 +                      @tab-context-menu="${this.onTabContextMenu_}"
 +                      @tab-select="${this.onTabSelect_}">
 +                  </webui-browser-tab>
-+                ` : '')}
++                ` : ''}`)}
 +            </div>
 +          </div>
-+        `)}
++        `}`)}
 +  </div>
 +  </div>
 +  <div id="dividerActions">
@@ -7180,7 +7180,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
  import '//resources/cr_elements/cr_icon/cr_icon.js';
  import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
  import '//resources/cr_elements/icons.html.js';
-@@ -11,33 +15,71 @@ import '//resources/cr_elements/icons.html.js';
+@@ -11,24 +15,58 @@ import '//resources/cr_elements/icons.html.js';
  import {assert, assertNotReachedCase} from '//resources/js/assert.js';
  import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
  import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
@@ -7250,20 +7250,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
  import {getCss} from './tab_strip.css.js';
  import {getHtml} from './tab_strip.html.js';
  
-+export type {TabGroupItem, TabItem, TabStripItem};
-+
- export interface TabStripElement {
-   $: {
-     tabstrip: HTMLElement,
-   };
- }
- 
-+export type {PinnedRow};
-+
- class TabStripItemFactory {
-   static create(child: Container): TabStripItem|null {
-     const data = child.data;
-@@ -65,8 +107,8 @@ class TabStripItemFactory {
+@@ -65,8 +103,8 @@ class TabStripItemFactory {
    }
  }
  
@@ -7274,7 +7261,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
    static get is() {
      return 'webui-browser-tab-strip';
    }
-@@ -84,6 +126,42 @@ export class TabStripElement extends CrLitElement implements
+@@ -84,6 +122,42 @@ export class TabStripElement extends CrLitElement implements
        items_: {
          type: Array,
        },
@@ -7317,7 +7304,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
        activeTab_: {
          type: String,
          state: true,
-@@ -93,32 +171,130 @@ export class TabStripElement extends CrLitElement implements
+@@ -93,32 +167,130 @@ export class TabStripElement extends CrLitElement implements
          reflect: true,
          attribute: 'drag-in-progress',
        },
@@ -7457,7 +7444,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
    }
  
    override connectedCallback() {
-@@ -126,11 +302,39 @@ export class TabStripElement extends CrLitElement implements
+@@ -126,11 +298,39 @@ export class TabStripElement extends CrLitElement implements
  
      this.tabStripObservation_ = new TabStripObservation(this);
      this.loadTabStripModel_(this.tabStripObservation_);
@@ -7497,7 +7484,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
      this.setItems_(items);
  
      // Process initial tabs to identify the active tab and fire tab-added
-@@ -152,6 +356,125 @@ export class TabStripElement extends CrLitElement implements
+@@ -152,6 +352,125 @@ export class TabStripElement extends CrLitElement implements
  
      // The initial data load should contain at least one active tab.
      assert(this.activeTab_ !== '', 'initial snapshot contains no active tab');
@@ -7623,7 +7610,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
    }
  
    private processModelContainer_(container: Container): TabStripItem[] {
-@@ -173,18 +496,8 @@ export class TabStripElement extends CrLitElement implements
+@@ -173,18 +492,8 @@ export class TabStripElement extends CrLitElement implements
    override disconnectedCallback() {
      super.disconnectedCallback();
      this.tabStripObservation_ = undefined;
@@ -7644,7 +7631,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
    }
  
  
-@@ -192,14 +505,39 @@ export class TabStripElement extends CrLitElement implements
+@@ -192,14 +501,39 @@ export class TabStripElement extends CrLitElement implements
    onTabsCreated(tabsCreatedEvent: OnTabsCreatedEvent) {
      const tabsCreated: TabCreatedContainer[] = tabsCreatedEvent.tabs;
      tabsCreated.forEach(container => {
@@ -7685,7 +7672,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
    }
  
    override update(changedProperties: PropertyValues<this>) {
-@@ -207,6 +545,12 @@ export class TabStripElement extends CrLitElement implements
+@@ -207,6 +541,12 @@ export class TabStripElement extends CrLitElement implements
      this.dragDelegate_.onUpdate();
    }
  
@@ -7698,7 +7685,7 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
    override willUpdate(changedProperties: PropertyValues<this>) {
      super.willUpdate(changedProperties);
  
-@@ -215,48 +559,14 @@ export class TabStripElement extends CrLitElement implements
+@@ -215,48 +555,14 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
@@ -7752,15 +7739,18 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
  
    private syncTabActiveStates_() {
      let hasChanges = false;
-@@ -304,23 +614,143 @@ export class TabStripElement extends CrLitElement implements
+@@ -304,209 +610,2409 @@ export class TabStripElement extends CrLitElement implements
      }
    }
  
 -  onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {}
+-
+-  onNodeMoved(_onNodeMoved: OnNodeMovedEvent) {}
 +  onCollectionCreated(_onCollectionCreated: OnCollectionCreatedEvent) {
 +    this.syncNativeGroups_();
 +  }
-+
+ 
+-  // End TabStripObserver impl:
 +  onNodeMoved(onNodeMoved: OnNodeMovedEvent) {
 +    const pending = this.ownMoves_.get(onNodeMoved.id) ?? 0;
 +    if (pending > 1) {
@@ -7772,7 +7762,16 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    }
 +    this.syncNativeGroups_();
 +  }
-+
+ 
+-  private addTab(tab: Tab) {
+-    this.setItems_([
+-      ...this.items_,
+-      {
+-        type: 'tab',
+-        id: tab.id,
+-        tabData: tab,
+-      },
+-    ]);
 +  private syncNativeGroups_() {
 +    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
 +      const groups = readNativeGroups(await this.readTabStrip_());
@@ -7784,20 +7783,28 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +      console.error('Failed to synchronize tab groups', error);
 +    });
 +  }
-+
+ 
+-    if (tab.isActive) {
+-      this.setActiveTab_(tab.id);
 +  private updateNativeGroup_(
 +      tidyId: string, change: Partial<TabGroupVisualData>) {
 +    if (!this.nativeGroups_.nativeFor(tidyId)) {
 +      return;
-+    }
+     }
+-
+-    this.fire<TabAdded>('tab-added', {
+-      id: tab.id,
+-      isActive: tab.isActive,
 +    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
 +      await this.nativeGroups_.update(
 +          tidyId, change, this.tabStripService_, await this.readTabStrip_());
 +    }).catch(error => {
 +      console.error('Failed to update tab group', error);
-+    });
-+  }
-+
+     });
+   }
+ 
+-  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
+-    this.tabStripService_.closeNodes([e.detail.id]);
 +  private ungroupNative_(tidyId: string) {
 +    const nativeId = this.nativeGroups_.release(tidyId);
 +    if (!nativeId) {
@@ -7809,8 +7816,13 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    }).catch(error => {
 +      console.error('Failed to ungroup tabs', error);
 +    });
-+  }
-+
+   }
+ 
+-  protected activateTab(tabId: NodeId) {
+-    // Only request the activation. The active state is applied when the
+-    // browser reports the change through OnDataChanged (see updateTab()), so
+-    // the UI never disagrees with the TabStripModel.
+-    this.tabStripService_.activateTab(tabId);
 +  syncTabOrder() {
 +    const order = [
 +      ...this.favoriteRows_.map(row => row.item.id),
@@ -7819,8 +7831,11 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +      ...this.looseTabIds_(),
 +    ];
 +    this.queueNativeOrder_(order);
-+  }
-+
+   }
+ 
+-  // TODO(webium): implement this.
+-  // private setTabGroupForTab(/*tabId*/ _: NodeId, /*groupId*/ _2?: NodeId) {
+-  //}
 +  private queueNativeOrder_(order?: string[]) {
 +    this.nativeOrderTask_ = this.nativeOrderTask_.then(async () => {
 +      if (order) {
@@ -7851,26 +7866,24 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    });
 +  }
  
--  onNodeMoved(_onNodeMoved: OnNodeMovedEvent) {}
+-  private updateTabGroup(group: TabGroup) {
+-    const groupItem = this.findItem_<TabGroupItem>(group.id, 'group');
+-    if (groupItem) {
+-      this.updateItem_(
+-          group.id, 'group', {...groupItem, groupData: group.data});
+-    }
 +  private async readTabStrip_(): Promise<Container> {
 +    const snapshot = await this.tabStripService_.getTabs();
 +    const receiver = new TabsObserverReceiver({onTabEvents: () => {}});
 +    receiver.$.bindHandle(snapshot.stream.handle);
 +    receiver.$.close();
 +    return snapshot.tabStrip;
-+  }
+   }
  
-   // End TabStripObserver impl:
- 
--  private addTab(tab: Tab) {
--    this.setItems_([
--      ...this.items_,
--      {
--        type: 'tab',
--        id: tab.id,
--        tabData: tab,
--      },
--    ]);
+-  private updateTab(tab: Tab) {
+-    const updated = this.updateItem_(tab.id, 'tab', {
++  // End TabStripObserver impl:
++
 +  private addTab(tab: Tab, index: number) {
 +    const requested = this.spaces_.requested(tab.id);
 +    const taken = this.taking_.has(tab.id);
@@ -7885,57 +7898,68 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    const at = Math.min(index, neighbors.length);
 +    const items = [...neighbors];
 +    items.splice(at, 0, {
-+      type: 'tab',
-+      id: tab.id,
-+      tabData: tab,
-+    });
+       type: 'tab',
+       id: tab.id,
+       tabData: tab,
+     });
+-
+-    if (updated) {
+-      if (tab.isActive) {
+-        this.setActiveTab_(tab.id);
 +    this.setItems_(items);
 +    const anchored =
 +        taken || this.placeInModelOrder_(tab.id, at, neighbors);
 +    if (this.pendingBelow_ && this.pendingBelow_ !== tab.id) {
 +      if (this.canAnchor_(this.pendingBelow_)) {
 +        this.spaces_.placeAfter(tab.id, this.pendingBelow_);
-+      }
+       }
+-      this.fire<TabUpdated>('tab-updated', tab);
 +      this.pendingBelow_ = '';
 +      this.refreshSections_();
-+    }
+     }
+-  }
  
-     if (tab.isActive) {
+-  private removeItem(id: NodeId) {
+-    const itemToRemove = this.findItem_<TabStripItem>(id);
+-    this.setItems_(this.items_.filter(item => item.id !== id));
++    if (tab.isActive) {
 +      if (requested) {
 +        this.spaces_.noteActive(tab.id);
 +      }
-       this.setActiveTab_(tab.id);
-     }
- 
-@@ -328,136 +758,2139 @@ export class TabStripElement extends CrLitElement implements
-       id: tab.id,
-       isActive: tab.isActive,
-     });
--  }
-+    if (this.taking_.delete(tab.id)) {
-+      this.activateTab(tab.id);
++      this.setActiveTab_(tab.id);
 +    }
  
--  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
--    this.tabStripService_.closeNodes([e.detail.id]);
+-    if (itemToRemove && itemToRemove.type === 'tab') {
+-      this.fire<TabClosed>('tab-closed', id);
++    this.fire<TabAdded>('tab-added', {
++      id: tab.id,
++      isActive: tab.isActive,
++    });
++    if (this.taking_.delete(tab.id)) {
++      this.activateTab(tab.id);
+     }
+-  }
+ 
+-  protected onNewTabButtonClick_() {
+-    this.tabStripService_.createTabAt(null, null);
 +    this.resolveOpener_(tab.id, tab.isActive, anchored || requested)
 +        .then(() => this.revealTab_(tab.id));
 +    this.ensureProfile_(tab.id, !requested && !taken);
    }
  
--  protected activateTab(tabId: NodeId) {
--    // Only request the activation. The active state is applied when the
--    // browser reports the change through OnDataChanged (see updateTab()), so
--    // the UI never disagrees with the TabStripModel.
--    this.tabStripService_.activateTab(tabId);
+-  // Utility helpers:
+-  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
+-    return this.items_.findIndex(
+-        item => item.id === id && (!type || item.type === type));
 +  private async revealTab_(tabId: NodeId) {
 +    await this.updateComplete;
 +    this.getTabElement_(tabId)?.scrollIntoView({block: 'nearest'});
    }
  
--  // TODO(webium): implement this.
--  // private setTabGroupForTab(/*tabId*/ _: NodeId, /*groupId*/ _2?: NodeId) {
--  //}
+-  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
+-      |undefined {
+-    return this.items_.find(
+-               item => item.id === id && (!type || item.type === type)) as T |
 +  private async ensureProfile_(tabId: NodeId, rehome = false) {
 +    if (MINI) {
 +      miniMatchProfile(tabId);
@@ -7951,19 +7975,17 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    }
 +    const home = rehome && profileId ?
 +        this.spaces_.all.find(space => space.profile === profileId) :
-+        undefined;
+         undefined;
 +    if (home) {
 +      this.adoptTab(tabId, home.id);
 +      return;
 +    }
 +    this.reprofile_(tabId, spaceId, this.entryFor_(tabId)?.key ?? '');
-+  }
+   }
  
--  private updateTabGroup(group: TabGroup) {
--    const groupItem = this.findItem_<TabGroupItem>(group.id, 'group');
--    if (groupItem) {
--      this.updateItem_(
--          group.id, 'group', {...groupItem, groupData: group.data});
+-  protected getTabElement_(id: string): TabElement|null {
+-    return this.shadowRoot.querySelector<TabElement>(
+-        `webui-browser-tab#${this.tabIdToDomId(id)}`);
 +  private placeInModelOrder_(
 +      tabId: NodeId, index: number, neighbors: TabStripItem[]): boolean {
 +    if (index >= neighbors.length) {
@@ -7973,46 +7995,41 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    if (before) {
 +      return before.type === 'tab' && this.canAnchor_(before.id) &&
 +          this.spaces_.placeAfter(tabId, before.id);
-     }
++    }
 +    const after = neighbors[0];
 +    return after !== undefined && after.type === 'tab' &&
 +        this.canAnchor_(after.id) &&
 +        this.spaces_.placeBefore(tabId, after.id);
    }
  
--  private updateTab(tab: Tab) {
--    const updated = this.updateItem_(tab.id, 'tab', {
--      type: 'tab',
--      id: tab.id,
--      tabData: tab,
--    });
+-  private setActiveTab_(id: string) {
+-    this.activeTab_ = id;
 +  private canAnchor_(id: string): boolean {
 +    return !!id && !this.entryFor_(id);
-+  }
+   }
  
--    if (updated) {
--      if (tab.isActive) {
--        this.setActiveTab_(tab.id);
+-  protected setItems_(items: TabStripItem[]) {
+-    this.items_ = items;
 +  private sleepCandidates_(): SleepCandidate[] {
 +    const candidates: SleepCandidate[] = [];
 +    for (const item of this.items_) {
 +      if (item.type !== 'tab' || item.id === this.activeTab_ ||
 +          this.spaces_.isAsleep(item.id)) {
 +        continue;
-       }
--      this.fire<TabUpdated>('tab-updated', tab);
++      }
 +      if (item.tabData.alertStates.length) {
 +        this.tabSleep_.touch(item.id);
 +        continue;
 +      }
 +      candidates.push({id: item.id, url: item.tabData.url});
-     }
++    }
 +    return candidates;
    }
  
--  private removeItem(id: NodeId) {
--    const itemToRemove = this.findItem_<TabStripItem>(id);
--    this.setItems_(this.items_.filter(item => item.id !== id));
+-  private updateItemAt_(index: number, item: TabStripItem) {
+-    const newItems = [...this.items_];
+-    newItems[index] = item;
+-    this.setItems_(newItems);
 +  private async sleepTab_(tabId: NodeId) {
 +    if (!tabId || tabId === this.activeTab_ || this.spaces_.isAsleep(tabId)) {
 +      return;
@@ -8023,10 +8040,13 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    if (asleep && this.spaces_.sleep(tabId)) {
 +      this.refreshSections_();
 +    }
-+  }
+   }
  
--    if (itemToRemove && itemToRemove.type === 'tab') {
--      this.fire<TabClosed>('tab-closed', id);
+-  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
+-      boolean {
+-    const index = this.findItemIndex_(id, type);
+-    if (index === -1) {
+-      return false;
 +  private onTabDiscarded_(tabId: NodeId) {
 +    if (this.spaces_.isAsleep(tabId)) {
 +      return;
@@ -8035,10 +8055,16 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    if (this.spaces_.sleep(tabId)) {
 +      this.refreshSections_();
      }
+-
+-    this.updateItemAt_(index, newItem);
+-    return true;
    }
  
--  protected onNewTabButtonClick_() {
--    this.tabStripService_.createTabAt(null, null);
+-  // Tab IDs contain ":" characters which are not valid when used as DOM node
+-  // IDs, and also an ID must contain at least one non-special and non-numeric
+-  // character.
+-  protected tabIdToDomId(id: NodeId): string {
+-    return 'id_' + id.replaceAll(':', '_');
 +  private async syncSleepingTabs_() {
 +    const {ids} =
 +        await browserProxyFactory.getInstance().handler.getSleepingTabs();
@@ -8047,10 +8073,10 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    }
    }
  
--  // Utility helpers:
--  private findItemIndex_(id: string, type?: 'tab'|'group'): number {
--    return this.items_.findIndex(
--        item => item.id === id && (!type || item.type === type));
+-  // TabDragHost impl:
+-
+-  get tabDragService() {
+-    return this.tabDragService_;
 +  private async syncOpeners_() {
 +    if (!this.spaces_.hasOpeners()) {
 +      return;
@@ -8062,11 +8088,8 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    }
    }
  
--  private findItem_<T extends TabStripItem>(id: string, type?: T['type']): T
--      |undefined {
--    return this.items_.find(
--               item => item.id === id && (!type || item.type === type)) as T |
--        undefined;
+-  get itemsForDrag() {
+-    return this.items_;
 +  private async toggleMute_(tabId: NodeId) {
 +    if (!tabId) {
 +      return;
@@ -8074,15 +8097,18 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    await browserProxyFactory.getInstance().handler.toggleTabMuted(tabId);
    }
  
--  protected getTabElement_(id: string): TabElement|null {
--    return this.shadowRoot.querySelector<TabElement>(
--        `webui-browser-tab#${this.tabIdToDomId(id)}`);
+-  commitDrag(nodeId: NodeId, finalIndex: number) {
+-    const position: Position = {
+-      path: {components: []},
+-      index: finalIndex,
+-    };
+-    this.tabStripService_.moveNode(nodeId, position);
 +  protected onTabAudioClick_(e: CustomEvent<{id: string}>) {
 +    this.toggleMute_(e.detail.id);
    }
  
--  private setActiveTab_(id: string) {
--    this.activeTab_ = id;
+-  getTabElementForDrag(id: string) {
+-    return this.getTabElement_(id);
 +  private async resolveOpener_(
 +      tabId: NodeId, foreground: boolean, placed: boolean) {
 +    const {opener, fromLink, groupLinks, restored} =
@@ -8122,42 +8148,33 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    this.refreshSections_();
    }
  
--  protected setItems_(items: TabStripItem[]) {
--    this.items_ = items;
+-  setItemsForDrag(items: TabStripItem[]) {
+-    this.setItems_(items);
 +  protected trailLevel_(id: string): number {
 +    return this.spaces_.trailLevel(id, this.trailDepth_);
    }
  
--  private updateItemAt_(index: number, item: TabStripItem) {
--    const newItems = [...this.items_];
--    newItems[index] = item;
--    this.setItems_(newItems);
+-  activateTabForDrag(id: string) {
+-    this.activateTab(id);
 +  canReturnToOpener(): boolean {
 +    return !!this.activeTab_ && !!this.spaces_.trailParent(this.activeTab_);
    }
  
--  private updateItem_(id: string, type: 'tab'|'group', newItem: TabStripItem):
--      boolean {
--    const index = this.findItemIndex_(id, type);
--    if (index === -1) {
+-  setDragInProgressForDrag(value: boolean) {
+-    this.dragInProgress_ = value;
 +  returnToOpener(): boolean {
 +    const closing = this.activeTab_;
 +    const parent = closing ? this.spaces_.trailParent(closing) : undefined;
 +    if (!closing || !parent) {
-       return false;
-     }
--
--    this.updateItemAt_(index, newItem);
++      return false;
++    }
 +    this.selectRow_(parent.tabId);
 +    this.tabStripService_.closeNodes([closing]);
-     return true;
++    return true;
    }
  
--  // Tab IDs contain ":" characters which are not valid when used as DOM node
--  // IDs, and also an ID must contain at least one non-special and non-numeric
--  // character.
--  protected tabIdToDomId(id: NodeId): string {
--    return 'id_' + id.replaceAll(':', '_');
+-  setTabStripNoDrag(noDrag: boolean) {
+-    this.$.tabstrip.classList.toggle('nodrag', noDrag);
 +  private rejoinClosed_(tabId: string) {
 +    const row = this.spaces_.byTab(tabId);
 +    if (!row) {
@@ -8194,44 +8211,36 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +    this.syncNativeGroups_();
    }
  
--  // TabDragHost impl:
--
--  get tabDragService() {
--    return this.tabDragService_;
+-  getDragContainerBounds(): DOMRect {
+-    const hostRect = this.getBoundingClientRect();
+-    const tabstripRect = this.$.tabstrip.getBoundingClientRect();
+-    return new DOMRect(
+-        tabstripRect.left, tabstripRect.top,
+-        Math.max(0, hostRect.right - tabstripRect.left), tabstripRect.height);
 +  private forgetOpeners_(spaceId: string) {
 +    const ids = this.spaces_.tabsIn(spaceId);
 +    this.spaces_.forgetOpeners(spaceId);
 +    browserProxyFactory.getInstance().handler.forgetOpeners(ids);
    }
  
--  get itemsForDrag() {
--    return this.items_;
+-  dragMouseDown(e: MouseEvent) {
+-    this.dragDelegate_.onMouseDown(e);
 +  private leaveTypedTab_(tabId: NodeId) {
 +    if (!this.typedTabs_.delete(tabId)) {
 +      return;
 +    }
 +    this.spaces_.clearOpener(tabId);
 +    browserProxyFactory.getInstance().handler.forgetOpeners([tabId]);
-   }
- 
--  commitDrag(nodeId: NodeId, finalIndex: number) {
--    const position: Position = {
--      path: {components: []},
--      index: finalIndex,
--    };
--    this.tabStripService_.moveNode(nodeId, position);
++  }
++
 +  protected onTabCloseClick(e: CustomEvent<{id: string}>) {
 +    this.closeTarget_(e.detail.id);
-   }
- 
--  getTabElementForDrag(id: string) {
--    return this.getTabElement_(id);
++  }
++
 +  protected onTabRename_(e: CustomEvent<TabRenameDetail>) {
 +    this.renameTab_(e.detail.id, e.detail.text);
-   }
- 
--  setItemsForDrag(items: TabStripItem[]) {
--    this.setItems_(items);
++  }
++
 +  private renameTab_(id: string, text: string) {
 +    const entry = this.entryFor_(id);
 +    const pageTitle = entry?.title ?? this.spaces_.rowFor(id)?.title ?? '';
@@ -8242,9 +8251,8 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +      this.getTabElement_(id)?.rename.playTitleEnter();
 +      this.refreshSections_();
 +    }
-   }
- 
--  activateTabForDrag(id: string) {
++  }
++
 +  protected onTabSelect_(
 +      e: CustomEvent<{id: string, ctrl: boolean, shift: boolean}>) {
 +    const {id, ctrl, shift} = e.detail;
@@ -10125,19 +10133,17 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +  }
 +
 +  activateTabForDrag(id: string) {
-     this.activateTab(id);
-   }
- 
-@@ -469,44 +2902,121 @@ export class TabStripElement extends CrLitElement implements
-     this.$.tabstrip.classList.toggle('nodrag', noDrag);
-   }
- 
--  getDragContainerBounds(): DOMRect {
--    const hostRect = this.getBoundingClientRect();
--    const tabstripRect = this.$.tabstrip.getBoundingClientRect();
--    return new DOMRect(
--        tabstripRect.left, tabstripRect.top,
--        Math.max(0, hostRect.right - tabstripRect.left), tabstripRect.height);
++    this.activateTab(id);
++  }
++
++  setDragInProgressForDrag(value: boolean) {
++    this.dragInProgress_ = value;
++  }
++
++  setTabStripNoDrag(noDrag: boolean) {
++    this.$.tabstrip.classList.toggle('nodrag', noDrag);
++  }
++
 +  handOffDrag(drag: DragHandOff) {
 +    const ids = drag.detachable ? this.dragTabIds_(drag.tabId) : [];
 +    browserProxyFactory.getInstance().handler.startTabDragGhost(
@@ -10148,10 +10154,8 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/tab_strip.ts b/chr
 +          height: Math.round(drag.row.height),
 +        },
 +        {x: Math.round(drag.grabX), y: Math.round(drag.grabY)}, ids);
-   }
- 
--  dragMouseDown(e: MouseEvent) {
--    this.dragDelegate_.onMouseDown(e);
++  }
++
 +  private dragRowIds_(id: string): string[] {
 +    return this.selectedIds_.length > 1 && this.selection_.has(id) ?
 +        [...this.selectedIds_] :
@@ -16198,3 +16202,27 @@ diff --git a/chrome/browser/resources/webui_browser/tab_strip/events.ts b/chrome
  export type TabClosed = NodeId;
  
  export type TabUpdated = TabData;
+diff --git a/extensions/browser/webstore_installer.cc b/extensions/browser/webstore_installer.cc
+--- a/extensions/browser/webstore_installer.cc
++++ b/extensions/browser/webstore_installer.cc
+@@ -98,6 +98,9 @@ const char kAuthUserQueryKey[] = "authuser";
+ 
+ constexpr base::TimeDelta kTimeRemainingThreshold = base::Seconds(1);
+ 
++const base::FilePath::CharType kWebstoreDownloadFolder[] =
++    FILE_PATH_LITERAL("Webstore Downloads");
++
+ base::FilePath* g_download_directory_for_tests = nullptr;
+ 
+ [[maybe_unused]]
+diff --git a/chrome/browser/devtools/BUILD.gn b/chrome/browser/devtools/BUILD.gn
+--- a/chrome/browser/devtools/BUILD.gn
++++ b/chrome/browser/devtools/BUILD.gn
+@@ -322,6 +322,7 @@ static_library("devtools") {
+       "//chrome/browser/ui/views/frame:contents_container_view",
+       "//chrome/browser/ui/views/frame:contents_web_view",
+       "//chrome/browser/ui/views/frame:scrim_view",
++      "//chrome/browser/ui/webui_browser:browser_mojo_bindings",
+       "//chrome/browser/ui/webui_browser:headers",
+       "//chrome/browser/user_education",
+       "//chrome/browser/web_applications",

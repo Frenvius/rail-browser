@@ -161,8 +161,7 @@ export class SpaceBarElement extends CrLitElement {
 
   private fly_(item: Download) {
     const target = this.shadowRoot.querySelector('#library');
-    const content = document.querySelector('webui-browser-app')
-                        ?.shadowRoot?.querySelector('#contentRegion');
+    const content = document.querySelector('webui-browser-app')?.$.contentRegion;
     if (!target || !content || !item.filePath ||
         matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return;

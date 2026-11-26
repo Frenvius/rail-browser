@@ -50,7 +50,7 @@ export function getHtml(this: RailLibraryElement) {
           `)}
         </div>
       </div>
-    ` : this.hasSearch_() ? html`
+    ` : html`${this.hasSearch_() ? html`
       <div id="searchRow">
         <label id="searchBox">
           ${libraryIcon('search')}
@@ -75,7 +75,7 @@ export function getHtml(this: RailLibraryElement) {
           </button>
         ` : ''}
       </div>
-    ` : ''}
+    ` : ''}`}
   </header>
   ${this.section === 'downloads' ? html`
     ${this.downloads_.length ? html`
@@ -117,7 +117,7 @@ export function getHtml(this: RailLibraryElement) {
                     title="Delete" @click="${this.onDiscardClick_}">
                   ${libraryIcon('close')}
                 </button>
-              ` : this.isMoving_(item) ? html`
+              ` : html`${this.isMoving_(item) ? html`
                 <button class="action" data-id="${item.id}"
                     title="${this.isPaused_(item) ? 'Resume' : 'Pause'}"
                     @click="${this.onPauseClick_}">
@@ -146,7 +146,7 @@ export function getHtml(this: RailLibraryElement) {
                     @click="${this.onRemoveDownloadClick_}">
                   ${libraryIcon('close')}
                 </button>
-              `}
+              `}`}
             </div>
           </div>
         `)}
@@ -170,7 +170,7 @@ export function getHtml(this: RailLibraryElement) {
         <span class="empty-hint">${this.downloadsHint_()}</span>
       </div>
     `}
-  ` : this.section === 'spaces' ? html`
+  ` : html`${this.section === 'spaces' ? html`
     <div id="board">
       ${repeat(this.spaces, space => space.id, (space, index) => html`
         <section class="column" data-id="${space.id}"
@@ -188,7 +188,7 @@ export function getHtml(this: RailLibraryElement) {
                 <span class="space-icon">
                   ${this.isGlyph_(space.icon) ? html`
                     <cr-icon icon="${space.icon}"></cr-icon>
-                  ` : space.icon}
+                  ` : html`${space.icon}`}
                 </span>
               ` : ''}
               <span class="space-name" title="${space.name}">
@@ -201,7 +201,7 @@ export function getHtml(this: RailLibraryElement) {
                   @click="${this.onIconEditClick_}">
                 ${this.isGlyph_(space.icon) ? html`
                   <cr-icon icon="${space.icon}"></cr-icon>
-                ` : space.icon}
+                ` : html`${space.icon}`}
               </button>
               ${space.id === this.editing_ ? html`
                 <input id="nameInput" class="space-name" spellcheck="false"
@@ -228,7 +228,7 @@ export function getHtml(this: RailLibraryElement) {
           </div>
           <div class="column-tabs" @click="${this.onColumnTabsClick_}">
             ${repeat(this.columnRows_(space), row => this.rowKey_(row),
-                     row => row.kind === 'tab' ? html`
+                     row => html`${row.kind === 'tab' ? html`
               <div class="board-tab" data-id="${row.tab.id}"
                   data-key="${space.id}/${this.rowKey_(row)}"
                   data-folder="${row.folder}" data-group="${row.group}"
@@ -247,7 +247,7 @@ export function getHtml(this: RailLibraryElement) {
                     src="${this.tabFavicon_(row.tab)}">
                 <span class="title">${row.tab.title}</span>
               </div>
-            ` : row.kind === 'folder' ? html`
+            ` : html`${row.kind === 'folder' ? html`
               <div class="board-folder" data-folder="${row.folder.id}"
                   data-key="${space.id}/${this.rowKey_(row)}"
                   style="--rail-folder-level: ${row.depth}"
@@ -274,7 +274,7 @@ export function getHtml(this: RailLibraryElement) {
                   <span class="folder-count">${row.count}</span>
                 `}
               </div>
-            ` : row.kind === 'group' ? html`
+            ` : html`${row.kind === 'group' ? html`
               <div class="board-folder board-group" data-folder="${row.group.id}"
                   tabindex="0" title="${row.group.name}" draggable="true"
                   aria-expanded="${row.group.expanded}"
@@ -291,7 +291,7 @@ export function getHtml(this: RailLibraryElement) {
                 ${row.icon ? html`
                   <img class="favicon" alt="" draggable="false"
                       src="${this.tabFavicon_(row.icon)}">
-                ` : libraryIcon('group')}
+                ` : html`${libraryIcon('group')}`}
                 ${row.group.id === this.editingFolder_ ? html`
                   <input id="folderInput" class="folder-name"
                       spellcheck="false" aria-label="Group name"
@@ -314,7 +314,7 @@ export function getHtml(this: RailLibraryElement) {
                   Clear
                 </button>
               </div>
-            `)}
+            `}`}`}`)}
           </div>
           <div class="column-foot">
             ${this.incognito_() ? html`<span></span>` : html`
@@ -325,7 +325,7 @@ export function getHtml(this: RailLibraryElement) {
               </button>
             `}
             <span class="foot-actions">
-              ${this.incognito_() ? '' : html`
+              ${!this.incognito_() ? html`
                 <button class="action" title="New folder"
                     aria-label="New folder in ${space.name}"
                     @click="${this.onNewFolderClick_}">
@@ -336,7 +336,7 @@ export function getHtml(this: RailLibraryElement) {
                     @click="${this.onNewGroupClick_}">
                   ${libraryIcon('group')}
                 </button>
-              `}
+              ` : ''}
               <button class="action" title="Space options"
                   aria-label="Options for ${space.name}"
                   @click="${this.onSpaceMoreClick_}">
@@ -346,14 +346,14 @@ export function getHtml(this: RailLibraryElement) {
           </div>
         </section>
       `)}
-      ${this.incognito_() ? '' : html`
+      ${!this.incognito_() ? html`
         <button id="addSpace" title="New space" aria-label="New space"
             @click="${this.onNewSpaceClick_}">
           ${libraryIcon('plus')}
         </button>
-      `}
+      ` : ''}
     </div>
-  ` : this.days_.length ? html`
+  ` : html`${this.days_.length ? html`
     <div class="list">
       ${this.days_.map(day => html`
         <div class="day archive-day">
@@ -364,7 +364,7 @@ export function getHtml(this: RailLibraryElement) {
               @click="${this.onArchivedClick_}">Restore All</button>
         </div>
         ${repeat(this.archiveRows_(day), row => row.key, (row, index) =>
-            row.kind === 'tab' ? html`
+            html`${row.kind === 'tab' ? html`
           <div class="row archived" data-ids="${row.tab.id}" tabindex="0"
               style="--i: ${index}" title="${row.tab.url}"
               ?nested="${row.nested}"
@@ -415,7 +415,7 @@ export function getHtml(this: RailLibraryElement) {
               </button>
             </div>
           </div>
-        `)}
+        `}`)}
       `)}
     </div>
     <div class="footer">
@@ -432,7 +432,7 @@ export function getHtml(this: RailLibraryElement) {
       <span class="empty-title">${this.emptyTitle_()}</span>
       <span class="empty-hint">${this.archiveHint_()}</span>
     </div>
-  `}
+  `}`}`}
 </section>
 <!--_html_template_end_-->`;
   // clang-format on

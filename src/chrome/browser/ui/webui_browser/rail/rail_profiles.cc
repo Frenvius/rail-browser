@@ -106,8 +106,8 @@ content::WebContents* InsertBlankTab(
 
   NavigateParams params(browser, std::move(contents));
   params.disposition = request.foreground
-                           ? WindowOpenDisposition::NEW_FOREGROUND_TAB
-                           : WindowOpenDisposition::NEW_BACKGROUND_TAB;
+                           ? WindowOpenDisposition::kNewForegroundTab
+                           : WindowOpenDisposition::kNewBackgroundTab;
   params.transition = ui::PAGE_TRANSITION_TYPED;
   params.tabstrip_index = request.index;
   Navigate(&params);

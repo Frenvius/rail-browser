@@ -102,7 +102,7 @@ content::WebContents* OpenFromShell(
     const content::OpenURLParams& params,
     base::OnceCallback<void(content::NavigationHandle&)> navigation_callback) {
   content::WebContents* source =
-      params.disposition == WindowOpenDisposition::CURRENT_TAB
+      params.disposition == WindowOpenDisposition::kCurrentTab
           ? browser->GetTabStripModel()->GetActiveWebContents()
           : nullptr;
   return BrowserWebContentsDelegate::From(browser)->OpenURLFromTab(

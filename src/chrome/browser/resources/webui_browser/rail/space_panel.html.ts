@@ -31,7 +31,7 @@ ${this.isProfile_() ? html`
       <button class="action" @click="${this.onCloseClick_}">Cancel</button>
     </div>
   </div>
-` : this.isColor_() ? html`
+` : html`${this.isColor_() ? html`
   <div id="colorpicker">
     <div id="field" ?dragging="${this.dragging_ >= 0}"
       @pointerdown="${this.onFieldPointerdown_}"
@@ -124,6 +124,6 @@ ${this.isProfile_() ? html`
       No icon matches
     </div>
   </div>
-`}
+`}`}
 <!--_html_template_end_-->`;
 }

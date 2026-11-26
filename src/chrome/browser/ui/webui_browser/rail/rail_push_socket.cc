@@ -64,7 +64,7 @@ void RailPushSocket::Connect(network::mojom::NetworkContext* context) {
       std::move(handshake_remote), mojo::NullRemote(), mojo::NullRemote(),
       mojo::NullRemote(), std::nullopt,
       network::GetNoOpNetworkRestrictionsId(),
-      network::mojom::IPAddressSpace::kUnknown);
+      network::mojom::IPAddressSpace::kUnknown, std::nullopt);
 }
 
 void RailPushSocket::SendText(const std::string& text) {

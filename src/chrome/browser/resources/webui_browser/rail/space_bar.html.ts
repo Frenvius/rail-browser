@@ -14,7 +14,7 @@ ${this.variant === 'title' ? html`
     this.activeColor_()}" @click="${this.onGlyphClick_}">
         ${this.isGlyphIcon_(this.activeIcon_()) ? html`
           <cr-icon icon="${this.activeIcon_()}"></cr-icon>
-        ` : this.activeIcon_()}
+        ` : html`${this.activeIcon_()}`}
       </button>
     ` : ''}
     ${this.editing_ ? html`
@@ -26,7 +26,7 @@ ${this.variant === 'title' ? html`
       </button>
     `}
   </div>
-` : INCOGNITO ? '' : html`
+` : html`${!INCOGNITO ? html`
   ${this.cardShown_ ? html`
     <div id="card" ?visible="${this.cardVisible_}"
         @pointerenter="${this.onLibraryPointerenter_}"
@@ -52,7 +52,7 @@ ${this.variant === 'title' ? html`
             <span class="card-name">${item.fileName}</span>
             <span class="card-status">${this.cardStatus_(item)}</span>
           </div>
-          ${this.isMoving_(item) ? '' : html`
+          ${!this.isMoving_(item) ? html`
             <div class="card-actions">
               ${this.canDrag_(item) ? html`
                 <button class="card-action" data-id="${item.id}"
@@ -66,7 +66,7 @@ ${this.variant === 'title' ? html`
                 ${libraryIcon('close')}
               </button>
             </div>
-          `}
+          ` : ''}
         </div>
       `)}
     </div>
@@ -100,10 +100,10 @@ ${this.variant === 'title' ? html`
           @contextmenu="${this.onDotContextmenu_}"
           @pointerdown="${this.onDotPointerdown_}">
           ${!this.compact_ || space.id === this.activeId ?
-    !space.icon ? html`<span class="space-dot"></span>` :
-    space.icon.startsWith('cr:') ?
+    html`${!space.icon ? html`<span class="space-dot"></span>` :
+    html`${space.icon.startsWith('cr:') ?
         html`<cr-icon icon="${space.icon}"></cr-icon>` :
-        html`<span class="space-icon">${space.icon}</span>` : ''}
+        html`<span class="space-icon">${space.icon}</span>`}`}` : ''}
         </button>
       `)}
       ${this.hasOverflow_() ? html`
@@ -113,14 +113,14 @@ ${this.variant === 'title' ? html`
         </button>
       ` : ''}
     </div>
-    ${this.hasOverflow_() ? '' : html`
+    ${!this.hasOverflow_() ? html`
       <button id="add" title="New space" aria-label="New space"
         @click="${this.onAddClick_}">
         <cr-icon icon="cr:add"></cr-icon>
       </button>
-    `}
+    ` : ''}
   </div>
-`}
+` : ''}`}
 <!--_html_template_end_-->`;
   // clang-format on
 }

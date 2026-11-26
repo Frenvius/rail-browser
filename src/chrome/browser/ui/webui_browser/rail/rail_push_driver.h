@@ -63,14 +63,6 @@ class RailPushDriver : public gcm::GCMDriver,
                         ClearActivityLogs clear_logs) override;
   void SetGCMRecording(const GCMStatisticsRecordingCallback& callback,
                        bool recording) override;
-  void SetAccountTokens(
-      const std::vector<gcm::GCMClient::AccountTokenInfo>& account_tokens)
-      override;
-  void UpdateAccountMapping(
-      const gcm::AccountMapping& account_mapping) override;
-  void RemoveAccountMapping(const CoreAccountId& account_id) override;
-  base::Time GetLastTokenFetchTime() override;
-  void SetLastTokenFetchTime(const base::Time& time) override;
   gcm::InstanceIDHandler* GetInstanceIDHandlerInternal() override;
   void AddHeartbeatInterval(const std::string& scope,
                             int interval_ms) override;
@@ -111,7 +103,7 @@ class RailPushDriver : public gcm::GCMDriver,
                 const std::string& receiver_id,
                 const gcm::OutgoingMessage& message) override;
   void RecordDecryptionFailure(const std::string& app_id,
-                               gcm::GCMDecryptionResult result) override;
+                               fcm::FcmDecryptionResult result) override;
 
  private:
   struct PendingRegister {

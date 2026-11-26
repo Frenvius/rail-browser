@@ -46,8 +46,7 @@ export class RailToastElement extends CrLitElement {
   }
 
   private place_() {
-    const content = document.querySelector('webui-browser-app')
-                        ?.shadowRoot?.querySelector('#contentRegion');
+    const content = document.querySelector('webui-browser-app')?.$.contentRegion;
     if (!content) {
       return;
     }

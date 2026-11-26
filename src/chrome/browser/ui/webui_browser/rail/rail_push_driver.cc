@@ -113,19 +113,6 @@ void RailPushDriver::GetGCMStatistics(GetGCMStatisticsCallback callback,
 void RailPushDriver::SetGCMRecording(const GCMStatisticsRecordingCallback&,
                                       bool) {}
 
-void RailPushDriver::SetAccountTokens(
-    const std::vector<gcm::GCMClient::AccountTokenInfo>&) {}
-
-void RailPushDriver::UpdateAccountMapping(const gcm::AccountMapping&) {}
-
-void RailPushDriver::RemoveAccountMapping(const CoreAccountId&) {}
-
-base::Time RailPushDriver::GetLastTokenFetchTime() {
-  return base::Time();
-}
-
-void RailPushDriver::SetLastTokenFetchTime(const base::Time&) {}
-
 gcm::InstanceIDHandler* RailPushDriver::GetInstanceIDHandlerInternal() {
   return this;
 }
@@ -155,7 +142,7 @@ void RailPushDriver::SendImpl(const std::string& app_id,
 }
 
 void RailPushDriver::RecordDecryptionFailure(const std::string&,
-                                              gcm::GCMDecryptionResult) {}
+                                              fcm::FcmDecryptionResult) {}
 
 void RailPushDriver::GetToken(const std::string& app_id,
                                const std::string& authorized_entity,

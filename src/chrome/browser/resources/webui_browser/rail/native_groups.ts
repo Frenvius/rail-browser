@@ -60,7 +60,13 @@ export class NativeGroupLinks {
     const group = this.groupFor_(tidyId, root);
     if (group) {
       await service.update(
-          {tabGroup: {id: group.id, data: {...group.visual, ...change}}},
+          {
+            tabGroup: {
+              id: group.id,
+              data: {...group.visual, ...change},
+              isEphemeral: false,
+            },
+          },
           null);
     }
   }

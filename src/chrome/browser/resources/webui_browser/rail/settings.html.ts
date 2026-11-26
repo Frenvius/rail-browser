@@ -300,9 +300,9 @@ ${this.section_ === 'tabs' ? html`
             </span>
             ${this.editingRoute_ === index && this.routeEditInvalid_ ? html`
               <span class="cardhint">Enter a site, like github.com</span>
-            ` : route.fromAi ? html`
+            ` : html`${route.fromAi ? html`
               <span class="cardhint">Assistant</span>
-            ` : nothing}
+            ` : nothing}`}
           </div>
         </div>
         <div class="control">
@@ -501,7 +501,7 @@ ${this.section_ === 'assistant' ? html`
         </option>
       </select>
     </div>
-    ${this.isListedModel_() ? nothing : html`
+    ${!this.isListedModel_() ? html`
       <div class="item">
         <div class="rowtext">
           <span class="cardtitle">Custom model</span>
@@ -511,7 +511,7 @@ ${this.section_ === 'assistant' ? html`
             .value="${this.customModelValue_()}"
             @change="${this.onModelChange_}">
       </div>
-    `}
+    ` : nothing}
   </div>
 ` : nothing}
 ${this.section_ === 'about' ? html`
