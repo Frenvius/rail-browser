@@ -18,4 +18,4 @@ use_sysroot=true
 use_system_libffi=false
 use_vaapi=true
 v8_symbol_level=0
-v8_use_metagen_instance_types=false
+v8_use_metagen=false

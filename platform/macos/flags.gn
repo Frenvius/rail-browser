@@ -1,3 +1,4 @@
+added_rust_stdlib_libs=["addr2line","gimli"]
 blink_symbol_level=0
 chrome_pgo_phase=0
 enable_iterator_debugging=false
