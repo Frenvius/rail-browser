@@ -48,7 +48,8 @@ jobs:
           fi
           applied="$(git rev-parse HEAD)"
           if ! git diff --quiet "$applied" "$target" -- ungoogled-chromium patches \
-              platform/linux/patches ':(exclude)patches/rail-shell.patch'; then
+              ':(exclude)patches/rail-shell.patch' ||
+             ! git diff --quiet "$applied" "$GITHUB_SHA" -- platform/linux/patches; then
             echo "::error::patch layers below rail-shell.patch changed since $applied; prepare a fresh tree"
             exit 1
           fi
